@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { requireUser } from "@/lib/auth";
 import { PageHeader } from "@/components/ui/panel";
 import { StatusDot } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
@@ -21,6 +22,7 @@ function href(month: string | null, cliente: string | undefined) {
 }
 
 export default async function AgendaPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireUser();
   const sp = await searchParams;
   const today = todayKey();
   const currentMonth = today.slice(0, 7);

@@ -226,10 +226,7 @@ export async function runSiteConnectionTest(id: string): Promise<ActionResult<{ 
     };
   }
 
-  await db()
-    .from("sites")
-    .update({ last_check_at: new Date().toISOString(), last_check_ok: result.ok, last_check_message: result.message })
-    .eq("id", site.id);
+  // testSiteConnection já grava sites.last_check_* e a linha em deliveries.
   revalidateSite(site.client_id, site.id);
   return { ok: true, data: result };
 }

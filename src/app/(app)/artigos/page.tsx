@@ -123,7 +123,9 @@ function Row({ post }: { post: PostListItem }) {
 export default async function ArticlesPage({ searchParams }: PageProps<"/artigos">) {
   await requireUser();
   const sp = await searchParams;
-  const tab = TABS.find((t) => t.key === str(sp.status)) ?? TABS[0];
+  // aceita a chave da aba (?status=rascunhos) e o status do banco (?status=draft), usado por outros módulos
+  const statusParam = str(sp.status);
+  const tab = TABS.find((t) => t.key === statusParam || t.status === statusParam) ?? TABS[0];
   const q = str(sp.q).slice(0, 120);
   const clienteRaw = str(sp.cliente);
   const cliente = GUID.test(clienteRaw) ? clienteRaw : "";

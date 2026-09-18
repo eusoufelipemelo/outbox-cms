@@ -15,7 +15,18 @@ export async function signIn(_prev: LoginState, formData: FormData): Promise<Log
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: "E-mail ou senha incorretos." };
 
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");
+  redirect(safeNext(next));
+}
+
+/** Só caminhos internos: bloqueia "//host", "/\\host" e esquemas (redirecionamento aberto). */
+function safeNext(next: string): string {
+  if (!next.startsWith("/") || next.startsWith("//") || /[\\\s]/.test(next)) return "/";
+  try {
+    const url = new URL(next, "http://cms.local");
+    return url.origin === "http://cms.local" ? `${url.pathname}${url.search}${url.hash}` : "/";
+  } catch {
+    return "/";
+  }
 }
 
 export async function signOut() {

@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { siteArticleUrl } from "@/lib/delivery/urls";
+import { sanitizeArticleHtml } from "@/lib/sanitize";
 import type { Post, PostSite, SitePlatform } from "@/lib/types";
 import { slugify, stripHtml } from "@/lib/utils";
 
@@ -160,7 +161,8 @@ export function toPublicPost(site: ContentSite, post: PostFields, ps: PostSiteFi
   const eff = effectiveContent(post, ps);
   const base: Omit<PublicPost, "json_ld"> = {
     ...summary,
-    content_html: eff.content_html,
+    // já é limpo ao salvar; limpa de novo na saída porque o embed injeta este HTML no site do cliente
+    content_html: sanitizeArticleHtml(eff.content_html),
     seo: {
       title: eff.seo_title,
       description: eff.seo_description,

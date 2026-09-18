@@ -112,7 +112,7 @@ create index if not exists post_sites_site_idx on public.post_sites(site_id, sta
 -- ============ Log de entregas ============
 create table if not exists public.deliveries (
   id uuid primary key default gen_random_uuid(),
-  post_site_id uuid references public.post_sites(id) on delete cascade,
+  post_site_id uuid references public.post_sites(id) on delete set null,   -- remover um destino não apaga o log
   post_id uuid references public.posts(id) on delete cascade,
   site_id uuid references public.sites(id) on delete cascade,
   channel text not null check (channel in ('api','wordpress','webhook')),
@@ -171,6 +171,7 @@ returns void language sql security definer set search_path = public as $$
   on conflict (post_id, site_id, day) do update set views = public.post_views.views + 1;
 $$;
 revoke all on function public.increment_post_view(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.increment_post_view(uuid, uuid) to service_role;
 
 -- ============ updated_at automático ============
 create or replace function public.touch_updated_at()

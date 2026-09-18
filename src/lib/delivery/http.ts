@@ -1,4 +1,7 @@
 import "server-only";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+import { env } from "@/lib/env";
 
 export const USER_AGENT = "OutBox-CMS/1.0";
 
@@ -79,6 +82,64 @@ export function networkMessage(err: unknown, url: string, timeoutMs: number): st
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Loopback, redes privadas, link-local (metadados de nuvem), CGNAT, multicast e reservados. */
+function isPrivateAddress(ip: string): boolean {
+  if (isIP(ip) === 4) {
+    const [a, b] = ip.split(".").map(Number);
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      a >= 224
+    );
+  }
+  const v6 = ip.toLowerCase();
+  if (v6 === "::" || v6 === "::1") return true;
+  const mapped = v6.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) return isPrivateAddress(mapped[1]);
+  if (v6.startsWith("::ffff:")) return true;
+  return /^(fc|fd|fe[89ab]|ff)/.test(v6);
+}
+
+/**
+ * Proteção contra SSRF: URLs informadas pelo usuário (webhook, WordPress, capa) só podem
+ * apontar para http(s) em endereço público. Desligável em desenvolvimento com OUTBOX_ALLOW_PRIVATE_URLS=1.
+ */
+export async function assertPublicUrl(raw: string): Promise<URL> {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new DeliveryError(`URL inválida: ${raw}`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new DeliveryError(`Endereço não permitido (${url.protocol}). Use uma URL começando com https://.`);
+  }
+  if (env.allowPrivateUrls) return url;
+
+  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const blocked = `${host} é um endereço interno. Use o endereço público do site.`;
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
+    throw new DeliveryError(blocked);
+  }
+  let addresses: string[];
+  if (isIP(host)) addresses = [host];
+  else {
+    try {
+      addresses = (await lookup(host, { all: true, verbatim: true })).map((a) => a.address);
+    } catch (err) {
+      throw new DeliveryError(networkMessage(err, raw, 0));
+    }
+  }
+  if (!addresses.length || addresses.some(isPrivateAddress)) throw new DeliveryError(blocked);
+  return url;
+}
+
 export type RequestOptions = RequestInit & {
   /** Tempo máximo por tentativa. Padrão: 10 s. */
   timeoutMs?: number;
@@ -86,11 +147,41 @@ export type RequestOptions = RequestInit & {
   retries?: number;
 };
 
+const MAX_REDIRECTS = 5;
+
 /**
  * fetch com timeout e novas tentativas (backoff 0,5 s → 1,5 s) em erro de rede, 429 e 5xx.
  * O corpo precisa ser reutilizável (string, Buffer, Uint8Array). Lança DeliveryError em falha de rede.
+ * Cada endereço (inclusive os de redirecionamento) passa por `assertPublicUrl`.
  */
 export async function request(url: string, options: RequestOptions = {}): Promise<Response> {
+  const { redirect = "follow", ...rest } = options;
+  const h = new Headers(rest.headers);
+  let target = url;
+  let method = (rest.method ?? "GET").toUpperCase();
+  let body = rest.body;
+
+  for (let hop = 0; ; hop++) {
+    const current = await assertPublicUrl(target);
+    const res = await fetchWithRetry(current.toString(), { ...rest, method, body, headers: h, redirect: "manual" });
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (redirect !== "follow" || !location) return res;
+
+    await res.body?.cancel().catch(() => {});
+    if (hop >= MAX_REDIRECTS) throw new DeliveryError(`${hostOf(url)} redirecionou vezes demais. Confira a URL.`);
+    const next = new URL(location, current);
+    // credenciais não seguem para outro host nem para http
+    if (next.host !== current.host || (current.protocol === "https:" && next.protocol === "http:")) h.delete("authorization");
+    if (res.status === 303 || ((res.status === 301 || res.status === 302) && method !== "GET" && method !== "HEAD")) {
+      method = "GET";
+      body = undefined;
+      h.delete("content-type");
+    }
+    target = next.toString();
+  }
+}
+
+async function fetchWithRetry(url: string, options: RequestOptions): Promise<Response> {
   const { timeoutMs = 10_000, retries = 2, headers, ...init } = options;
   const h = new Headers(headers);
   if (!h.has("user-agent")) h.set("user-agent", USER_AGENT);

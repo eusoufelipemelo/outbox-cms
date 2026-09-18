@@ -69,7 +69,7 @@ interface Draft {
 
 type Patch = Partial<Draft> | ((d: Draft) => Partial<Draft>);
 
-function initialDraft(post: EditorPost | null, scheduledLocal: string): Draft {
+function initialDraft(post: EditorPost | null, scheduledLocal: string, siteIds: string[] = []): Draft {
   return {
     title: post?.title ?? "",
     slug: post?.slug ?? "",
@@ -86,7 +86,7 @@ function initialDraft(post: EditorPost | null, scheduledLocal: string): Draft {
     seoDescription: post?.seoDescription ?? "",
     focusKeyword: post?.focusKeyword ?? "",
     scheduledLocal: post ? isoToLocalInput(post.scheduledAt) : scheduledLocal,
-    destinations: post?.destinations ?? [],
+    destinations: post?.destinations ?? siteIds.map(emptyDestination),
   };
 }
 
@@ -215,17 +215,20 @@ export function ArticleEditor({
   sites,
   categories,
   initialScheduledLocal = "",
+  initialSiteIds = [],
 }: {
   post: EditorPost | null;
   sites: DestinationSite[];
   categories: string[];
   initialScheduledLocal?: string;
+  /** Destinos pré-marcados em um artigo novo (ex.: /artigos/novo?cliente=<id>). */
+  initialSiteIds?: string[];
 }) {
   const router = useRouter();
   const narrow = useIsNarrow();
   const { confirm, dialog: confirmDialog } = useConfirm();
 
-  const [draft, setDraft] = useState<Draft>(() => initialDraft(post, initialScheduledLocal));
+  const [draft, setDraft] = useState<Draft>(() => initialDraft(post, initialScheduledLocal, initialSiteIds));
   const [postId, setPostId] = useState<string | null>(post?.id ?? null);
   const [status, setStatus] = useState<PostStatus>(post?.status ?? "draft");
   const [serverScheduledAt, setServerScheduledAt] = useState<string | null>(post?.scheduledAt ?? null);

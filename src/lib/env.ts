@@ -28,4 +28,8 @@ export const env = {
   get cronSecret() {
     return process.env.CRON_SECRET || null;
   },
+  /** Só para desenvolvimento: 1 libera entregas para localhost/rede interna (bloqueadas por padrão). */
+  get allowPrivateUrls() {
+    return process.env.OUTBOX_ALLOW_PRIVATE_URLS === "1";
+  },
 };

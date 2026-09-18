@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireUser } from "@/lib/auth";
 import { PageHeader } from "@/components/ui/panel";
 import { SiteNetwork } from "@/components/dashboard/site-network";
 import { AttentionPanel, DraftsPanel, TopReadPanel, UpcomingPanel } from "@/components/dashboard/side-panels";
@@ -33,6 +34,7 @@ function summary(d: DashboardData) {
 }
 
 export default async function DashboardPage() {
+  await requireUser();
   const data = await getDashboard();
 
   if (!data.clientCount) {

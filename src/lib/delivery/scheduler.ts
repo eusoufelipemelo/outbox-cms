@@ -38,11 +38,19 @@ export async function processScheduledPosts(): Promise<ScheduledRun[]> {
       const results = siteIds.length ? await publishPost(post.id, { siteIds }) : [];
       const failed = results.filter((r) => !r.ok).length;
 
-      if (results.length > 0 && failed === results.length) {
-        // Nada foi ao ar: volta a rascunho (mantendo a data) para a equipe ver o erro, sem repetir a cada minuto.
+      if (failed === results.length) {
+        // Nada foi ao ar (tudo falhou ou nenhum destino): volta a rascunho (mantendo a data) para a equipe
+        // ver o problema, sem repetir a cada minuto e sem marcar como publicado um artigo que não está em site nenhum.
         await db().from("posts").update({ status: "draft", scheduled_at: post.scheduled_at, published_at: post.published_at }).eq("id", post.id);
       }
-      runs.push({ postId: post.id, title: post.title, ok: failed < results.length || results.length === 0, sites: results.length, failed });
+      runs.push({
+        postId: post.id,
+        title: post.title,
+        ok: failed < results.length,
+        sites: results.length,
+        failed,
+        ...(results.length === 0 ? { message: "nenhum destino escolhido; voltou para rascunho" } : {}),
+      });
     } catch (err) {
       // Erro inesperado (banco fora, etc.): devolve para a fila e tenta no próximo ciclo.
       await db().from("posts").update({ status: "scheduled", scheduled_at: post.scheduled_at, published_at: post.published_at }).eq("id", post.id);

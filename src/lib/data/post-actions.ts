@@ -82,6 +82,9 @@ const nullIfEmpty = (value: string | null | undefined) => {
 
 // ============ Persistência ============
 
+const sameInstant = (a: string | null, b: string | null) =>
+  (a ? new Date(a).getTime() : null) === (b ? new Date(b).getTime() : null);
+
 const REVISION_INTERVAL_MS = 10 * 60 * 1000;
 
 interface Persisted {
@@ -134,13 +137,27 @@ async function persist(input: SaveData, user: CurrentUser, opts: { forceRevision
     updated_by: user.id,
   };
 
-  const columns = "id,updated_at,slug,status,published_at";
-  let saved: { id: string; updated_at: string; slug: string; status: PostStatus; published_at: string | null };
+  const columns = "id,updated_at,slug,status,published_at,scheduled_at";
+  let saved: { id: string; updated_at: string; slug: string; status: PostStatus; published_at: string | null; scheduled_at: string | null };
   if (input.id) {
-    const { data, error } = await db().from("posts").update(row).eq("id", input.id).select(columns).maybeSingle();
+    // scheduled_at de artigo agendado/publicado só muda por schedulePost/publicação: o autosave não pode
+    // reagendar (nem mandar para o passado, o que publicaria na hora) nem desfazer o que o agendador gravou.
+    const { scheduled_at: scheduledAt, ...fields } = row;
+    const { data, error } = await db().from("posts").update(fields).eq("id", input.id).select(columns).maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw new UserError("Este artigo não existe mais. Ele pode ter sido excluído por outra pessoa.");
     saved = data;
+    if ((saved.status === "draft" || saved.status === "archived") && !sameInstant(saved.scheduled_at, scheduledAt)) {
+      const { data: again, error: schedError } = await db()
+        .from("posts")
+        .update({ scheduled_at: scheduledAt })
+        .eq("id", input.id)
+        .in("status", ["draft", "archived"])
+        .select(columns)
+        .maybeSingle();
+      if (schedError) throw new Error(schedError.message);
+      if (again) saved = again;
+    }
   } else {
     const { data, error } = await db()
       .from("posts")
@@ -424,8 +441,15 @@ export async function unarchivePost(postId: string): Promise<ActionResult<{ save
   try {
     await requireUser();
     const pid = parseId(postId);
-    const { data, error } = await db().from("posts").update({ status: "draft" }).eq("id", pid).select("updated_at").single();
+    const { data, error } = await db()
+      .from("posts")
+      .update({ status: "draft" })
+      .eq("id", pid)
+      .eq("status", "archived")
+      .select("updated_at")
+      .maybeSingle();
     if (error) throw new Error(error.message);
+    if (!data) throw new UserError("Este artigo não está mais arquivado. Recarregue a página.");
     return { ok: true, data: { savedAt: data.updated_at } };
   } catch (error) {
     return fail(error);
