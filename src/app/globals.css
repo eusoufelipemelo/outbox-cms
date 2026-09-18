@@ -1,26 +1,191 @@
 @import "tailwindcss";
 
+/*
+  OutBox CMS — tokens (modo light)
+  Laranja e preto vêm direto do símbolo da marca. O laranja é reservado para
+  "ação de publicar" e para marcar destino selecionado — não para decoração.
+*/
+@theme {
+  --color-paper: #f2f3f5;       /* fundo do app */
+  --color-surface: #ffffff;     /* painéis */
+  --color-sunken: #f7f8f9;      /* áreas internas, inputs em repouso */
+  --color-ink: #000000;         /* títulos, logo, botão primário */
+  --color-text: #1d1e22;        /* corpo */
+  --color-muted: #5c5f68;       /* texto secundário (7:1 sobre branco) */
+  --color-faint: #80838c;       /* metadados não essenciais */
+  --color-line: #e3e4e8;
+  --color-line-strong: #cdd0d6;
+
+  --color-brand: #f15532;       /* laranja OutBox */
+  --color-brand-hover: #e0461f;
+  --color-brand-ink: #b3361a;   /* laranja para texto sobre branco (AA) */
+  --color-brand-soft: #fdeee9;
+
+  --color-ok: #157a45;
+  --color-ok-soft: #e4f3ea;
+  --color-warn: #8a5a00;
+  --color-warn-soft: #fff3d1;
+  --color-danger: #b42318;
+  --color-danger-soft: #fdecea;
+  --color-info: #1f5fbf;
+  --color-info-soft: #e8f0fc;
+
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
+
+  /* raio segue a hierarquia do símbolo: caixa grande arredondada, controles menores */
+  --radius-panel: 16px;
+  --radius-control: 10px;
+  --radius-chip: 999px;
+
+  --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -12px rgb(0 0 0 / 0.18);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-paper);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Títulos de página: Archivo largo e pesado, eco do logotipo */
+.display {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-stretch: 112%;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: var(--color-brand-soft);
+  color: var(--color-ink);
+}
+
+/* Marca de destino selecionado: o "entalhe" do símbolo OutBox no canto superior esquerdo */
+.notch {
+  position: relative;
+}
+.notch::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 18px;
+  height: 18px;
+  border-top: 4px solid var(--color-brand);
+  border-left: 4px solid var(--color-brand);
+  border-top-left-radius: var(--radius-control);
+  pointer-events: none;
+}
+
+/* Conteúdo de artigo (editor e pré-visualização) */
+.prose-article {
+  font-family: var(--font-serif);
+  font-size: 1.1875rem;
+  line-height: 1.75;
+  color: var(--color-text);
+  max-width: 68ch;
+}
+.prose-article > * + * {
+  margin-top: 1.1em;
+}
+.prose-article h2 {
+  font-family: var(--font-sans);
+  font-weight: 750;
+  font-size: 1.6rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+  margin-top: 1.8em;
+}
+.prose-article h3 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1.25rem;
+  line-height: 1.3;
+  color: var(--color-ink);
+  margin-top: 1.5em;
+}
+.prose-article a {
+  color: var(--color-brand-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.prose-article ul,
+.prose-article ol {
+  padding-left: 1.4em;
+}
+.prose-article ul {
+  list-style: disc;
+}
+.prose-article ol {
+  list-style: decimal;
+}
+.prose-article li + li {
+  margin-top: 0.35em;
+}
+.prose-article blockquote {
+  border-left: 3px solid var(--color-brand);
+  padding-left: 1em;
+  color: var(--color-muted);
+  font-style: italic;
+}
+.prose-article img {
+  border-radius: 12px;
+  max-width: 100%;
+  height: auto;
+}
+.prose-article hr {
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  margin: 2em 0;
+}
+.prose-article code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--color-sunken);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+/* Placeholder do TipTap */
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--color-faint);
+  pointer-events: none;
+  height: 0;
+}
+.tiptap:focus {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
