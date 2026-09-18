@@ -200,3 +200,6 @@ alter table public.post_views enable row level security;
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('media', 'media', true, 10485760, array['image/jpeg','image/png','image/webp','image/gif','image/avif','image/svg+xml'])
 on conflict (id) do nothing;
+
+-- A contagem de leituras é chamada pelo servidor (service role)
+grant execute on function public.increment_post_view(uuid, uuid) to service_role;
