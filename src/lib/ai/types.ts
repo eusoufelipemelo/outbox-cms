@@ -25,3 +25,15 @@ export interface AiOutput {
   seo: { seo_title: string; seo_description: string; excerpt: string; slug: string };
   variation: { title: string; excerpt: string; content_html: string; seo_title: string; seo_description: string };
 }
+
+/** GET /api/ai */
+export interface AiStatus {
+  enabled: boolean;
+  /** Modelo em uso (só quando `enabled`). */
+  model?: string;
+}
+
+/** Corpo de resposta de POST /api/ai. */
+export type AiResponse<A extends AiAction = AiAction> =
+  | { ok: true; result: AiOutput[A] }
+  | { ok: false; error: string };

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CalendarDays, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -92,9 +92,6 @@ function SidebarBody({ user, signOut, onNavigate }: { user: { name: string; emai
 
 export function AppNav({ user, signOut }: { user: { name: string; email: string }; signOut: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
-  useEffect(() => setOpen(false), [pathname]);
-
   return (
     <>
       {/* desktop */}
