@@ -33,11 +33,14 @@ export function storageProvider(): "r2" | "supabase" {
 export async function putImage(key: string, bytes: Uint8Array, mime: string): Promise<{ path: string; url: string }> {
   const r = r2();
   if (r) {
-    const res = await r.client.fetch(r.objectUrl(key), {
+    // Assina e envia os bytes direto. Passar o Request do aws4fetch ao fetch do Next faz o corpo
+    // virar stream (sem Content-Length), e o R2 recusa com HTTP 411 (Length Required).
+    const signed = await r.client.sign(r.objectUrl(key), {
       method: "PUT",
-      body: new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mime }),
+      body: bytes as Uint8Array<ArrayBuffer>,
       headers: { "content-type": mime, "cache-control": "public, max-age=31536000, immutable" },
     });
+    const res = await fetch(signed.url, { method: "PUT", headers: signed.headers, body: bytes as Uint8Array<ArrayBuffer>, cache: "no-store" });
     if (!res.ok) throw new Error(`R2 recusou o envio (HTTP ${res.status})`);
     return { path: `${R2_PREFIX}${key}`, url: `${r.cfg.publicUrl}/${key}` };
   }
@@ -52,7 +55,8 @@ export async function deleteImage(path: string): Promise<void> {
   if (path.startsWith(R2_PREFIX)) {
     const r = r2();
     if (!r) throw new Error("R2 não está configurado para apagar este arquivo.");
-    const res = await r.client.fetch(r.objectUrl(path.slice(R2_PREFIX.length)), { method: "DELETE" });
+    const signed = await r.client.sign(r.objectUrl(path.slice(R2_PREFIX.length)), { method: "DELETE" });
+    const res = await fetch(signed.url, { method: "DELETE", headers: signed.headers, cache: "no-store" });
     if (!res.ok && res.status !== 404) throw new Error(`R2 recusou a exclusão (HTTP ${res.status})`);
     return;
   }
