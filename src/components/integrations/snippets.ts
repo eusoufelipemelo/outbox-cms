@@ -30,28 +30,65 @@ export function embedOptionsSnippet(appUrl: string, key: string): string {
 ></script>`;
 }
 
-export function nextEnvSnippet(appUrl: string, key: string): string {
-  return `# .env.local
-OUTBOX_API_URL=${appUrl}/api/v1
-OUTBOX_KEY=${key}
+/** Rota do starter OutBox (e do snippet Next.js) que revalida o blog a cada publicação. */
+export const REVALIDATE_PATH = "/api/outbox/revalidate";
+
+/** As 3 variáveis de ambiente de um site feito com o starter da OutBox. */
+export function outboxEnvSnippet(appUrl: string, key: string): string {
+  return `OUTBOX_API_URL=${appUrl}/api/v1
+OUTBOX_SITE_KEY=${key}
 # Segredo do webhook: copie na página do site no OutBox CMS
 OUTBOX_WEBHOOK_SECRET=`;
+}
+
+export function nextEnvSnippet(appUrl: string, key: string): string {
+  return `# .env.local
+${outboxEnvSnippet(appUrl, key)}`;
+}
+
+/** Robôs de busca e de IA liberados no robots.txt (GEO). */
+export const AI_CRAWLERS = [
+  "GPTBot",
+  "OAI-SearchBot",
+  "ChatGPT-User",
+  "PerplexityBot",
+  "ClaudeBot",
+  "Claude-SearchBot",
+  "Google-Extended",
+  "Bingbot",
+  "Applebot-Extended",
+] as const;
+
+export function robotsSnippet(siteUrl: string): string {
+  const root = siteUrl.replace(/\/+$/, "");
+  const groups = AI_CRAWLERS.map((bot) => `User-agent: ${bot}\nAllow: /`).join("\n\n");
+  return `# robots.txt: libera buscadores e assistentes de IA para lerem e citarem o site
+User-agent: *
+Allow: /
+
+${groups}
+
+Sitemap: ${root}/sitemap.xml`;
 }
 
 export function nextLibSnippet(): string {
   return `// lib/outbox.ts
 const API = process.env.OUTBOX_API_URL!;
-const KEY = process.env.OUTBOX_KEY!;
+const KEY = process.env.OUTBOX_SITE_KEY!;
+
+export type OutboxAuthor = { name: string; credentials: string | null; bio: string | null };
 
 export type OutboxPostSummary = {
   id: string;
   slug: string;
   title: string;
   excerpt: string;
+  answer_summary: string | null;
   cover_image: { url: string; alt: string } | null;
   category: string | null;
   tags: string[];
   author: string | null;
+  author_profile: OutboxAuthor | null;
   published_at: string | null;
   updated_at: string;
   reading_minutes: number;
@@ -60,6 +97,10 @@ export type OutboxPostSummary = {
 
 export type OutboxPost = OutboxPostSummary & {
   content_html: string;
+  key_takeaways: string[];
+  faq: { question: string; answer: string }[];
+  sources: { title: string; url: string; publisher?: string | null }[];
+  content_type: "article" | "howto" | "guide" | "list" | "comparison" | "news";
   seo: { title: string; description: string; canonical_url: string; og_image: string | null };
   json_ld: Record<string, unknown>;
 };
@@ -143,6 +184,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: post.seo.description,
       images: post.seo.og_image ? [post.seo.og_image] : [],
       publishedTime: post.published_at ?? undefined,
+      modifiedTime: post.updated_at,
     },
   };
 }
@@ -159,9 +201,19 @@ export default async function PostPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(post.json_ld).replace(/</g, "\\\\u003c") }}
       />
       <h1>{post.title}</h1>
+      {post.answer_summary && <p><strong>Resposta rápida:</strong> {post.answer_summary}</p>}
       {post.cover_image && <img src={post.cover_image.url} alt={post.cover_image.alt} />}
+      {post.key_takeaways.length > 0 && (
+        <ul>{post.key_takeaways.map((t) => <li key={t}>{t}</li>)}</ul>
+      )}
       {/* HTML já sanitizado pelo OutBox CMS */}
       <div dangerouslySetInnerHTML={{ __html: post.content_html }} />
+      {post.faq.map((f) => (
+        <details key={f.question}>
+          <summary>{f.question}</summary>
+          <p>{f.answer}</p>
+        </details>
+      ))}
     </article>
   );
 }`;
@@ -169,7 +221,7 @@ export default async function PostPage({ params }: Props) {
 
 export function nextWebhookSnippet(blogPath: string): string {
   const folder = blogFolder(blogPath);
-  return `// app/api/outbox-webhook/route.ts
+  return `// app${REVALIDATE_PATH}/route.ts
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
@@ -205,17 +257,23 @@ export function webhookPayloadSnippet(site: SnippetSite, articleUrl: string): st
       slug: "como-escolher-o-melhor-armario",
       title: "Como escolher o melhor armário",
       excerpt: "Um guia rápido para acertar na escolha.",
-      content_html: "<p>…</p>",
+      answer_summary: "Escolha pelo espaço disponível, pelo material e pela rotina de quem vai usar…",
       cover_image: { url: "https://…/capa.jpg", alt: "Armário planejado" },
       category: "Dicas",
       tags: ["armário", "planejados"],
-      author: "Equipe",
+      author: "Ana Souza",
+      author_profile: { name: "Ana Souza", credentials: "Arquiteta, CAU A12345-6", bio: "…" },
       published_at: now,
       updated_at: now,
       reading_minutes: 4,
       url: articleUrl,
+      content_html: "<p>…</p>",
+      key_takeaways: ["Meça o espaço antes de escolher o modelo."],
+      faq: [{ question: "Quanto custa um armário planejado?", answer: "…" }],
+      sources: [{ title: "…", url: "https://…", publisher: "…" }],
+      content_type: "guide",
       seo: { title: "…", description: "…", canonical_url: articleUrl, og_image: "https://…/capa.jpg" },
-      json_ld: { "@context": "https://schema.org", "@type": "BlogPosting" },
+      json_ld: { "@context": "https://schema.org", "@graph": [{ "@type": "BlogPosting" }, { "@type": "FAQPage" }] },
     },
   };
   return `POST <sua URL de webhook>
@@ -282,6 +340,9 @@ export function curlSnippets(appUrl: string, key: string): { title: string; code
       code: `curl -H "x-outbox-key: ${key}" "${api}/posts/como-escolher-o-melhor-armario"`,
     },
     { title: "Categorias e tags com contagem", code: `curl -H "Authorization: Bearer ${key}" "${api}/categories"` },
+    { title: "Dados do site e da empresa (rodapé, schema da home, IndexNow)", code: `curl "${api}/site?key=${key}"` },
+    { title: "llms.txt (resumo para IAs)", code: `curl "${api}/llms.txt?key=${key}"` },
+    { title: "llms-full.txt (artigos completos em markdown)", code: `curl "${api}/llms-full.txt?key=${key}"` },
     { title: "Sitemap XML dos artigos", code: `curl "${api}/sitemap.xml?key=${key}"` },
     { title: "Feed RSS 2.0", code: `curl "${api}/feed.xml?key=${key}"` },
     {

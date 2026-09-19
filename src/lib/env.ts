@@ -28,6 +28,16 @@ export const env = {
   get cronSecret() {
     return process.env.CRON_SECRET || null;
   },
+  /**
+   * Opcional: domínios de e-mail aprovados automaticamente no primeiro login
+   * (ex.: "outboxgroup.com.br,outbox.com.br"). Contas de outros domínios esperam um admin.
+   */
+  get autoApproveDomains(): string[] {
+    return (process.env.AUTO_APPROVE_DOMAINS || "")
+      .split(",")
+      .map((d) => d.trim().toLowerCase().replace(/^@/, ""))
+      .filter(Boolean);
+  },
   /** Só para desenvolvimento: 1 libera entregas para localhost/rede interna (bloqueadas por padrão). */
   get allowPrivateUrls() {
     return process.env.OUTBOX_ALLOW_PRIVATE_URLS === "1";

@@ -1,6 +1,8 @@
 // Contrato do assistente de IA, compartilhado entre servidor (/api/ai) e cliente (callAi).
 
-export type AiAction = "titles" | "outline" | "draft" | "improve" | "seo" | "variation";
+import type { ContentType, FaqItem } from "@/lib/types";
+
+export type AiAction = "titles" | "outline" | "draft" | "improve" | "seo" | "variation" | "geo" | "full_article" | "ideas";
 
 export interface AiInput {
   /** Sugere títulos a partir de um tema. */
@@ -15,6 +17,12 @@ export interface AiInput {
   seo: { title: string; html: string; keyword?: string };
   /** Versão do artigo adaptada ao cliente dono do site (tom, cidade, palavras-chave). */
   variation: { postId: string; siteId: string };
+  /** Blocos de GEO a partir de um artigo pronto: resposta direta, pontos principais, FAQ e tipo. */
+  geo: { title: string; html: string; keyword?: string; clientId?: string };
+  /** Um clique: artigo completo pronto para SEO + GEO a partir de um tema. */
+  full_article: { topic: string; keyword?: string; clientId?: string; contentType?: ContentType; words?: number };
+  /** Pautas: ideias de artigos para um cliente (nicho, cidade, serviços, palavras-chave). */
+  ideas: { clientId: string; count?: number; focus?: string };
 }
 
 export interface AiOutput {
@@ -23,7 +31,40 @@ export interface AiOutput {
   draft: { html: string };
   improve: { html: string };
   seo: { seo_title: string; seo_description: string; excerpt: string; slug: string };
-  variation: { title: string; excerpt: string; content_html: string; seo_title: string; seo_description: string };
+  variation: {
+    title: string;
+    excerpt: string;
+    content_html: string;
+    seo_title: string;
+    seo_description: string;
+    answer_summary: string;
+    faq: FaqItem[];
+  };
+  geo: { answer_summary: string; key_takeaways: string[]; faq: FaqItem[]; content_type: ContentType };
+  full_article: {
+    title: string;
+    slug: string;
+    excerpt: string;
+    content_html: string;
+    answer_summary: string;
+    key_takeaways: string[];
+    faq: FaqItem[];
+    seo_title: string;
+    seo_description: string;
+    focus_keyword: string;
+    content_type: ContentType;
+    /** O que citar como fonte (descrições para o redator verificar). A IA nunca inventa URLs. */
+    source_suggestions: string[];
+  };
+  ideas: {
+    ideas: {
+      title: string;
+      keyword: string;
+      intent: "informacional" | "comercial" | "local" | "comparativa";
+      content_type: ContentType;
+      angle: string;
+    }[];
+  };
 }
 
 /** GET /api/ai */

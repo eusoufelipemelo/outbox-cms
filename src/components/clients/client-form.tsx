@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useActionState, useState, type FormEvent } from "react";
-import { ImageIcon } from "lucide-react";
+import { startTransition, useActionState, useState, type FormEvent, type KeyboardEvent } from "react";
+import { ImageIcon, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
@@ -11,10 +11,172 @@ import { Panel } from "@/components/ui/panel";
 import { MediaPicker } from "@/components/media/media-picker";
 import { saveClient } from "@/lib/data/client-actions";
 import type { ActionResult, Client } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { CLIENT_STATUS, CLIENT_STATUSES, UFS } from "./options";
-import { KeywordInput } from "./keyword-input";
 
 type State = ActionResult<{ id: string }> | null;
+
+/** Sugestões do campo Segmento (texto livre): a OutBox atende qualquer nicho. */
+const SEGMENT_SUGGESTIONS = [
+  "Odontologia",
+  "Clínica médica",
+  "Dermatologia",
+  "Oftalmologia",
+  "Ortopedia",
+  "Pediatria",
+  "Psicologia",
+  "Nutrição",
+  "Fisioterapia",
+  "Estética facial e corporal",
+  "Clínica veterinária",
+  "Pet shop",
+  "Farmácia",
+  "Laboratório de análises clínicas",
+  "Advocacia",
+  "Contabilidade",
+  "Consultoria empresarial",
+  "Corretora de seguros",
+  "Consórcios e financiamentos",
+  "Imobiliária",
+  "Construtora",
+  "Arquitetura",
+  "Design de interiores",
+  "Marcenaria e móveis planejados",
+  "Materiais de construção",
+  "Energia solar",
+  "Climatização e ar-condicionado",
+  "Engenharia",
+  "Indústria",
+  "Distribuidora",
+  "Logística e transporte",
+  "Oficina mecânica",
+  "Concessionária e revenda de veículos",
+  "Varejo de moda",
+  "Loja de móveis e decoração",
+  "Supermercado",
+  "E-commerce",
+  "Restaurante",
+  "Padaria e confeitaria",
+  "Bar e cervejaria",
+  "Hotel e pousada",
+  "Agência de viagens",
+  "Eventos e buffet",
+  "Escola",
+  "Curso livre e idiomas",
+  "Faculdade",
+  "Academia",
+  "Salão de beleza e barbearia",
+  "Tecnologia e software",
+  "Agronegócio",
+  "Limpeza e conservação",
+  "Segurança eletrônica",
+  "Gráfica",
+  "Fotografia",
+  "Organização sem fins lucrativos",
+];
+
+/**
+ * Campo de etiquetas: Enter ou vírgula adicionam, Backspace no campo vazio remove a última.
+ * Envia cada etiqueta como `name` e o texto ainda não confirmado como `${name}_draft`.
+ */
+function TagInput({
+  id,
+  name,
+  defaultValue,
+  invalid,
+  maxLength,
+  placeholder,
+  itemLabel,
+}: {
+  id: string;
+  name: string;
+  defaultValue: string[];
+  invalid?: boolean;
+  maxLength: number;
+  placeholder: string;
+  /** Nome do item no rótulo do botão de remover, ex.: "palavra-chave". */
+  itemLabel: string;
+}) {
+  const [tags, setTags] = useState<string[]>(defaultValue);
+  const [draft, setDraft] = useState("");
+
+  function add(raw: string) {
+    const parts = raw
+      .split(",")
+      .map((p) => p.trim().replace(/\s+/g, " "))
+      .filter(Boolean);
+    if (parts.length === 0) return;
+    setTags((current) => {
+      const next = [...current];
+      for (const p of parts) {
+        if (p.length <= maxLength && !next.some((t) => t.toLowerCase() === p.toLowerCase())) next.push(p);
+      }
+      return next;
+    });
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      add(draft);
+      setDraft("");
+    } else if (e.key === "Backspace" && draft === "" && tags.length > 0) {
+      setTags((current) => current.slice(0, -1));
+    }
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-[var(--radius-control)] border border-line-strong bg-surface px-2 py-1.5 transition-colors duration-150 hover:border-[#b6b9c0] focus-within:border-ink focus-within:ring-2 focus-within:ring-brand/25",
+        invalid && "border-danger",
+      )}
+    >
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex h-7 items-center gap-1 rounded-[var(--radius-chip)] border border-line bg-sunken pr-0.5 pl-2.5 text-[13px] text-text"
+        >
+          {tag}
+          <input type="hidden" name={name} value={tag} />
+          <button
+            type="button"
+            onClick={() => setTags((current) => current.filter((t) => t !== tag))}
+            aria-label={`Remover ${itemLabel} ${tag}`}
+            className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-line hover:text-ink"
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        </span>
+      ))}
+      <input
+        id={id}
+        name={`${name}_draft`}
+        value={draft}
+        maxLength={maxLength}
+        onChange={(e) => {
+          const value = e.target.value;
+          if (value.includes(",")) {
+            add(value);
+            setDraft("");
+          } else {
+            setDraft(value);
+          }
+        }}
+        onKeyDown={onKeyDown}
+        onBlur={() => {
+          if (draft.trim()) {
+            add(draft);
+            setDraft("");
+          }
+        }}
+        aria-invalid={invalid || undefined}
+        placeholder={tags.length === 0 ? placeholder : "Adicionar outro"}
+        className="h-7 min-w-[10ch] flex-1 bg-transparent px-1 text-[15px] text-text placeholder:text-faint focus:outline-none"
+      />
+    </div>
+  );
+}
 
 export function ClientForm({ client }: { client?: Client }) {
   const router = useRouter();
@@ -83,8 +245,26 @@ export function ClientForm({ client }: { client?: Client }) {
                 aria-invalid={invalid("document")}
               />
             </Field>
-            <Field label="Segmento" htmlFor="segment" error={err("segment")} hint="Por exemplo: marcenaria, odontologia.">
-              <Input id="segment" name="segment" defaultValue={client?.segment ?? ""} aria-invalid={invalid("segment")} />
+            <Field
+              label="Segmento"
+              htmlFor="segment"
+              error={err("segment")}
+              hint="Escreva livremente ou escolha uma sugestão. Define exemplos, vocabulário e regras do setor na IA."
+            >
+              <Input
+                id="segment"
+                name="segment"
+                list="segment-suggestions"
+                defaultValue={client?.segment ?? ""}
+                maxLength={80}
+                autoComplete="off"
+                aria-invalid={invalid("segment")}
+              />
+              <datalist id="segment-suggestions">
+                {SEGMENT_SUGGESTIONS.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
             </Field>
             <Field label="Status" htmlFor="status" error={err("status")}>
               <Select id="status" name="status" defaultValue={client?.status ?? "active"} aria-invalid={invalid("status")}>
@@ -213,7 +393,7 @@ export function ClientForm({ client }: { client?: Client }) {
 
         <Panel
           title="Voz da marca"
-          description="Tom de voz, público, cidade e palavras-chave alimentam a IA quando ela adapta um artigo para o site deste cliente. Quanto mais específico, menos o texto se parece com o de outros clientes."
+          description="Tom de voz, público, cidade e palavras-chave alimentam a IA quando ela escreve ou adapta artigos para este cliente. Quanto mais específico, menos o texto se parece com o de outros clientes."
         >
           <div className="grid gap-5">
             <Field
@@ -244,7 +424,156 @@ export function ClientForm({ client }: { client?: Client }) {
               error={err("keywords")}
               hint="Tecle Enter ou vírgula para adicionar cada uma."
             >
-              <KeywordInput id="keywords" name="keywords" defaultValue={client?.keywords ?? []} invalid={Boolean(err("keywords"))} />
+              <TagInput
+                id="keywords"
+                name="keywords"
+                defaultValue={client?.keywords ?? []}
+                invalid={Boolean(err("keywords"))}
+                maxLength={60}
+                placeholder="Digite e tecle Enter"
+                itemLabel="palavra-chave"
+              />
+            </Field>
+          </div>
+        </Panel>
+
+        <Panel
+          title="Presença para Google e IAs"
+          description="Descreve o cliente como empresa para buscadores e assistentes de IA, e entra no contexto dos artigos gerados. Preencha só o que for verdade e puder ser público."
+        >
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field
+              label="Sobre a empresa"
+              htmlFor="about"
+              error={err("about")}
+              hint="O que a empresa faz, em 2 ou 3 frases. É o texto que IAs usam para descrever o cliente."
+              className="sm:col-span-2"
+            >
+              <Textarea id="about" name="about" rows={3} maxLength={600} defaultValue={client?.about ?? ""} aria-invalid={invalid("about")} />
+            </Field>
+            <Field
+              label="Serviços e produtos"
+              htmlFor="services"
+              error={err("services")}
+              hint="Tecle Enter ou vírgula para adicionar cada um, com o nome usado no site do cliente."
+              className="sm:col-span-2"
+            >
+              <TagInput
+                id="services"
+                name="services"
+                defaultValue={client?.services ?? []}
+                invalid={Boolean(err("services"))}
+                maxLength={80}
+                placeholder="Digite um serviço e tecle Enter"
+                itemLabel="serviço"
+              />
+            </Field>
+            <Field
+              label="Área de atendimento"
+              htmlFor="service_area"
+              error={err("service_area")}
+              hint="Onde o cliente atende. Por exemplo: Curitiba e região metropolitana, ou todo o Brasil."
+              className="sm:col-span-2"
+            >
+              <Input
+                id="service_area"
+                name="service_area"
+                maxLength={200}
+                defaultValue={client?.service_area ?? ""}
+                aria-invalid={invalid("service_area")}
+              />
+            </Field>
+            <Field
+              label="Endereço"
+              htmlFor="address"
+              error={err("address")}
+              hint="Completo, como no Google Meu Negócio. Deixe vazio se não atende no local."
+            >
+              <Input
+                id="address"
+                name="address"
+                maxLength={300}
+                defaultValue={client?.address ?? ""}
+                autoComplete="off"
+                aria-invalid={invalid("address")}
+              />
+            </Field>
+            <Field
+              label="Horário de atendimento"
+              htmlFor="opening_hours"
+              error={err("opening_hours")}
+              hint="Por exemplo: segunda a sexta, das 8h às 18h."
+            >
+              <Input
+                id="opening_hours"
+                name="opening_hours"
+                maxLength={300}
+                defaultValue={client?.opening_hours ?? ""}
+                aria-invalid={invalid("opening_hours")}
+              />
+            </Field>
+            <Field
+              label="Perfis e links oficiais"
+              htmlFor="social_links"
+              error={err("social_links")}
+              hint="Um endereço por linha: Instagram, LinkedIn, YouTube, Google Meu Negócio. Ajuda as IAs a reconhecer a empresa."
+              className="sm:col-span-2"
+            >
+              <Textarea
+                id="social_links"
+                name="social_links"
+                rows={3}
+                inputMode="url"
+                placeholder="https://instagram.com/cliente"
+                defaultValue={(client?.social_links ?? []).join("\n")}
+                className="font-mono text-[14px]"
+                aria-invalid={invalid("social_links")}
+              />
+            </Field>
+            <Field
+              label="Especialista responsável"
+              htmlFor="expert_name"
+              error={err("expert_name")}
+              hint="Quem assina ou revisa o conteúdo. Mostra experiência real para Google e IAs."
+            >
+              <Input
+                id="expert_name"
+                name="expert_name"
+                maxLength={120}
+                defaultValue={client?.expert_name ?? ""}
+                autoComplete="off"
+                aria-invalid={invalid("expert_name")}
+              />
+            </Field>
+            <Field
+              label="Credenciais do especialista"
+              htmlFor="expert_credentials"
+              error={err("expert_credentials")}
+              hint="Por exemplo: Cirurgiã-dentista, CRO-PR 12345."
+            >
+              <Input
+                id="expert_credentials"
+                name="expert_credentials"
+                maxLength={200}
+                defaultValue={client?.expert_credentials ?? ""}
+                aria-invalid={invalid("expert_credentials")}
+              />
+            </Field>
+            <Field
+              label="Minibiografia do especialista"
+              htmlFor="expert_bio"
+              error={err("expert_bio")}
+              hint="Formação e experiência, em 2 ou 3 frases."
+              className="sm:col-span-2"
+            >
+              <Textarea
+                id="expert_bio"
+                name="expert_bio"
+                rows={3}
+                maxLength={1500}
+                defaultValue={client?.expert_bio ?? ""}
+                aria-invalid={invalid("expert_bio")}
+              />
             </Field>
           </div>
         </Panel>

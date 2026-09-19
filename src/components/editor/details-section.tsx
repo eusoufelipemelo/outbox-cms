@@ -2,7 +2,9 @@
 
 import { useId, useState } from "react";
 import { X } from "lucide-react";
-import { Field, Input, Textarea } from "@/components/ui/field";
+import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { CONTENT_TYPES } from "@/lib/geo";
+import type { ContentType } from "@/lib/types";
 import { CharCounter } from "./primitives";
 
 function TagInput({ id, tags, onChange }: { id: string; tags: string[]; onChange: (tags: string[]) => void }) {
@@ -62,6 +64,7 @@ export function DetailsSection({
   category,
   tags,
   authorName,
+  contentType,
   scheduledLocal,
   categories,
   defaultAuthor,
@@ -72,11 +75,19 @@ export function DetailsSection({
   category: string;
   tags: string[];
   authorName: string;
+  contentType: ContentType;
   scheduledLocal: string;
   categories: string[];
   defaultAuthor: string;
   scheduleLocked: boolean;
-  onChange: (patch: { excerpt?: string; category?: string; tags?: string[]; authorName?: string; scheduledLocal?: string }) => void;
+  onChange: (patch: {
+    excerpt?: string;
+    category?: string;
+    tags?: string[];
+    authorName?: string;
+    contentType?: ContentType;
+    scheduledLocal?: string;
+  }) => void;
 }) {
   const listId = useId();
   return (
@@ -95,6 +106,20 @@ export function DetailsSection({
         />
         <CharCounter value={excerpt} max={300} id="post-excerpt-count" />
       </div>
+
+      <Field
+        label="Tipo de conteúdo"
+        htmlFor="post-content-type"
+        hint="Ajuda buscadores e IAs a entender o formato do artigo."
+      >
+        <Select id="post-content-type" value={contentType} onChange={(e) => onChange({ contentType: e.target.value as ContentType })}>
+          {CONTENT_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
 
       <Field label="Categoria" htmlFor="post-category">
         <Input
@@ -115,7 +140,7 @@ export function DetailsSection({
         <TagInput id="post-tags" tags={tags} onChange={(next) => onChange({ tags: next })} />
       </Field>
 
-      <Field label="Autor" htmlFor="post-author" hint="Nome exibido no artigo. Se ficar vazio, cada site usa o autor padrão.">
+      <Field label="Autor" htmlFor="post-author" hint="Nome exibido no artigo. Prefira o especialista do cliente. Se ficar vazio, cada site usa o autor padrão.">
         <Input id="post-author" value={authorName} onChange={(e) => onChange({ authorName: e.target.value })} placeholder={defaultAuthor} />
       </Field>
 

@@ -1,20 +1,25 @@
 import "server-only";
 import { cache } from "react";
 import { db } from "@/lib/supabase/admin";
-import type { PostStatus, PublicationStatus, SitePlatform } from "@/lib/types";
+import { isContentType } from "@/lib/geo";
+import type { ContentType, FaqItem, PostStatus, PublicationStatus, SitePlatform } from "@/lib/types";
 import type {
   DestinationDraft,
   DestinationSite,
   EditorPost,
   Publication,
   RevisionItem,
+  SourceDraft,
 } from "@/components/editor/types";
 
 // Colunas seguras de sites: nunca inclua wp_app_password / webhook_secret aqui.
-const SITE_COLUMNS = "id,name,url,blog_path,platform,status,client:clients(id,name,brand_color,city,state)";
+const SITE_COLUMNS =
+  "id,name,url,blog_path,platform,status,client:clients(id,name,brand_color,city,state,expert_name,expert_credentials)";
 
 const PUBLICATION_COLUMNS =
-  "site_id,status,is_canonical,external_url,last_error,published_at,override_title,override_excerpt,override_content_html,override_seo_title,override_seo_description";
+  "site_id,status,is_canonical,external_url,last_error,published_at,snapshot_at,override_title,override_excerpt,override_content_html,override_seo_title,override_seo_description,override_answer_summary,override_faq";
+
+const GEO_COLUMNS = "answer_summary,key_takeaways,faq,sources,content_type";
 
 type Row = Record<string, unknown>;
 
@@ -38,8 +43,40 @@ function toSite(row: Row): DestinationSite {
       brand_color: (client.brand_color as string | null) ?? null,
       city: (client.city as string | null) ?? null,
       state: (client.state as string | null) ?? null,
+      expert_name: (client.expert_name as string | null) ?? null,
+      expert_credentials: (client.expert_credentials as string | null) ?? null,
     },
   };
+}
+
+// ---- GEO: jsonb/text[] chegam como unknown; normaliza sem confiar no formato ----
+
+function str(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+export function toFaq(value: unknown): FaqItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((x): x is Row => Boolean(x) && typeof x === "object")
+    .map((x) => ({ question: str(x.question), answer: str(x.answer) }))
+    .filter((x) => x.question || x.answer);
+}
+
+export function toSources(value: unknown): SourceDraft[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((x): x is Row => Boolean(x) && typeof x === "object")
+    .map((x) => ({ title: str(x.title), url: str(x.url), publisher: str(x.publisher) }))
+    .filter((x) => x.title || x.url);
+}
+
+function toTakeaways(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
+}
+
+function toContentType(value: unknown): ContentType {
+  return isContentType(value) ? value : "article";
 }
 
 export function toPublication(row: Row): Publication {
@@ -50,6 +87,7 @@ export function toPublication(row: Row): Publication {
     externalUrl: (row.external_url as string | null) ?? null,
     lastError: (row.last_error as string | null) ?? null,
     publishedAt: (row.published_at as string | null) ?? null,
+    snapshotAt: (row.snapshot_at as string | null) ?? null,
   };
 }
 
@@ -62,6 +100,8 @@ function toDestination(row: Row): DestinationDraft {
     overrideContentHtml: (row.override_content_html as string | null) ?? "",
     overrideSeoTitle: (row.override_seo_title as string | null) ?? "",
     overrideSeoDescription: (row.override_seo_description as string | null) ?? "",
+    overrideAnswerSummary: (row.override_answer_summary as string | null) ?? "",
+    overrideFaq: toFaq(row.override_faq),
   };
 }
 
@@ -241,7 +281,7 @@ export const getPostForEditor = cache(async (id: string): Promise<EditorPost | n
     db()
       .from("posts")
       .select(
-        "id,title,slug,excerpt,content_html,cover_image_url,cover_image_alt,category,tags,author_name,seo_title,seo_description,focus_keyword,status,scheduled_at,published_at,updated_at",
+        `id,title,slug,excerpt,content_html,cover_image_url,cover_image_alt,category,tags,author_name,seo_title,seo_description,focus_keyword,status,scheduled_at,published_at,updated_at,${GEO_COLUMNS}`,
       )
       .eq("id", id)
       .maybeSingle(),
@@ -265,6 +305,11 @@ export const getPostForEditor = cache(async (id: string): Promise<EditorPost | n
     seoTitle: (p.seo_title as string | null) ?? "",
     seoDescription: (p.seo_description as string | null) ?? "",
     focusKeyword: (p.focus_keyword as string | null) ?? "",
+    answerSummary: (p.answer_summary as string | null) ?? "",
+    keyTakeaways: toTakeaways(p.key_takeaways),
+    faq: toFaq(p.faq),
+    sources: toSources(p.sources),
+    contentType: toContentType(p.content_type),
     status: p.status as PostStatus,
     scheduledAt: (p.scheduled_at as string | null) ?? null,
     publishedAt: (p.published_at as string | null) ?? null,
@@ -289,8 +334,16 @@ export interface PreviewData {
     coverImageAlt: string | null;
     category: string | null;
     tags: string[];
+    /** Autor escrito no artigo (vazio = cada site usa o autor padrão). */
+    authorName: string | null;
+    /** Autor para exibir: o do artigo ou quem criou. */
     author: string | null;
     readingMinutes: number;
+    answerSummary: string | null;
+    keyTakeaways: string[];
+    faq: FaqItem[];
+    sources: SourceDraft[];
+    contentType: ContentType;
     status: PostStatus;
     publishedAt: string | null;
     updatedAt: string;
@@ -298,21 +351,26 @@ export interface PreviewData {
   sites: (DestinationSite & {
     publication: Publication;
     override: DestinationDraft;
+    defaultAuthor: string | null;
+    expertBio: string | null;
   })[];
 }
+
+const PREVIEW_SITE_COLUMNS =
+  "id,name,url,blog_path,platform,status,default_author,client:clients(id,name,brand_color,city,state,expert_name,expert_credentials,expert_bio)";
 
 export async function getPostPreview(id: string): Promise<PreviewData | null> {
   const [{ data: post }, { data: links }, names] = await Promise.all([
     db()
       .from("posts")
       .select(
-        "id,title,slug,excerpt,content_html,cover_image_url,cover_image_alt,category,tags,author_name,created_by,reading_minutes,status,published_at,updated_at",
+        `id,title,slug,excerpt,content_html,cover_image_url,cover_image_alt,category,tags,author_name,created_by,reading_minutes,status,published_at,updated_at,${GEO_COLUMNS}`,
       )
       .eq("id", id)
       .maybeSingle(),
     db()
       .from("post_sites")
-      .select(`${PUBLICATION_COLUMNS},site:sites(${SITE_COLUMNS})`)
+      .select(`${PUBLICATION_COLUMNS},site:sites(${PREVIEW_SITE_COLUMNS})`)
       .eq("post_id", id)
       .neq("status", "unpublished")
       .order("created_at"),
@@ -324,7 +382,14 @@ export async function getPostPreview(id: string): Promise<PreviewData | null> {
     .map((row) => {
       const site = one(row.site as Row | Row[] | null);
       if (!site) return null;
-      return { ...toSite(site), publication: toPublication(row), override: toDestination(row) };
+      const client = one(site.client as Row | Row[] | null) ?? {};
+      return {
+        ...toSite(site),
+        publication: toPublication(row),
+        override: toDestination(row),
+        defaultAuthor: (site.default_author as string | null) ?? null,
+        expertBio: (client.expert_bio as string | null) ?? null,
+      };
     })
     .filter((s): s is NonNullable<typeof s> => s !== null);
 
@@ -339,8 +404,14 @@ export async function getPostPreview(id: string): Promise<PreviewData | null> {
       coverImageAlt: (p.cover_image_alt as string | null) ?? null,
       category: (p.category as string | null) ?? null,
       tags: (p.tags as string[] | null) ?? [],
+      authorName: (p.author_name as string | null) || null,
       author: (p.author_name as string | null) || (p.created_by ? (names.get(p.created_by as string) ?? null) : null),
       readingMinutes: (p.reading_minutes as number) ?? 0,
+      answerSummary: (p.answer_summary as string | null) || null,
+      keyTakeaways: toTakeaways(p.key_takeaways),
+      faq: toFaq(p.faq),
+      sources: toSources(p.sources),
+      contentType: toContentType(p.content_type),
       status: p.status as PostStatus,
       publishedAt: (p.published_at as string | null) ?? null,
       updatedAt: p.updated_at as string,

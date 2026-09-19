@@ -40,6 +40,8 @@ export async function listClients(filters: { q?: string; status?: ClientStatus }
   let rows = ((data ?? []) as ClientListItem[]).map((c) => ({
     ...c,
     keywords: c.keywords ?? [],
+    services: c.services ?? [],
+    social_links: c.social_links ?? [],
     sites: [...(c.sites ?? [])].sort((a, b) => collator.compare(a.name, b.name)),
   }));
 
@@ -58,8 +60,39 @@ export const getClient = cache(async function getClient(id: string): Promise<Cli
   if (error) throw new Error(`Não foi possível carregar o cliente: ${error.message}`);
   if (!data) return null;
   const client = data as Client;
-  return { ...client, keywords: client.keywords ?? [] };
+  return { ...client, keywords: client.keywords ?? [], services: client.services ?? [], social_links: client.social_links ?? [] };
 });
+
+/** Opção de cliente para seletores (ex.: Pautas). */
+export type ClientOption = Pick<Client, "id" | "name" | "segment" | "city" | "state" | "status" | "brand_color"> & {
+  /** Campos do perfil ainda vazios que dariam mais contexto à IA. */
+  profileGaps: string[];
+};
+
+/** Clientes ativos e pausados (sem arquivados), em ordem alfabética, com o que falta no perfil para a IA. */
+export async function listClientOptions(): Promise<ClientOption[]> {
+  const { data, error } = await db()
+    .from("clients")
+    .select("id, name, segment, city, state, status, brand_color, about, services, audience, keywords")
+    .neq("status", "archived");
+  if (error) throw new Error(`Não foi possível carregar os clientes: ${error.message}`);
+  type Row = Pick<Client, "id" | "name" | "segment" | "city" | "state" | "status" | "brand_color" | "about" | "audience"> & {
+    services: string[] | null;
+    keywords: string[] | null;
+  };
+  return ((data ?? []) as Row[])
+    .map(({ about, services, audience, keywords, ...c }) => ({
+      ...c,
+      profileGaps: [
+        !c.segment && "segmento",
+        !about && "sobre a empresa",
+        !services?.length && "serviços",
+        !audience && "público-alvo",
+        !keywords?.length && "palavras-chave",
+      ].filter((g): g is string => Boolean(g)),
+    }))
+    .sort((a, b) => collator.compare(a.name, b.name));
+}
 
 /** Últimas publicações (artigo x site) nos sites do cliente. */
 export async function listClientPublications(siteIds: string[], limit = 10): Promise<ClientPublication[]> {

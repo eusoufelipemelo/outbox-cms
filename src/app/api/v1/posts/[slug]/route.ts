@@ -7,8 +7,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
   return safely(async () => {
     const auth = await authSite(req);
     if (auth.error) return auth.error;
+    // o Next já entrega o parâmetro decodificado; slug fora do formato vira 404 (sem decodificar de novo)
     const { slug } = await ctx.params;
-    const post = await getPublishedPost(auth.site, decodeURIComponent(slug));
+    const post = await getPublishedPost(auth.site, slug);
     if (!post) return apiError(404, "Artigo não encontrado neste site. Confira o slug ou se o artigo está publicado aqui.");
     return json(post);
   });

@@ -78,7 +78,7 @@ export default async function SitePage({ params }: Props) {
             lastCheckOk={site.last_check_ok}
             lastCheckMessage={site.last_check_message}
           />
-          <SiteKeysPanel siteId={site.id} publicKey={site.public_key} webhookSecret={site.webhook_secret} />
+          <SiteKeysPanel siteId={site.id} publicKey={site.public_key} webhookSecret={site.webhook_secret} indexnowKey={site.indexnow_key} siteUrl={site.url} />
         </div>
 
         <div className="min-w-0 space-y-6 lg:order-1">

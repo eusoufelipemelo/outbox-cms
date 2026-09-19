@@ -29,6 +29,11 @@ export function xml(body: string, contentType = "application/xml; charset=utf-8"
   return new Response(body, { status: 200, headers: headers({ "Content-Type": contentType }) });
 }
 
+/** Texto puro (llms.txt, llms-full.txt), com o mesmo CORS e cache da API. */
+export function text(body: string, contentType = "text/plain; charset=utf-8"): Response {
+  return new Response(body, { status: 200, headers: headers({ "Content-Type": contentType, "X-Content-Type-Options": "nosniff" }) });
+}
+
 export function apiError(status: number, message: string): Response {
   return json({ error: message }, { status, cache: "no-store" });
 }

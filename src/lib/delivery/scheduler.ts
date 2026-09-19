@@ -1,10 +1,33 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
-import { publishPost } from "./index";
+import { backfillSnapshots, publishPost } from "./index";
 
 export type ScheduledRun = { postId: string; title: string; ok: boolean; sites: number; failed: number; message?: string };
 
 const BATCH = 20;
+
+const flags = globalThis as typeof globalThis & { __outboxSnapshotsReady?: boolean; __outboxSnapshotsWarned?: boolean };
+
+/**
+ * Uma vez por processo (no primeiro ciclo do agendador ou do cron): grava o snapshot dos destinos
+ * que já estavam no ar antes da migração 002. Nunca lança; tenta de novo no próximo ciclo se falhar.
+ */
+async function ensureSnapshots(): Promise<void> {
+  if (flags.__outboxSnapshotsReady) return;
+  try {
+    const written = await backfillSnapshots();
+    flags.__outboxSnapshotsReady = true;
+    if (written) console.log(`[snapshots] ${written} destinos no ar receberam o snapshot inicial`);
+  } catch (err) {
+    if (!flags.__outboxSnapshotsWarned) {
+      flags.__outboxSnapshotsWarned = true;
+      console.error(
+        "[snapshots] não foi possível preencher os snapshots (rodou supabase/migrations/002_snapshots.sql?):",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+}
 
 /**
  * Publica os artigos `scheduled` cujo `scheduled_at` já passou, em todos os seus destinos.
@@ -12,6 +35,7 @@ const BATCH = 20;
  * o intervalo interno e o cron externo podem rodar ao mesmo tempo sem publicar duas vezes.
  */
 export async function processScheduledPosts(): Promise<ScheduledRun[]> {
+  await ensureSnapshots();
   const now = new Date().toISOString();
   const { data, error } = await db()
     .from("posts")
@@ -33,7 +57,8 @@ export async function processScheduledPosts(): Promise<ScheduledRun[]> {
     if (claimErr || !claimed?.length) continue;
 
     try {
-      const { data: links } = await db().from("post_sites").select("site_id").eq("post_id", post.id);
+      // destinos despublicados ficam no histórico, mas não voltam ao ar sozinhos
+      const { data: links } = await db().from("post_sites").select("site_id").eq("post_id", post.id).neq("status", "unpublished");
       const siteIds = (links ?? []).map((l: { site_id: string }) => l.site_id);
       const results = siteIds.length ? await publishPost(post.id, { siteIds }) : [];
       const failed = results.filter((r) => !r.ok).length;

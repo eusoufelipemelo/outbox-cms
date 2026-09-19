@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FilePen, Plus } from "lucide-react";
+import { FilePen, Plus, Sparkles } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import {
   countPostsByStatus,
@@ -147,10 +147,16 @@ export default async function ArticlesPage({ searchParams }: PageProps<"/artigos
         title="Artigos"
         description="Escreva uma vez e publique no blog de cada cliente."
         actions={
-          <Link href="/artigos/novo" prefetch={false} className={buttonClass("primary", "md")}>
-            <Plus className="size-4" aria-hidden />
-            Novo artigo
-          </Link>
+          <>
+            <Link href="/artigos/novo?ia=1" prefetch={false} className={buttonClass("secondary", "md")}>
+              <Sparkles className="size-4" aria-hidden />
+              Criar com IA
+            </Link>
+            <Link href="/artigos/novo" prefetch={false} className={buttonClass("primary", "md")}>
+              <Plus className="size-4" aria-hidden />
+              Novo artigo
+            </Link>
+          </>
         }
       />
 

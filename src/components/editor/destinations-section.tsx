@@ -29,7 +29,9 @@ export function hasVariation(d: DestinationDraft) {
       d.overrideExcerpt.trim() ||
       d.overrideContentHtml.trim() ||
       d.overrideSeoTitle.trim() ||
-      d.overrideSeoDescription.trim(),
+      d.overrideSeoDescription.trim() ||
+      d.overrideAnswerSummary.trim() ||
+      d.overrideFaq.length,
   );
 }
 
@@ -55,6 +57,7 @@ export function DestinationsSection({
   onToggle,
   onCanonical,
   onUnpublish,
+  onRemove,
 }: {
   sites: DestinationSite[];
   destinations: DestinationDraft[];
@@ -63,6 +66,7 @@ export function DestinationsSection({
   onToggle: (siteId: string) => void;
   onCanonical: (siteId: string) => void;
   onUnpublish: (siteId: string) => void;
+  onRemove: (siteId: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const selected = useMemo(() => new Map(destinations.map((d) => [d.siteId, d])), [destinations]);
@@ -138,6 +142,7 @@ export function DestinationsSection({
               const isSelected = Boolean(dest);
               const pub = pubs.get(site.id);
               const live = pub?.status === "published";
+              const removable = pub?.status === "unpublished" && !isSelected;
               const paused = site.status === "paused";
               const P = platform[site.platform];
               const busy = busySiteId === site.id;
@@ -200,7 +205,7 @@ export function DestinationsSection({
                       {pub?.status === "failed" && pub.lastError ? (
                         <p className="text-[12.5px] leading-snug text-danger">{pub.lastError}</p>
                       ) : null}
-                      {(isSelected && multi) || live ? (
+                      {(isSelected && multi) || live || removable ? (
                         <div className="-mx-2 flex flex-wrap gap-1">
                           {isSelected && multi ? (
                             <button
@@ -220,6 +225,17 @@ export function DestinationsSection({
                               className="inline-flex h-10 cursor-pointer items-center rounded-lg px-2 text-[13px] font-medium text-danger hover:bg-danger-soft disabled:opacity-60"
                             >
                               {busy ? "Despublicando…" : "Despublicar"}
+                            </button>
+                          ) : null}
+                          {removable ? (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => onRemove(site.id)}
+                              aria-label={`Remover ${site.name} dos destinos`}
+                              className="inline-flex h-10 cursor-pointer items-center rounded-lg px-2 text-[13px] font-medium text-muted hover:bg-sunken hover:text-ink disabled:opacity-60"
+                            >
+                              {busy ? "Removendo…" : "Remover destino"}
                             </button>
                           ) : null}
                         </div>

@@ -66,8 +66,23 @@ export function SiteConnectionPanel({
   );
 }
 
-/** Chave pública (com troca) e segredo do webhook, para o desenvolvedor do site. */
-export function SiteKeysPanel({ siteId, publicKey, webhookSecret }: { siteId: string; publicKey: string; webhookSecret: string }) {
+/**
+ * Chave pública (com troca), segredo do webhook e chave do IndexNow, para o desenvolvedor do site.
+ * `indexnowKey`/`siteUrl` são opcionais: sem eles o bloco do IndexNow não aparece.
+ */
+export function SiteKeysPanel({
+  siteId,
+  publicKey,
+  webhookSecret,
+  indexnowKey,
+  siteUrl,
+}: {
+  siteId: string;
+  publicKey: string;
+  webhookSecret: string;
+  indexnowKey?: string | null;
+  siteUrl?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -100,6 +115,19 @@ export function SiteKeysPanel({ siteId, publicKey, webhookSecret }: { siteId: st
           <CopyField value={webhookSecret} label="Copiar segredo do webhook" />
           <p className="text-[13px] text-muted">Assina cada aviso enviado ao site. Guarde no servidor do site, nunca no navegador.</p>
         </div>
+        {indexnowKey ? (
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium text-ink">Chave do IndexNow</p>
+            <CopyField value={indexnowKey} label="Copiar chave do IndexNow" />
+            <p className="text-[13px] text-muted">
+              A cada publicação avisamos o Bing e os buscadores que alimentam as IAs. O site precisa responder esta chave em{" "}
+              <span className="font-mono text-[12px] break-all text-text">
+                {siteUrl ? `${siteUrl.replace(/\/+$/, "")}/${indexnowKey}.txt` : `/${indexnowKey}.txt`}
+              </span>
+              ; o site OutBox já faz isso.
+            </p>
+          </div>
+        ) : null}
       </div>
       <ConfirmDialog
         open={open}

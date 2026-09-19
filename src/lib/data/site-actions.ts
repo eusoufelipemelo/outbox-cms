@@ -27,6 +27,11 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+/** O WordPress recebe a senha de aplicativo em toda chamada: o endereço é sempre salvo com https://. */
+function forceHttps(url: string): string {
+  return url.replace(/^http:\/\//i, "https://");
+}
+
 /** Texto opcional que, se preenchido, vira URL normalizada (https://, sem barra final). */
 const optionalUrl = (message: string) =>
   text(500)
@@ -142,7 +147,7 @@ export async function saveSite(_prev: ActionResult<{ id: string }> | null, formD
   // Campos do WordPress só mudam quando o WordPress é o canal escolhido,
   // para não perder as credenciais ao alternar de plataforma.
   if (v.platform === "wordpress") {
-    values.wp_url = v.wp_url ?? v.url;
+    values.wp_url = forceHttps(v.wp_url ?? v.url);
     values.wp_username = v.wp_username;
     values.wp_default_status = v.wp_default_status;
     if (v.wp_app_password) values.wp_app_password = v.wp_app_password;

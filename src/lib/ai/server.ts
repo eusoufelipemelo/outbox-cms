@@ -4,9 +4,14 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { env } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
+import type { ContentType, FaqItem } from "@/lib/types";
 import type { AiAction, AiInput, AiOutput, AiStatus } from "./types";
+import { CONTENT_TYPES, IDEA_INTENTS, type IdeaIntent } from "./labels";
 import {
   draftPrompt,
+  fullArticlePrompt,
+  geoPrompt,
+  ideasPrompt,
   improvePrompt,
   outlinePrompt,
   seoPrompt,
@@ -18,7 +23,7 @@ import {
   type VariationSource,
 } from "./prompts";
 import { htmlForPrompt, plainText, sanitizeAiHtml } from "./sanitize";
-import { DEFAULT_WORDS, MAX_HTML_CHARS } from "./validation";
+import { DEFAULT_FULL_ARTICLE_WORDS, DEFAULT_IDEAS, DEFAULT_WORDS, MAX_HTML_CHARS } from "./validation";
 
 // Assistente de escrita (Claude). Só roda no servidor, chamado por /api/ai.
 
@@ -164,7 +169,7 @@ function cleanTitle(value: string): string {
 export function slugify(value: string): string {
   const slug = value
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
@@ -178,11 +183,135 @@ function safeHtml(html: string): string {
   return clean;
 }
 
+const ANCHOR = /<a href="([^"]*)">([\s\S]*?)<\/a>/g;
+
+/**
+ * Remove links que não existiam no material de origem (a IA nunca deve criar URLs).
+ * `html` e `sourceHtml` precisam ter passado pelo sanitize (mesmo formato de <a href="...">);
+ * `sourceText` libera endereços citados literalmente pela equipe (ex.: na instrução).
+ */
+function keepSourceLinks(html: string, sourceHtml = "", sourceText = ""): string {
+  const allowed = new Set([...sourceHtml.matchAll(ANCHOR)].map((m) => m[1]));
+  const ok = (href: string) => allowed.has(href) || (!!sourceText && sourceText.includes(href.replace(/&amp;/g, "&")));
+  return html.replace(ANCHOR, (whole, href: string, text: string) => (ok(href) ? whole : text));
+}
+
+const URL_IN_TEXT = /\b(?:https?:\/\/|www\.)\S+/gi;
+
+/** Texto puro sem URLs soltas (a IA não pode inventar endereços). */
+function cleanPlain(value: string, max: number): string {
+  return clampText(plainText(value).replace(URL_IN_TEXT, "").replace(/\s{2,}/g, " ").replace(/\(\s*\)/g, ""), max);
+}
+
+/** Lista de frases curtas: tira marcadores, vazios e repetidos. */
+function cleanList(items: string[], maxItems: number, maxChars: number): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const text = cleanPlain(item.replace(/^\s*(\d+[.)]|[-*•])\s+/, ""), maxChars);
+    const key = text.toLowerCase();
+    if (!text || seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+  }
+  return out.slice(0, maxItems);
+}
+
+function cleanFaq(items: FaqItem[], maxItems: number): FaqItem[] {
+  const seen = new Set<string>();
+  const out: FaqItem[] = [];
+  for (const item of items) {
+    let question = cleanPlain(item.question, 200).replace(/^\s*(\d+[.)]|[-*•]|P:)\s*/i, "");
+    const answer = cleanPlain(item.answer.replace(/^\s*R:\s*/i, ""), 700);
+    if (!question || !answer) continue;
+    if (!/[?]$/.test(question)) question = `${question.replace(/[.!:;]+$/, "")}?`;
+    const key = question.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ question, answer });
+  }
+  return out.slice(0, maxItems);
+}
+
+/** Primeiro parágrafo do HTML, como texto puro (reserva para a resposta direta). */
+function firstParagraph(html: string): string {
+  const match = /<p>([\s\S]*?)<\/p>/.exec(html);
+  return match ? plainText(match[1]) : "";
+}
+
+function answerSummary(value: string, html: string): string {
+  return cleanPlain(value, 600) || clampText(firstParagraph(html), 600);
+}
+
+const STOPWORDS = new Set(
+  "a o as os e de da do das dos em no na nos nas um uma uns umas para pra por com sem que como qual quais seu sua seus suas ou ao aos à às é".split(
+    " ",
+  ),
+);
+
+function titleTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .split(" ")
+      .filter((w) => w.length > 1 && !STOPWORDS.has(w)),
+  );
+}
+
+/** Títulos quase iguais (mesmas palavras relevantes). */
+function similarTitles(a: Set<string>, b: Set<string>): boolean {
+  if (!a.size || !b.size) return false;
+  let common = 0;
+  for (const w of a) if (b.has(w)) common++;
+  return common / (a.size + b.size - common) >= 0.7;
+}
+
+const fold = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+/**
+ * O SDK converte `enum` do schema em dica de descrição (não é restrição dura), então o modelo
+ * pode devolver "Passo a passo" ou "Informacional". Normaliza em vez de rejeitar a resposta.
+ */
+function toContentType(value: string, fallback: ContentType = "article"): ContentType {
+  const v = fold(value);
+  if ((CONTENT_TYPES as readonly string[]).includes(v)) return v as ContentType;
+  if (/how|passo|tutorial|como fazer/.test(v)) return "howto";
+  if (/guia|guide/.test(v)) return "guide";
+  if (/list/.test(v)) return "list";
+  if (/compar|versus|\bvs\b/.test(v)) return "comparison";
+  if (/news|notici|novidade/.test(v)) return "news";
+  if (/artig|article/.test(v)) return "article";
+  return fallback;
+}
+
+function toIntent(value: string): IdeaIntent {
+  const v = fold(value);
+  if ((IDEA_INTENTS as readonly string[]).includes(v)) return v as IdeaIntent;
+  if (/compar/.test(v)) return "comparativa";
+  if (/local|geo/.test(v)) return "local";
+  if (/comerc|transac|compra|contrat/.test(v)) return "comercial";
+  return "informacional";
+}
+
 const clampInt = (value: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(value)));
+
+/** Mês atual no Brasil, por extenso (ex.: "setembro de 2026"). */
+function currentMonthBr(): string {
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "America/Sao_Paulo" }).format(new Date());
+}
 
 // ---------------------------------------------------------------- dados do banco
 
-const CLIENT_FIELDS = "name, segment, city, state, tone_of_voice, audience, keywords";
+const CLIENT_FIELDS =
+  "name, segment, city, state, tone_of_voice, audience, keywords, about, services, service_area, expert_name, expert_credentials";
 
 async function loadClient(clientId?: string): Promise<ClientContext | null> {
   if (!clientId) return null;
@@ -192,14 +321,23 @@ async function loadClient(clientId?: string): Promise<ClientContext | null> {
     throw new AiError("Não foi possível carregar os dados do cliente. Tente de novo.", 500);
   }
   if (!data) throw new AiError("Cliente não encontrado. Ele pode ter sido removido; selecione outro.", 404);
-  return data as ClientContext;
+  const client = data as ClientContext;
+  return { ...client, keywords: client.keywords ?? [], services: client.services ?? [] };
+}
+
+function normalizeFaq(value: unknown): FaqItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((f): f is FaqItem => !!f && typeof f.question === "string" && typeof f.answer === "string")
+    .map((f) => ({ question: plainText(f.question), answer: plainText(f.answer) }))
+    .filter((f) => f.question && f.answer);
 }
 
 async function loadVariationContext(postId: string, siteId: string) {
   const [postRes, siteRes] = await Promise.all([
     db()
       .from("posts")
-      .select("title, excerpt, content_html, seo_title, seo_description, focus_keyword")
+      .select("title, excerpt, content_html, seo_title, seo_description, focus_keyword, answer_summary, faq")
       .eq("id", postId)
       .maybeSingle(),
     db().from("sites").select("name, url, client_id").eq("id", siteId).maybeSingle(),
@@ -225,12 +363,68 @@ async function loadVariationContext(postId: string, siteId: string) {
   if (content.length > MAX_HTML_CHARS) {
     throw new AiError("O artigo é longo demais para gerar a variação de uma vez. Divida o conteúdo ou encurte o texto.", 413);
   }
-  return { post: { ...post, title: plainText(post.title || ""), content_html: content }, site, client };
+  return {
+    post: {
+      ...post,
+      title: plainText(post.title || ""),
+      content_html: content,
+      answer_summary: post.answer_summary ? plainText(post.answer_summary) : null,
+      faq: normalizeFaq(post.faq),
+    },
+    site,
+    client,
+  };
+}
+
+type PublishedRow = { override_title: string | null; post: { title: string | null } | { title: string | null }[] | null };
+
+/**
+ * Títulos dos artigos no ar nos sites do cliente, do mais recente ao mais antigo (sem repetição).
+ * Falha aqui não impede as pautas: só perde o filtro de repetição.
+ */
+async function loadPublishedTitles(clientId: string, limit = 50): Promise<string[]> {
+  const sitesRes = await db().from("sites").select("id").eq("client_id", clientId);
+  if (sitesRes.error) {
+    console.error(`[ai] falha ao carregar sites do cliente: ${sitesRes.error.code ?? ""} ${sitesRes.error.message}`);
+    return [];
+  }
+  const siteIds = (sitesRes.data ?? []).map((s) => s.id as string);
+  if (!siteIds.length) return [];
+
+  const { data, error } = await db()
+    .from("post_sites")
+    .select("override_title, post:posts(title)")
+    .in("site_id", siteIds)
+    .eq("status", "published")
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .limit(limit * 3);
+  if (error) {
+    console.error(`[ai] falha ao carregar títulos publicados: ${error.code ?? ""} ${error.message}`);
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const titles: string[] = [];
+  for (const row of (data ?? []) as unknown as PublishedRow[]) {
+    const post = Array.isArray(row.post) ? row.post[0] : row.post;
+    for (const raw of [row.override_title, post?.title]) {
+      const title = raw ? plainText(raw) : "";
+      const key = title.toLowerCase();
+      if (!title || seen.has(key)) continue;
+      seen.add(key);
+      titles.push(title);
+    }
+    if (titles.length >= limit) break;
+  }
+  return titles.slice(0, limit);
 }
 
 // ---------------------------------------------------------------- ações
 
 const htmlSchema = z.object({ html: z.string() });
+const faqSchema = z.array(z.object({ question: z.string(), answer: z.string() }));
+// Texto livre no schema (ver `toContentType`); a lista de valores vai no prompt e na descrição.
+const contentTypeSchema = z.string().describe(`Um destes: ${CONTENT_TYPES.join(", ")}`);
 
 type Handlers = { [A in AiAction]: (input: AiInput[A], signal?: AbortSignal) => Promise<AiOutput[A]> };
 
@@ -277,7 +471,7 @@ const handlers: Handlers = {
       { maxTokens: clampInt(10_000 + words * 6, 12_000, 32_000), timeoutMs: 280_000, effort: "medium" },
       signal,
     );
-    return { html: safeHtml(out.html) };
+    return { html: keepSourceLinks(safeHtml(out.html), outlineHtml) };
   },
 
   async improve(input, signal) {
@@ -289,7 +483,8 @@ const handlers: Handlers = {
       { maxTokens: clampInt(6_000 + html.length / 2, 6_000, 32_000), timeoutMs: 180_000, effort: "medium" },
       signal,
     );
-    return { html: safeHtml(out.html) };
+    // Links do trecho original continuam; um link novo só fica se o endereço veio na instrução.
+    return { html: keepSourceLinks(safeHtml(out.html), html, input.instruction) };
   },
 
   async seo(input, signal) {
@@ -316,22 +511,143 @@ const handlers: Handlers = {
         content_html: z.string(),
         seo_title: z.string(),
         seo_description: z.string(),
+        answer_summary: z.string(),
+        faq: faqSchema,
       }),
       variationPrompt(post, site, client),
       {
-        maxTokens: clampInt(12_000 + post.content_html.length / 2, 12_000, 32_000),
+        maxTokens: clampInt(14_000 + post.content_html.length / 2, 14_000, 32_000),
         timeoutMs: 280_000,
         effort: "medium",
       },
       signal,
     );
+    const content_html = keepSourceLinks(safeHtml(out.content_html), post.content_html);
     return {
       title: clampText(cleanTitle(out.title), 80),
       excerpt: clampText(out.excerpt, 220),
-      content_html: safeHtml(out.content_html),
+      content_html,
       seo_title: clampText(out.seo_title, 60),
       seo_description: clampText(out.seo_description, 160),
+      answer_summary: answerSummary(out.answer_summary, content_html),
+      faq: cleanFaq(out.faq, 5),
     };
+  },
+
+  async geo(input, signal) {
+    const client = await loadClient(input.clientId);
+    const html = htmlForPrompt(input.html);
+    if (plainText(html).length < 200) {
+      throw new AiError("O artigo ainda está curto demais para gerar os blocos de GEO. Escreva o texto antes.", 422);
+    }
+    const out = await generate(
+      z.object({
+        answer_summary: z.string(),
+        key_takeaways: z.array(z.string()),
+        faq: faqSchema,
+        content_type: contentTypeSchema,
+      }),
+      geoPrompt({ title: plainText(input.title), html, keyword: input.keyword }, client),
+      { maxTokens: clampInt(8_000 + html.length / 8, 8_000, 16_000), timeoutMs: 120_000, effort: "medium" },
+      signal,
+    );
+    const faq = cleanFaq(out.faq, 5);
+    const answer = answerSummary(out.answer_summary, html);
+    if (!answer || !faq.length) {
+      throw new AiError("O assistente devolveu os blocos de GEO incompletos. Tente de novo.", 502);
+    }
+    return {
+      answer_summary: answer,
+      key_takeaways: cleanList(out.key_takeaways, 6, 240),
+      faq,
+      content_type: toContentType(out.content_type),
+    };
+  },
+
+  async full_article(input, signal) {
+    const client = await loadClient(input.clientId);
+    const words = input.words ?? DEFAULT_FULL_ARTICLE_WORDS;
+    const out = await generate(
+      z.object({
+        title: z.string(),
+        slug: z.string(),
+        focus_keyword: z.string(),
+        content_type: contentTypeSchema,
+        content_html: z.string(),
+        answer_summary: z.string(),
+        key_takeaways: z.array(z.string()),
+        faq: faqSchema,
+        excerpt: z.string(),
+        seo_title: z.string(),
+        seo_description: z.string(),
+        source_suggestions: z.array(z.string()),
+      }),
+      fullArticlePrompt({ topic: input.topic, keyword: input.keyword, contentType: input.contentType, words }, client),
+      { maxTokens: clampInt(14_000 + words * 7, 18_000, 32_000), timeoutMs: 280_000, effort: "medium" },
+      signal,
+    );
+    // Artigo nasce de um tema, sem material de origem: qualquer link seria inventado.
+    const content_html = keepSourceLinks(safeHtml(out.content_html));
+    const title = clampText(cleanTitle(out.title), 80) || clampText(cleanTitle(input.topic), 80);
+    return {
+      title,
+      slug: slugify(out.slug) || slugify(title),
+      excerpt: clampText(out.excerpt, 220),
+      content_html,
+      answer_summary: answerSummary(out.answer_summary, content_html),
+      key_takeaways: cleanList(out.key_takeaways, 6, 240),
+      faq: cleanFaq(out.faq, 5),
+      seo_title: clampText(out.seo_title, 60),
+      seo_description: clampText(out.seo_description, 160),
+      focus_keyword: input.keyword ?? clampText(out.focus_keyword, 80),
+      content_type: input.contentType ?? toContentType(out.content_type),
+      source_suggestions: cleanList(out.source_suggestions, 5, 240),
+    };
+  },
+
+  async ideas(input, signal) {
+    const count = input.count ?? DEFAULT_IDEAS;
+    const [client, publishedTitles] = await Promise.all([loadClient(input.clientId), loadPublishedTitles(input.clientId)]);
+    if (!client) throw new AiError("Escolha um cliente para gerar pautas.", 400);
+    const out = await generate(
+      z.object({
+        ideas: z.array(
+          z.object({
+            title: z.string(),
+            keyword: z.string(),
+            intent: z.string().describe(`Um destes: ${IDEA_INTENTS.join(", ")}`),
+            content_type: contentTypeSchema,
+            angle: z.string(),
+          }),
+        ),
+      }),
+      ideasPrompt({ count, focus: input.focus, monthLabel: currentMonthBr(), publishedTitles }, client),
+      { maxTokens: clampInt(6_000 + count * 400, 8_000, 16_000), timeoutMs: 120_000, effort: "medium" },
+      signal,
+    );
+
+    // Filtro de segurança: nada repetido entre as sugestões nem parecido com o que já está no ar.
+    const taken = publishedTitles.map(titleTokens);
+    const ideas: AiOutput["ideas"]["ideas"] = [];
+    for (const idea of out.ideas) {
+      const title = clampText(cleanTitle(idea.title), 80);
+      if (!title) continue;
+      const tokens = titleTokens(title);
+      if (taken.some((t) => similarTitles(t, tokens))) continue;
+      taken.push(tokens);
+      ideas.push({
+        title,
+        keyword: clampText(idea.keyword, 80).toLowerCase() || title.toLowerCase(),
+        intent: toIntent(idea.intent),
+        content_type: toContentType(idea.content_type),
+        angle: cleanPlain(idea.angle, 200),
+      });
+      if (ideas.length >= count) break;
+    }
+    if (!ideas.length) {
+      throw new AiError("O assistente não sugeriu pautas novas. Mude o foco ou tente de novo.", 502);
+    }
+    return { ideas };
   },
 };
 

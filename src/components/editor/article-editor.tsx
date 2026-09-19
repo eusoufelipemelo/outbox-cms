@@ -3,7 +3,7 @@
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { Archive, ArchiveRestore, CalendarClock, CalendarX, ImagePlus, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, CalendarClock, CalendarX, ImagePlus, Sparkles, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
@@ -15,14 +15,16 @@ import {
   cancelSchedule,
   deletePost,
   publishArticle,
+  removeDestination,
   restoreRevision,
   savePost,
   schedulePost,
   unarchivePost,
   unpublishFromSite,
 } from "@/lib/data/post-actions";
+import { FAQ_MAX, TAKEAWAYS_MAX, geoReport, isCompleteFaq, isHttpUrl } from "@/lib/geo";
 import { seoReport } from "@/lib/seo";
-import type { PostStatus } from "@/lib/types";
+import type { ContentType, FaqItem, PostStatus } from "@/lib/types";
 import { countWords, hostname, readingMinutes, slugify, stripHtml } from "@/lib/utils";
 import { AiAssistant } from "./ai-assistant";
 import { localInputToIso, isoToLocalInput } from "./datetime";
@@ -33,6 +35,9 @@ import { articleExtensions } from "./extensions";
 import { HistorySection } from "./history-section";
 import { RailSection, useConfirm, type MenuItem } from "./primitives";
 import { SeoSection } from "./seo-section";
+import { FullArticleDialog, type FullArticleRequest } from "./full-article-dialog";
+import { AnswerBlock, FaqBlock, SOURCES_MAX, SourcesBlock, TakeawaysBlock, normalizeSourceUrl } from "./geo-blocks";
+import { GeoSection, type ExpertSuggestion } from "./geo-section";
 import { EditorToolbar } from "./toolbar";
 import { ScheduleDialog, TopBar, useIsNarrow, type PublishTarget, type SaveState } from "./top-bar";
 import type {
@@ -43,6 +48,7 @@ import type {
   RevisionItem,
   SaveOutcome,
   SavePostInput,
+  SourceDraft,
 } from "./types";
 import { VariationsSection } from "./variations-section";
 
@@ -63,13 +69,23 @@ interface Draft {
   seoTitle: string;
   seoDescription: string;
   focusKeyword: string;
+  answerSummary: string;
+  keyTakeaways: string[];
+  faq: FaqItem[];
+  sources: SourceDraft[];
+  contentType: ContentType;
   scheduledLocal: string;
   destinations: DestinationDraft[];
 }
 
 type Patch = Partial<Draft> | ((d: Draft) => Partial<Draft>);
 
-function initialDraft(post: EditorPost | null, scheduledLocal: string, siteIds: string[] = []): Draft {
+function initialDraft(
+  post: EditorPost | null,
+  scheduledLocal: string,
+  siteIds: string[] = [],
+  contentType: ContentType = "article",
+): Draft {
   return {
     title: post?.title ?? "",
     slug: post?.slug ?? "",
@@ -85,6 +101,11 @@ function initialDraft(post: EditorPost | null, scheduledLocal: string, siteIds: 
     seoTitle: post?.seoTitle ?? "",
     seoDescription: post?.seoDescription ?? "",
     focusKeyword: post?.focusKeyword ?? "",
+    answerSummary: post?.answerSummary ?? "",
+    keyTakeaways: post?.keyTakeaways ?? [],
+    faq: post?.faq ?? [],
+    sources: post?.sources ?? [],
+    contentType: post?.contentType ?? contentType,
     scheduledLocal: post ? isoToLocalInput(post.scheduledAt) : scheduledLocal,
     destinations: post?.destinations ?? siteIds.map(emptyDestination),
   };
@@ -92,6 +113,22 @@ function initialDraft(post: EditorPost | null, scheduledLocal: string, siteIds: 
 
 function hasContent(d: Draft) {
   return Boolean(d.title.trim() || stripHtml(d.contentHtml));
+}
+
+// Itens incompletos continuam na tela, mas só vão ao servidor quando estiverem completos
+// (o autosave não pode falhar enquanto a pessoa ainda está digitando uma pergunta ou colando um link).
+const completeFaq = (items: FaqItem[]) =>
+  items
+    .map((f) => ({ question: f.question.trim(), answer: f.answer.trim() }))
+    .filter(isCompleteFaq)
+    .slice(0, FAQ_MAX);
+
+function completeSources(items: SourceDraft[]): SourceDraft[] {
+  return items
+    .map((s) => ({ title: s.title.trim(), url: normalizeSourceUrl(s.url), publisher: s.publisher.trim() }))
+    .filter((s) => isHttpUrl(s.url))
+    .map((s) => ({ ...s, title: s.title || hostname(s.url) }))
+    .slice(0, SOURCES_MAX);
 }
 
 function toPayload(d: Draft, id: string | null): SavePostInput {
@@ -110,8 +147,16 @@ function toPayload(d: Draft, id: string | null): SavePostInput {
     seoTitle: d.seoTitle,
     seoDescription: d.seoDescription,
     focusKeyword: d.focusKeyword,
+    answerSummary: d.answerSummary,
+    keyTakeaways: d.keyTakeaways
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, TAKEAWAYS_MAX),
+    faq: completeFaq(d.faq),
+    sources: completeSources(d.sources),
+    contentType: d.contentType,
     scheduledAt: d.scheduledLocal ? localInputToIso(d.scheduledLocal) : null,
-    sites: d.destinations,
+    sites: d.destinations.map((x) => ({ ...x, overrideFaq: completeFaq(x.overrideFaq) })),
   };
 }
 
@@ -123,6 +168,8 @@ const emptyDestination = (siteId: string): DestinationDraft => ({
   overrideContentHtml: "",
   overrideSeoTitle: "",
   overrideSeoDescription: "",
+  overrideAnswerSummary: "",
+  overrideFaq: [],
 });
 
 const OFFLINE = "Sem conexão com o servidor. Suas alterações continuam aqui; salvaremos assim que der.";
@@ -216,6 +263,9 @@ export function ArticleEditor({
   categories,
   initialScheduledLocal = "",
   initialSiteIds = [],
+  clients,
+  initialClientId = "",
+  initialAi,
 }: {
   post: EditorPost | null;
   sites: DestinationSite[];
@@ -223,12 +273,20 @@ export function ArticleEditor({
   initialScheduledLocal?: string;
   /** Destinos pré-marcados em um artigo novo (ex.: /artigos/novo?cliente=<id>). */
   initialSiteIds?: string[];
+  /** Clientes para o "Criar artigo completo com IA" (padrão: os clientes dos sites). */
+  clients?: { id: string; name: string }[];
+  /** Cliente pré-escolhido (ex.: ?cliente=<id>), mesmo sem site ativo. */
+  initialClientId?: string;
+  /** Abre o "Criar artigo completo com IA" já preenchido (ex.: /artigos/novo?tema=…&palavra=…, vindo de Pautas). */
+  initialAi?: { open: boolean; topic: string; keyword: string; contentType?: ContentType };
 }) {
   const router = useRouter();
   const narrow = useIsNarrow();
   const { confirm, dialog: confirmDialog } = useConfirm();
 
-  const [draft, setDraft] = useState<Draft>(() => initialDraft(post, initialScheduledLocal, initialSiteIds));
+  const [draft, setDraft] = useState<Draft>(() =>
+    initialDraft(post, initialScheduledLocal, initialSiteIds, initialAi?.contentType),
+  );
   const [postId, setPostId] = useState<string | null>(post?.id ?? null);
   const [status, setStatus] = useState<PostStatus>(post?.status ?? "draft");
   const [serverScheduledAt, setServerScheduledAt] = useState<string | null>(post?.scheduledAt ?? null);
@@ -246,6 +304,11 @@ export function ArticleEditor({
   const [busySiteId, setBusySiteId] = useState<string | null>(null);
   const [generatingSiteId, setGeneratingSiteId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [fullArticleOpen, setFullArticleOpen] = useState(Boolean(initialAi?.open));
+  // o que a IA sugeriu citar (não é salvo: some ao recarregar ou ao dispensar)
+  const [sourceSuggestions, setSourceSuggestions] = useState<string[]>([]);
+  // referência de "agora" para a checagem de atualização (fixa por sessão do editor)
+  const [openedAt] = useState(() => Date.now());
 
   // refs lidos só em callbacks (autosave, atalhos, beforeunload)
   const draftRef = useRef(draft);
@@ -404,6 +467,7 @@ export function ArticleEditor({
         html: deferred.contentHtml,
         coverImageUrl: deferred.coverUrl,
         coverImageAlt: deferred.coverAlt,
+        answerSummary: deferred.answerSummary,
       }),
     [deferred],
   );
@@ -412,6 +476,52 @@ export function ArticleEditor({
   const canonicalDest = draft.destinations.find((d) => d.isCanonical);
   const primarySite = siteById.get(canonicalDest?.siteId ?? draft.destinations[0]?.siteId ?? "") ?? null;
   const primaryClientId = primarySite?.client.id;
+
+  // clientes dos destinos (o original primeiro): entidades da resposta direta e especialista sugerido
+  const destClients = useMemo(() => {
+    const ordered = [...deferred.destinations].sort((a, b) => Number(b.isCanonical) - Number(a.isCanonical));
+    const seen = new Map<string, DestinationSite["client"]>();
+    for (const d of ordered) {
+      const c = siteById.get(d.siteId)?.client;
+      if (c && !seen.has(c.id)) seen.set(c.id, c);
+    }
+    return [...seen.values()];
+  }, [deferred.destinations, siteById]);
+  const expert: ExpertSuggestion | null = useMemo(() => {
+    const c = destClients.find((x) => x.expert_name?.trim());
+    return c ? { name: c.expert_name!.trim(), credentials: c.expert_credentials?.trim() || null, clientName: c.name } : null;
+  }, [destClients]);
+  // versão no ar mais antiga entre os sites (é ela que precisa de atualização)
+  const oldestLive = useMemo(() => {
+    const times = publications
+      .filter((p) => p.status === "published" && p.snapshotAt)
+      .map((p) => p.snapshotAt as string)
+      .sort();
+    return times[0] ?? null;
+  }, [publications]);
+  const geo = useMemo(
+    () =>
+      geoReport({
+        answerSummary: deferred.answerSummary,
+        focusKeyword: deferred.focusKeyword,
+        entities: destClients.flatMap((c) => [c.name, c.city ?? ""]),
+        html: deferred.contentHtml,
+        keyTakeaways: deferred.keyTakeaways,
+        faq: deferred.faq,
+        sources: deferred.sources.map((x) => ({ url: normalizeSourceUrl(x.url) })),
+        authorName: deferred.authorName,
+        expert,
+        liveVersionAt: oldestLive,
+        now: openedAt,
+      }),
+    [deferred, destClients, expert, oldestLive, openedAt],
+  );
+  const clientOptions = useMemo(() => {
+    if (clients) return clients;
+    const map = new Map<string, string>();
+    for (const s of sites) if (s.client.id) map.set(s.client.id, s.client.name);
+    return [...map].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [clients, sites]);
   const targets: PublishTarget[] = draft.destinations
     .map((d) => {
       const s = siteById.get(d.siteId);
@@ -426,6 +536,16 @@ export function ArticleEditor({
       };
     })
     .filter((t): t is PublishTarget => t !== null);
+  // Artigo no ar com texto mais novo que a versão enviada a algum site (posts.updated_at > snapshot_at).
+  const livePubs = publications.filter((p) => p.status === "published");
+  const savedMs = savedAt ? Date.parse(savedAt) : 0;
+  const unsent =
+    status === "published" &&
+    livePubs.length > 0 &&
+    (saveState === "dirty" ||
+      saveState === "saving" ||
+      saveState === "error" ||
+      livePubs.some((p) => !p.snapshotAt || savedMs > Date.parse(p.snapshotAt)));
 
   // ---- ações ----
   const leaveTo = async (href: string) => {
@@ -552,13 +672,16 @@ export function ArticleEditor({
       title: `Tirar o artigo do ar em ${site.name}?`,
       description: removing
         ? "Para remover este destino, o artigo sai do ar nesse site. Os outros sites não mudam."
-        : "O artigo sai do ar nesse site e deixa de ser um destino. Os outros sites não mudam.",
+        : "O artigo sai do ar nesse site e fica na lista como despublicado. Marque o site de novo para publicar outra vez. Os outros sites não mudam.",
       confirmLabel: "Despublicar",
       tone: "danger",
     });
     if (!ok) return false;
     setBusySiteId(siteId);
-    const res = await unpublishFromSite(id, siteId).catch(() => ({ ok: false as const, error: OFFLINE }));
+    // na fila de gravação: um autosave em andamento não recria o destino depois da remoção
+    const res = await enqueue(() =>
+      (removing ? removeDestination(id, siteId) : unpublishFromSite(id, siteId)).catch(() => ({ ok: false as const, error: OFFLINE })),
+    );
     setBusySiteId(null);
     if (!res.ok) {
       toast.error(res.error);
@@ -568,6 +691,22 @@ export function ArticleEditor({
     update((d) => ({ destinations: d.destinations.filter((x) => x.siteId !== siteId) }));
     toast.success(`Despublicado de ${hostname(site.url)}`);
     return true;
+  };
+
+  /** Tira da lista um destino já despublicado (apaga o selo e o histórico daquele site). */
+  const removeSite = async (siteId: string) => {
+    const site = siteById.get(siteId);
+    const id = postIdRef.current;
+    if (!id) return;
+    setBusySiteId(siteId);
+    const res = await enqueue(() => removeDestination(id, siteId).catch(() => ({ ok: false as const, error: OFFLINE })));
+    setBusySiteId(null);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setPublications(res.data!.publications);
+    toast.success(`Destino removido: ${site ? hostname(site.url) : "site"}`);
   };
 
   const toggleSite = (siteId: string) => {
@@ -606,6 +745,8 @@ export function ArticleEditor({
         overrideContentHtml: out.content_html ?? "",
         overrideSeoTitle: out.seo_title ?? "",
         overrideSeoDescription: out.seo_description ?? "",
+        overrideAnswerSummary: out.answer_summary ?? "",
+        overrideFaq: Array.isArray(out.faq) ? out.faq.filter(isCompleteFaq).slice(0, FAQ_MAX) : [],
       });
       toast.success(`Variação gerada para ${siteById.get(siteId)?.name ?? "o site"}. Revise antes de publicar.`);
     } catch (error) {
@@ -739,6 +880,78 @@ export function ArticleEditor({
       ...(status !== "published" && seo.slug ? { slug: slugify(seo.slug), slugTouched: true } : {}),
     }));
 
+  /** Blocos de GEO vindos do assistente. Pergunta antes de trocar o que já foi escrito. */
+  const applyGeo = async (out: AiOutput["geo"]) => {
+    const d = draftRef.current;
+    const filled = [
+      d.answerSummary.trim() ? "a resposta direta" : null,
+      d.keyTakeaways.some((t) => t.trim()) ? "os pontos principais" : null,
+      d.faq.some((f) => f.question.trim() || f.answer.trim()) ? "as perguntas frequentes" : null,
+    ].filter(Boolean) as string[];
+    if (filled.length) {
+      const list = filled.length === 1 ? filled[0] : `${filled.slice(0, -1).join(", ")} e ${filled[filled.length - 1]}`;
+      const ok = await confirm({
+        title: "Substituir os blocos de GEO?",
+        description: `A IA vai substituir ${list} que você já escreveu.`,
+        confirmLabel: "Substituir blocos",
+      });
+      if (!ok) return;
+    }
+    const faq = (out.faq ?? []).filter(isCompleteFaq).slice(0, FAQ_MAX);
+    const takeaways = (out.key_takeaways ?? []).map((t) => t.trim()).filter(Boolean).slice(0, TAKEAWAYS_MAX);
+    update((cur) => ({
+      answerSummary: out.answer_summary?.trim() || cur.answerSummary,
+      keyTakeaways: takeaways.length ? takeaways : cur.keyTakeaways,
+      faq: faq.length ? faq : cur.faq,
+      ...(out.content_type ? { contentType: out.content_type } : {}),
+    }));
+    toast.success("Blocos de GEO gerados. Revise antes de publicar.");
+  };
+
+  /** Artigo completo vindo do assistente. Devolve false se a pessoa desistiu de substituir. */
+  const applyFullArticle = async (out: AiOutput["full_article"], req: FullArticleRequest): Promise<boolean> => {
+    const d = draftRef.current;
+    if (hasContent(d) || d.answerSummary.trim()) {
+      const ok = await confirm({
+        title: "Substituir o artigo atual?",
+        description: "Título, texto, resposta direta, pontos principais, perguntas frequentes e SEO serão trocados pelo que a IA escreveu.",
+        confirmLabel: "Substituir artigo",
+      });
+      if (!ok) return false;
+    }
+    const published = statusRef.current === "published";
+    if (editor) editor.commands.setContent(out.content_html ?? "", { emitUpdate: false });
+    const faq = (out.faq ?? []).filter(isCompleteFaq).slice(0, FAQ_MAX);
+    const takeaways = (out.key_takeaways ?? []).map((t) => t.trim()).filter(Boolean).slice(0, TAKEAWAYS_MAX);
+    update((cur) => {
+      const title = out.title?.trim() || cur.title;
+      const slug = out.slug ? slugify(out.slug) : slugify(title);
+      // escolheu um cliente e ainda não há destino: marca os sites ativos dele
+      const clientSites =
+        req.clientId && cur.destinations.length === 0
+          ? sites.filter((s) => s.client.id === req.clientId && s.status === "active").map((s) => emptyDestination(s.id))
+          : [];
+      return {
+        title,
+        ...(published ? {} : { slug, slugTouched: Boolean(out.slug) }),
+        excerpt: out.excerpt?.trim() || cur.excerpt,
+        contentHtml: editor ? (editor.isEmpty ? "" : editor.getHTML()) : (out.content_html ?? ""),
+        contentJson: editor?.getJSON(),
+        answerSummary: out.answer_summary?.trim() || cur.answerSummary,
+        keyTakeaways: takeaways.length ? takeaways : cur.keyTakeaways,
+        faq: faq.length ? faq : cur.faq,
+        seoTitle: out.seo_title?.trim() || cur.seoTitle,
+        seoDescription: out.seo_description?.trim() || cur.seoDescription,
+        focusKeyword: out.focus_keyword?.trim() || req.keyword || cur.focusKeyword,
+        contentType: out.content_type || req.contentType,
+        ...(clientSites.length ? { destinations: clientSites } : {}),
+      };
+    });
+    setSourceSuggestions((out.source_suggestions ?? []).map((x) => x.trim()).filter(Boolean));
+    toast.success("Artigo criado. Revise o texto, confira as fontes e publique.");
+    return true;
+  };
+
   const scheduleItem: MenuItem[] =
     narrow && status !== "published"
       ? [
@@ -778,10 +991,12 @@ export function ArticleEditor({
         onBack={onBack}
         onPreview={onPreview}
         targets={targets}
+        unsent={unsent}
         publishing={publishing}
         onPublish={() => runPublish()}
         onOpenSchedule={() => setScheduleOpen(true)}
         menuItems={menuItems}
+        scores={{ seo: { score: report.score, total: report.total }, geo: { score: geo.score, total: geo.total } }}
       />
 
       {status === "archived" ? (
@@ -795,6 +1010,24 @@ export function ArticleEditor({
 
       <div className="grid items-start gap-6 px-4 pt-6 pb-24 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:px-10">
         <article className="min-w-0 rounded-[var(--radius-panel)] border border-line bg-surface" aria-label="Artigo">
+          {!postId && !hasContent(draft) && aiEnabled !== false ? (
+            <div className="border-b border-line px-5 py-5 sm:px-10 lg:px-14">
+              <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-x-5 gap-y-3">
+                <span aria-hidden className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-sunken text-ink">
+                  <Sparkles className="size-5" />
+                </span>
+                <div className="min-w-0 flex-1 basis-60">
+                  <p className="text-[15px] font-semibold text-ink">Criar artigo completo com IA</p>
+                  <p className="text-[13px] leading-snug text-muted">
+                    Dê o tema e receba texto, resposta direta, perguntas frequentes e SEO prontos para revisar.
+                  </p>
+                </div>
+                <Button onClick={() => setFullArticleOpen(true)} disabled={aiEnabled !== true} className="max-sm:w-full max-sm:justify-center">
+                  Criar com IA
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <CoverImage
             url={draft.coverUrl}
             alt={draft.coverAlt}
@@ -804,9 +1037,19 @@ export function ArticleEditor({
           />
           <div className="px-5 pt-6 pb-4 sm:px-10 lg:px-14">
             <div className="mx-auto max-w-[720px]">
-              <TitleInput value={draft.title} onChange={(title) => update({ title })} onEnter={() => editor?.commands.focus("start")} />
+              <TitleInput
+                value={draft.title}
+                onChange={(title) => update({ title })}
+                onEnter={() => document.getElementById("geo-answer")?.focus()}
+              />
             </div>
           </div>
+
+          <AnswerBlock
+            value={draft.answerSummary}
+            onChange={(answerSummary) => update({ answerSummary })}
+            onEnter={() => editor?.commands.focus("start")}
+          />
 
           {editor ? (
             <EditorToolbar
@@ -822,6 +1065,8 @@ export function ArticleEditor({
                   clientId={primaryClientId}
                   onApplyTitle={(title) => update({ title })}
                   onApplySeo={applySeo}
+                  onApplyGeo={applyGeo}
+                  onOpenFullArticle={() => setFullArticleOpen(true)}
                 />
               }
             />
@@ -833,6 +1078,17 @@ export function ArticleEditor({
             <div className="mx-auto max-w-[720px]">
               <EditorContent editor={editor} />
             </div>
+          </div>
+
+          <div className="divide-y divide-line border-t border-line">
+            <TakeawaysBlock items={draft.keyTakeaways} onChange={(keyTakeaways) => update({ keyTakeaways })} />
+            <FaqBlock items={draft.faq} onChange={(faq) => update({ faq })} />
+            <SourcesBlock
+              items={draft.sources}
+              onChange={(sources) => update({ sources })}
+              suggestions={sourceSuggestions}
+              onDismissSuggestions={() => setSourceSuggestions([])}
+            />
           </div>
 
           <footer className="flex flex-wrap gap-x-5 gap-y-1 border-t border-line px-5 py-3 text-[13px] text-muted tabular-nums sm:px-10 lg:px-14">
@@ -856,10 +1112,11 @@ export function ArticleEditor({
               onToggle={toggleSite}
               onCanonical={setCanonical}
               onUnpublish={(siteId) => void takeOffSite(siteId, false)}
+              onRemove={(siteId) => void removeSite(siteId)}
             />
           </RailSection>
 
-          <RailSection title="SEO" summary={`${report.score} de ${report.total}`}>
+          <RailSection id="editor-seo" title="SEO" summary={`${report.score} de ${report.total}`}>
             <SeoSection
               report={report}
               focusKeyword={draft.focusKeyword}
@@ -876,12 +1133,26 @@ export function ArticleEditor({
             />
           </RailSection>
 
+          <RailSection id="editor-geo" title="GEO" summary={`${geo.score} de ${geo.total}`}>
+            <GeoSection
+              report={geo}
+              authorName={draft.authorName}
+              expert={expert}
+              aiEnabled={aiEnabled}
+              onUseExpert={(authorName) => {
+                update({ authorName });
+                toast.success(`Autor definido: ${authorName}`);
+              }}
+            />
+          </RailSection>
+
           <RailSection title="Detalhes" defaultOpen={false}>
             <DetailsSection
               excerpt={draft.excerpt}
               category={draft.category}
               tags={draft.tags}
               authorName={draft.authorName}
+              contentType={draft.contentType}
               scheduledLocal={draft.scheduledLocal}
               categories={categories}
               defaultAuthor="Autor padrão de cada site"
@@ -899,6 +1170,7 @@ export function ArticleEditor({
               sites={sites}
               destinations={draft.destinations}
               mainHtml={draft.contentHtml}
+              mainFaq={completeFaq(draft.faq)}
               aiEnabled={aiEnabled}
               generatingSiteId={generatingSiteId}
               onChange={patchDestination}
@@ -941,6 +1213,21 @@ export function ArticleEditor({
           setPicker(null);
         }}
       />
+
+      {fullArticleOpen ? (
+        <FullArticleDialog
+          initial={{
+            topic: initialAi?.topic || draft.title,
+            keyword: initialAi?.keyword || draft.focusKeyword,
+            clientId: primaryClientId || initialClientId,
+            contentType: draft.contentType,
+          }}
+          clients={clientOptions}
+          enabled={aiEnabled}
+          onClose={() => setFullArticleOpen(false)}
+          onGenerated={applyFullArticle}
+        />
+      ) : null}
 
       {confirmDialog}
     </div>

@@ -1,12 +1,27 @@
 import { z } from "zod";
+import { CONTENT_TYPES } from "./labels";
 import type { AiAction, AiInput } from "./types";
 
 // Validação das entradas de POST /api/ai (zod v4). Mensagens em pt-BR, dizendo o que corrigir.
 
-export const AI_ACTIONS = ["titles", "outline", "draft", "improve", "seo", "variation"] as const satisfies readonly AiAction[];
+export const AI_ACTIONS = [
+  "titles",
+  "outline",
+  "draft",
+  "improve",
+  "seo",
+  "variation",
+  "geo",
+  "full_article",
+  "ideas",
+] as const satisfies readonly AiAction[];
 
 export const MAX_HTML_CHARS = 60_000;
 export const DEFAULT_WORDS = 1000;
+/** Tamanho padrão do artigo completo gerado em um clique. */
+export const DEFAULT_FULL_ARTICLE_WORDS = 1200;
+/** Quantidade padrão de pautas por pedido. */
+export const DEFAULT_IDEAS = 12;
 
 /** Trata `""`, espaços e `null` como campo ausente (o editor costuma mandar assim). */
 const blankToUndefined = (v: unknown) =>
@@ -98,6 +113,51 @@ export const inputSchemas = {
   variation: z.object({
     postId: requiredId("Artigo"),
     siteId: requiredId("Site"),
+  }),
+  geo: z.object({
+    title: z
+      .string({ error: "Informe o título do artigo." })
+      .trim()
+      .min(5, "Escreva um título antes de gerar os blocos de GEO.")
+      .max(200, "O título pode ter no máximo 200 caracteres."),
+    html: html("o conteúdo do artigo", 200),
+    keyword,
+    clientId,
+  }),
+  full_article: z.object({
+    topic: z
+      .string({ error: "Informe o tema do artigo." })
+      .trim()
+      .min(3, "Descreva o tema com pelo menos 3 caracteres.")
+      .max(300, "O tema pode ter no máximo 300 caracteres."),
+    keyword,
+    clientId,
+    contentType: z.preprocess(
+      blankToUndefined,
+      z.enum(CONTENT_TYPES, { error: "Escolha um formato de artigo da lista." }).optional(),
+    ),
+    words: z.preprocess(
+      blankToUndefined,
+      z
+        .number({ error: "O tamanho precisa ser um número de palavras." })
+        .int("Use um número inteiro de palavras.")
+        .min(400, "Peça pelo menos 400 palavras.")
+        .max(2500, "Peça no máximo 2.500 palavras no artigo completo.")
+        .optional(),
+    ),
+  }),
+  ideas: z.object({
+    clientId: z.uuid({ error: "Escolha um cliente para gerar pautas." }),
+    count: z.preprocess(
+      blankToUndefined,
+      z
+        .number({ error: "A quantidade de pautas precisa ser um número." })
+        .int("Use um número inteiro de pautas.")
+        .min(3, "Peça pelo menos 3 pautas.")
+        .max(24, "Peça no máximo 24 pautas por vez.")
+        .optional(),
+    ),
+    focus: optionalText(300, "O foco"),
   }),
 } satisfies { [A in AiAction]: z.ZodType<AiInput[A], unknown> };
 

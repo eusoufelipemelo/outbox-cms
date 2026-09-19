@@ -11,6 +11,8 @@ import { articleExtensions } from "./extensions";
 import { ClientDot } from "./primitives";
 import { EditorToolbar } from "./toolbar";
 import { DuplicateNotice, hasVariation } from "./destinations-section";
+import { FaqEditor } from "./geo-blocks";
+import type { FaqItem } from "@/lib/types";
 import type { DestinationDraft, DestinationSite } from "./types";
 
 type OverridePatch = Partial<Omit<DestinationDraft, "siteId" | "isCanonical">>;
@@ -50,6 +52,7 @@ function VariationBlock({
   site,
   dest,
   mainHtml,
+  mainFaq,
   aiEnabled,
   generating,
   onChange,
@@ -58,6 +61,7 @@ function VariationBlock({
   site: DestinationSite;
   dest: DestinationDraft;
   mainHtml: string;
+  mainFaq: FaqItem[];
   aiEnabled: boolean | null;
   generating: boolean;
   onChange: (patch: OverridePatch) => void;
@@ -66,6 +70,7 @@ function VariationBlock({
   const [open, setOpen] = useState(false);
   const bodyId = useId();
   const contentLabel = useId();
+  const faqLabel = useId();
   const custom = hasVariation(dest);
   const p = `var-${site.id}`;
 
@@ -98,7 +103,7 @@ function VariationBlock({
           <p className="text-[12.5px] text-muted">
             {aiEnabled === false
               ? "Configure ANTHROPIC_API_KEY para ativar"
-              : "Adapta tom, cidade e palavras-chave ao cliente. Revise antes de publicar."}
+              : "Adapta tom, cidade, palavras-chave, resposta direta e perguntas frequentes ao cliente. Revise antes de publicar."}
           </p>
         </div>
         <Field label="Título" htmlFor={`${p}-title`}>
@@ -130,6 +135,36 @@ function VariationBlock({
             placeholder="Usa a meta descrição principal"
           />
         </Field>
+        <Field label="Resposta direta" htmlFor={`${p}-answer`} hint="De 40 a 60 palavras, citando a cidade ou o nome do cliente.">
+          <Textarea
+            id={`${p}-answer`}
+            rows={3}
+            value={dest.overrideAnswerSummary}
+            maxLength={1000}
+            onChange={(e) => onChange({ overrideAnswerSummary: e.target.value.replace(/\s*\n\s*/g, " ") })}
+            placeholder="Usa a resposta direta principal"
+          />
+        </Field>
+        <div className="space-y-1.5" role="group" aria-labelledby={faqLabel}>
+          <div className="flex items-center justify-between gap-2">
+            <span id={faqLabel} className="text-sm font-medium text-ink">
+              Perguntas frequentes
+            </span>
+            {!dest.overrideFaq.length ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10"
+                onClick={() => onChange({ overrideFaq: mainFaq.map((f) => ({ ...f })) })}
+                disabled={!mainFaq.length}
+              >
+                Copiar FAQ principal
+              </Button>
+            ) : null}
+          </div>
+          {dest.overrideFaq.length ? null : <p className="text-[13px] text-muted">Usa as perguntas frequentes principais.</p>}
+          {open ? <FaqEditor items={dest.overrideFaq} onChange={(overrideFaq) => onChange({ overrideFaq })} idPrefix={`${p}-faq`} compact /> : null}
+        </div>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <span id={contentLabel} className="text-sm font-medium text-ink">
@@ -147,7 +182,15 @@ function VariationBlock({
           <Button
             variant="ghost"
             onClick={() =>
-              onChange({ overrideTitle: "", overrideExcerpt: "", overrideContentHtml: "", overrideSeoTitle: "", overrideSeoDescription: "" })
+              onChange({
+                overrideTitle: "",
+                overrideExcerpt: "",
+                overrideContentHtml: "",
+                overrideSeoTitle: "",
+                overrideSeoDescription: "",
+                overrideAnswerSummary: "",
+                overrideFaq: [],
+              })
             }
           >
             Limpar variação
@@ -162,6 +205,7 @@ export function VariationsSection({
   sites,
   destinations,
   mainHtml,
+  mainFaq,
   aiEnabled,
   generatingSiteId,
   onChange,
@@ -170,6 +214,7 @@ export function VariationsSection({
   sites: DestinationSite[];
   destinations: DestinationDraft[];
   mainHtml: string;
+  mainFaq: FaqItem[];
   aiEnabled: boolean | null;
   generatingSiteId: string | null;
   onChange: (siteId: string, patch: OverridePatch) => void;
@@ -177,7 +222,7 @@ export function VariationsSection({
 }) {
   const byId = new Map(sites.map((s) => [s.id, s]));
   if (!destinations.length) {
-    return <p className="text-sm text-muted">Escolha os destinos primeiro. Aqui você adapta título e texto para cada site.</p>;
+    return <p className="text-sm text-muted">Escolha os destinos primeiro. Aqui você adapta título, texto e blocos de GEO para cada site.</p>;
   }
   return (
     <div className="space-y-3">
@@ -195,6 +240,7 @@ export function VariationsSection({
               site={site}
               dest={dest}
               mainHtml={mainHtml}
+              mainFaq={mainFaq}
               aiEnabled={aiEnabled}
               generating={generatingSiteId === dest.siteId}
               onChange={(patch) => onChange(dest.siteId, patch)}

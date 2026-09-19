@@ -46,11 +46,27 @@ const clientSchema = z.object({
   audience: text(1000),
   keywords: z.array(z.string().max(60, "Cada palavra-chave pode ter no máximo 60 caracteres.")).max(40, "Use no máximo 40 palavras-chave."),
   notes: text(4000),
+  // Presença para Google e IAs (entidade do cliente)
+  about: text(600),
+  services: z.array(z.string().max(80, "Cada serviço pode ter no máximo 80 caracteres.")).max(30, "Use no máximo 30 serviços."),
+  service_area: text(200),
+  address: text(300),
+  opening_hours: text(300),
+  social_links: z
+    .array(z.string().max(300, "Cada link pode ter no máximo 300 caracteres."))
+    .max(12, "Use no máximo 12 links.")
+    .refine((links) => links.every(isHttpUrl), {
+      error: "Confira os links: cada linha precisa ser um endereço completo, como https://instagram.com/cliente.",
+    }),
+  expert_name: text(120),
+  expert_credentials: text(200),
+  expert_bio: text(1500),
   status: z.enum(CLIENT_STATUSES, { error: "Escolha um status válido." }),
 });
 
-function readKeywords(formData: FormData): string[] {
-  const raw = [...formData.getAll("keywords").map(String), ...String(formData.get("keywords_draft") ?? "").split(",")];
+/** Etiquetas de um campo de tags: cada valor de `name` mais o texto ainda não confirmado em `${name}_draft`. */
+function readTags(formData: FormData, name: string): string[] {
+  const raw = [...formData.getAll(name).map(String), ...String(formData.get(`${name}_draft`) ?? "").split(",")];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const item of raw) {
@@ -59,6 +75,22 @@ function readKeywords(formData: FormData): string[] {
     if (!k || seen.has(key)) continue;
     seen.add(key);
     out.push(k);
+  }
+  return out;
+}
+
+/** Links, um por linha. Completa "https://" quando a pessoa cola só o domínio (ex.: instagram.com/cliente). */
+function readLinks(formData: FormData, name: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of String(formData.get(name) ?? "").split(/[\r\n]+/)) {
+    let link = line.trim();
+    if (!link) continue;
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(link) && /^[\w-]+(\.[\w-]+)+(\/|$)/.test(link)) link = `https://${link}`;
+    const key = link.toLowerCase().replace(/\/$/, "");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(link);
   }
   return out;
 }
@@ -94,8 +126,17 @@ export async function saveClient(_prev: ActionResult<{ id: string }> | null, for
     brand_color: str("brand_color"),
     tone_of_voice: str("tone_of_voice"),
     audience: str("audience"),
-    keywords: readKeywords(formData),
+    keywords: readTags(formData, "keywords"),
     notes: str("notes"),
+    about: str("about"),
+    services: readTags(formData, "services"),
+    service_area: str("service_area"),
+    address: str("address"),
+    opening_hours: str("opening_hours"),
+    social_links: readLinks(formData, "social_links"),
+    expert_name: str("expert_name"),
+    expert_credentials: str("expert_credentials"),
+    expert_bio: str("expert_bio"),
     status: str("status") || "active",
   });
   if (!parsed.success) {

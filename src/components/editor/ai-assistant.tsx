@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { DOMSerializer } from "@tiptap/pm/model";
-import { FileText, ListTree, SearchCheck, Sparkles, Type, WandSparkles } from "lucide-react";
+import { FilePlus2, FileText, ListChecks, ListTree, SearchCheck, Sparkles, Type, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label, Textarea } from "@/components/ui/field";
@@ -14,12 +14,16 @@ import { Dialog, Menu, useConfirm, type MenuItem } from "./primitives";
 
 const DISABLED_HINT = "Configure ANTHROPIC_API_KEY para ativar";
 
-const actionLabel: Record<Exclude<AiAction, "variation">, string> = {
+/** Ações que rodam direto do menu (variação, artigo completo e pautas têm tela própria). */
+type MenuAction = Exclude<AiAction, "variation" | "full_article" | "ideas">;
+
+const actionLabel: Record<MenuAction, string> = {
   titles: "Sugerindo títulos",
   outline: "Gerando estrutura",
   draft: "Escrevendo rascunho",
   improve: "Melhorando trecho",
   seo: "Preenchendo SEO",
+  geo: "Gerando blocos de GEO",
 };
 
 const suggestions = ["Deixar mais claro", "Encurtar", "Tom mais próximo do leitor", "Corrigir gramática e pontuação"];
@@ -42,6 +46,8 @@ export function AiAssistant({
   clientId,
   onApplyTitle,
   onApplySeo,
+  onApplyGeo,
+  onOpenFullArticle,
 }: {
   editor: Editor;
   enabled: boolean | null;
@@ -50,8 +56,11 @@ export function AiAssistant({
   clientId?: string;
   onApplyTitle: (title: string) => void;
   onApplySeo: (seo: AiOutput["seo"]) => void;
+  /** Aplica os blocos de GEO (pede confirmação antes de sobrescrever o que já foi escrito). */
+  onApplyGeo: (geo: AiOutput["geo"]) => Promise<void>;
+  onOpenFullArticle: () => void;
 }) {
-  const [running, setRunning] = useState<Exclude<AiAction, "variation"> | null>(null);
+  const [running, setRunning] = useState<MenuAction | null>(null);
   const [titles, setTitles] = useState<string[] | null>(null);
   const [improve, setImprove] = useState<{ from: number; to: number; html: string } | null>(null);
   const [instruction, setInstruction] = useState("");
@@ -59,7 +68,7 @@ export function AiAssistant({
 
   const keyword = focusKeyword.trim() || undefined;
 
-  async function run<T>(action: Exclude<AiAction, "variation">, fn: () => Promise<T>): Promise<T | null> {
+  async function run<T>(action: MenuAction, fn: () => Promise<T>): Promise<T | null> {
     setRunning(action);
     try {
       return await fn();
@@ -148,6 +157,17 @@ export function AiAssistant({
     toast.success("SEO preenchido. Revise os campos na seção SEO.");
   }
 
+  async function fillGeo() {
+    if (needTitle("gerar os blocos de GEO")) return;
+    if (editor.isEmpty) {
+      toast.error("Escreva o texto antes de gerar os blocos de GEO. Eles resumem o que o artigo já diz.");
+      return;
+    }
+    const out = await run("geo", () => callAi("geo", { title, html: editor.getHTML(), keyword, clientId }));
+    if (!out) return;
+    await onApplyGeo(out);
+  }
+
   const off = enabled !== true || running !== null;
   const hint = enabled === false ? DISABLED_HINT : enabled === null ? "Verificando o assistente" : undefined;
   const items: MenuItem[] = [
@@ -156,7 +176,21 @@ export function AiAssistant({
     { key: "draft", label: "Escrever rascunho", icon: <FileText aria-hidden />, onSelect: draft },
     { key: "improve", label: "Melhorar trecho selecionado", icon: <WandSparkles aria-hidden />, onSelect: openImprove },
     { key: "seo", label: "Preencher SEO", icon: <SearchCheck aria-hidden />, onSelect: fillSeo },
-  ].map((item) => ({ ...item, disabled: off, hint }));
+    {
+      key: "geo",
+      label: "Gerar blocos de GEO",
+      icon: <ListChecks aria-hidden />,
+      onSelect: fillGeo,
+      hint: "Resposta direta, pontos principais e perguntas frequentes",
+    },
+    {
+      key: "full",
+      label: "Criar artigo completo",
+      icon: <FilePlus2 aria-hidden />,
+      onSelect: onOpenFullArticle,
+      hint: "A partir de um tema, com SEO e GEO",
+    },
+  ].map((item) => ({ ...item, disabled: off, hint: hint ?? item.hint }));
 
   return (
     <>

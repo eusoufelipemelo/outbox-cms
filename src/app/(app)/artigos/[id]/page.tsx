@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getPostForEditor, listCategorySuggestions, listDestinationSites } from "@/lib/data/posts";
+import { getPostForEditor, listCategorySuggestions, listClientOptions, listDestinationSites } from "@/lib/data/posts";
 import { ArticleEditor } from "@/components/editor/article-editor";
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -17,7 +17,12 @@ export default async function EditArticlePage({ params }: PageProps<"/artigos/[i
   await requireUser();
   const { id } = await params;
   if (!GUID.test(id)) notFound();
-  const [post, sites, categories] = await Promise.all([getPostForEditor(id), listDestinationSites(), listCategorySuggestions()]);
+  const [post, sites, categories, clients] = await Promise.all([
+    getPostForEditor(id),
+    listDestinationSites(),
+    listCategorySuggestions(),
+    listClientOptions(),
+  ]);
   if (!post) notFound();
-  return <ArticleEditor key={post.id} post={post} sites={sites} categories={categories} />;
+  return <ArticleEditor key={post.id} post={post} sites={sites} categories={categories} clients={clients} />;
 }

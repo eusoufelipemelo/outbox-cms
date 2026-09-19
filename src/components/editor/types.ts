@@ -1,5 +1,5 @@
 // Tipos compartilhados entre o editor (cliente), as consultas e as server actions de artigos.
-import type { PostStatus, PublicationStatus, SitePlatform } from "@/lib/types";
+import type { ContentType, FaqItem, PostStatus, PublicationStatus, SitePlatform } from "@/lib/types";
 import type { PublishResult } from "@/lib/delivery";
 
 export type { PublishResult };
@@ -12,7 +12,23 @@ export interface DestinationSite {
   blog_path: string;
   platform: SitePlatform;
   status: "active" | "paused";
-  client: { id: string; name: string; brand_color: string | null; city: string | null; state: string | null };
+  client: {
+    id: string;
+    name: string;
+    brand_color: string | null;
+    city: string | null;
+    state: string | null;
+    /** Especialista que assina/revisa (E-E-A-T). */
+    expert_name: string | null;
+    expert_credentials: string | null;
+  };
+}
+
+/** Fonte citada no artigo, como o editor manipula (publisher vazio = sem editora). */
+export interface SourceDraft {
+  title: string;
+  url: string;
+  publisher: string;
 }
 
 /** Estado da publicação de um artigo em um site (linha de post_sites). */
@@ -23,6 +39,8 @@ export interface Publication {
   externalUrl: string | null;
   lastError: string | null;
   publishedAt: string | null;
+  /** Quando a versão no ar neste site foi gravada (null = nada enviado ainda). */
+  snapshotAt: string | null;
 }
 
 /** Destino escolhido no editor + variação do texto para aquele site. Strings vazias = sem variação. */
@@ -34,6 +52,10 @@ export interface DestinationDraft {
   overrideContentHtml: string;
   overrideSeoTitle: string;
   overrideSeoDescription: string;
+  /** GEO: resposta direta própria deste site. */
+  overrideAnswerSummary: string;
+  /** GEO: FAQ própria deste site (vazia = usa a FAQ principal). */
+  overrideFaq: FaqItem[];
 }
 
 export interface RevisionItem {
@@ -58,6 +80,11 @@ export interface EditorPost {
   seoTitle: string;
   seoDescription: string;
   focusKeyword: string;
+  answerSummary: string;
+  keyTakeaways: string[];
+  faq: FaqItem[];
+  sources: SourceDraft[];
+  contentType: ContentType;
   status: PostStatus;
   scheduledAt: string | null;
   publishedAt: string | null;
@@ -83,6 +110,11 @@ export interface SavePostInput {
   seoTitle: string;
   seoDescription: string;
   focusKeyword: string;
+  answerSummary: string;
+  keyTakeaways: string[];
+  faq: FaqItem[];
+  sources: SourceDraft[];
+  contentType: ContentType;
   /** ISO com fuso, ou null. */
   scheduledAt: string | null;
   sites: DestinationDraft[];

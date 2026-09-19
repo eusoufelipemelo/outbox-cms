@@ -16,7 +16,7 @@ export function isUuid(value: string): boolean {
   return UUID.test(value);
 }
 
-// Colunas sem wp_app_password e webhook_secret.
+// Colunas sem wp_app_password e webhook_secret (indexnow_key é pública: fica em {url}/{chave}.txt).
 const SAFE_COLUMNS = [
   "id",
   "client_id",
@@ -31,6 +31,7 @@ const SAFE_COLUMNS = [
   "wp_default_status",
   "default_author",
   "default_category",
+  "indexnow_key",
   "status",
   "last_check_at",
   "last_check_ok",

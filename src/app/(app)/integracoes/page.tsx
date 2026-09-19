@@ -14,8 +14,9 @@ import { CopyField } from "@/components/ui/copy-field";
 import { EmptyState, PageHeader, Panel } from "@/components/ui/panel";
 import { IntegrationTabs } from "@/components/integrations/integration-tabs";
 import { SitePicker } from "@/components/integrations/site-picker";
-import { CHANNEL_LABEL, DeliveryFilter, DeliveryList, type DeliveryRow } from "@/components/integrations/delivery-list";
+import { DeliveryFilter, DeliveryList, type DeliveryRow } from "@/components/integrations/delivery-list";
 import * as S from "@/components/integrations/snippets";
+import { PLATFORM } from "@/components/clients/options";
 
 export const metadata: Metadata = { title: "Integrações" };
 
@@ -28,6 +29,7 @@ type IntegrationSite = {
   platform: SitePlatform;
   public_key: string;
   webhook_url: string | null;
+  indexnow_key: string | null;
   status: "active" | "paused";
   last_check_at: string | null;
   last_check_ok: boolean | null;
@@ -37,7 +39,7 @@ type IntegrationSite = {
 
 // Nunca selecione wp_app_password nem webhook_secret aqui: tudo vai para o HTML da página.
 const SITE_COLUMNS =
-  "id, client_id, name, url, blog_path, platform, public_key, webhook_url, status, last_check_at, last_check_ok, last_check_message, client:clients(id, name)";
+  "id, client_id, name, url, blog_path, platform, public_key, webhook_url, indexnow_key, status, last_check_at, last_check_ok, last_check_message, client:clients(id, name)";
 
 function one<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value;
@@ -138,7 +140,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           <EmptyState
             icon={<Plug className="size-6" aria-hidden />}
             title="Cadastre um site para gerar os códigos de integração"
-            description="Cada site de cliente recebe uma chave pública. Com ela, o blog aparece no site por script, código Next.js, WordPress ou webhook."
+            description="Cada site de cliente recebe uma chave pública. Com ela, os artigos aparecem no site OutBox, por script, WordPress ou webhook."
             action={
               <Link href="/clientes" className={buttonClass("primary")}>
                 Ir para clientes e sites
@@ -157,8 +159,65 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const siteHost = hostname(selected.url);
   const api = `${appUrl}/api/v1`;
   const keep: Record<string, string> = failedOnly ? { entregas: "falhas" } : {};
+  const siteRoot = selected.url.replace(/\/+$/, "");
+  const revalidateUrl = `${siteRoot}${S.REVALIDATE_PATH}`;
+  const revalidateOk = (selected.webhook_url ?? "").replace(/\/+$/, "") === revalidateUrl;
 
   const tabs = [
+    {
+      id: "outbox",
+      label: "Site OutBox (Next.js)",
+      content: (
+        <ol className="space-y-7">
+          <Step n={1} title="Variáveis de ambiente do site">
+            <Prose>
+              <p>
+                Sites feitos com o starter da OutBox só precisam destas 3 variáveis. Blog, páginas de artigo com SEO e JSON-LD, sitemap, llms.txt e
+                o arquivo do IndexNow já vêm prontos no starter.
+              </p>
+            </Prose>
+            <CopyField value={S.outboxEnvSnippet(appUrl, key)} multiline label="Copiar variáveis de ambiente" />
+            <p className="text-[13.5px] text-muted">
+              O valor de <Code>OUTBOX_WEBHOOK_SECRET</Code> fica na{" "}
+              <Link href={configHref} className="font-medium text-ink underline underline-offset-4">
+                página do site
+              </Link>
+              .
+            </p>
+          </Step>
+          <Step n={2} title="Atualização instantânea">
+            {revalidateOk ? (
+              <Badge tone="ok">
+                <StatusDot tone="ok" />
+                Configurada neste site
+              </Badge>
+            ) : (
+              <Badge tone="warn">
+                <StatusDot tone="warn" />
+                Ainda não configurada
+              </Badge>
+            )}
+            <CopyField value={revalidateUrl} label="Copiar URL de atualização" />
+            <p className="text-[13.5px] text-muted">
+              {revalidateOk
+                ? "A cada publicação o OutBox chama esta rota do site e o artigo aparece na hora."
+                : "Na configuração do site, deixe este endereço em Atualização instantânea do site para os artigos aparecerem na hora."}{" "}
+              {revalidateOk ? null : (
+                <Link href={configHref} className="font-medium text-ink underline underline-offset-4">
+                  Abrir configuração do site
+                </Link>
+              )}
+            </p>
+          </Step>
+          <Step n={3} title="Publique e confira">
+            <p className="text-[14px] text-muted">
+              Depois do deploy, use Testar conexão na configuração do site e publique um artigo. Ele aparece em{" "}
+              <Code>{`${siteRoot}${selected.blog_path}`}</Code> assim que a publicação termina.
+            </p>
+          </Step>
+        </ol>
+      ),
+    },
     {
       id: "html",
       label: "Qualquer site (HTML)",
@@ -229,7 +288,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
               <Link href={configHref} className="font-medium text-ink underline underline-offset-4">
                 configuração do site
               </Link>{" "}
-              com <Code>{`${selected.url}/api/outbox-webhook`}</Code>. A cada publicação o OutBox chama essa rota e a página é atualizada na hora.
+              com <Code>{revalidateUrl}</Code>. A cada publicação o OutBox chama essa rota e a página é atualizada na hora.
             </p>
           </Step>
         </ol>
@@ -342,9 +401,18 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
               </thead>
               <tbody className="divide-y divide-line">
                 {[
-                  ["GET /posts", "Lista paginada: data, meta (page, per_page, total, total_pages) e site. Parâmetros page, per_page (até 50), category, tag, q."],
-                  ["GET /posts/{slug}", "Artigo completo com content_html, seo (title, description, canonical_url, og_image) e json_ld."],
+                  [
+                    "GET /posts",
+                    "Lista paginada: data (com answer_summary e author_profile), meta (page, per_page, total, total_pages) e site. Parâmetros page, per_page (até 50), category, tag, q.",
+                  ],
+                  [
+                    "GET /posts/{slug}",
+                    "Artigo completo: content_html, answer_summary, key_takeaways, faq, sources, content_type, author_profile, seo e json_ld (@graph).",
+                  ],
                   ["GET /categories", "Categorias e tags dos artigos no ar, com contagem."],
+                  ["GET /site", "Dados do site e da empresa (organization), indexnow_key e json_ld da home."],
+                  ["GET /llms.txt", "Resumo da empresa e dos 50 artigos mais recentes para IAs (llmstxt.org)."],
+                  ["GET /llms-full.txt", "Texto completo dos 30 artigos mais recentes, em markdown."],
                   ["GET /sitemap.xml", "Sitemap XML com o blog e todos os artigos."],
                   ["GET /feed.xml", "Feed RSS 2.0 com os 30 artigos mais recentes."],
                   ["POST /posts/{slug}/view", "Registra uma visualização (conta nas estatísticas do CMS)."],
@@ -373,7 +441,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     },
   ];
 
-  const defaultTab = selected.platform === "wordpress" ? "wordpress" : selected.platform === "webhook" ? "webhook" : "html";
+  const defaultTab = selected.platform === "wordpress" ? "wordpress" : selected.platform === "webhook" ? "webhook" : "outbox";
 
   return (
     <>
@@ -412,7 +480,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
               </dd>
               <dt className="text-muted">Plataforma</dt>
               <dd className="flex flex-wrap items-center gap-2">
-                <span className="text-ink">{CHANNEL_LABEL[selected.platform]}</span>
+                <span className="text-ink">{PLATFORM[selected.platform].label}</span>
                 {selected.status === "paused" ? (
                   <Badge tone="warn">
                     <StatusDot tone="warn" />
@@ -448,6 +516,71 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
         <Panel title="Como integrar" description={`Códigos já preenchidos para ${selected.name}.`}>
           <IntegrationTabs key={selected.id} tabs={tabs} defaultTab={defaultTab} />
+        </Panel>
+
+        <Panel
+          title="GEO: ser citado pelas IAs"
+          description="O que o CMS entrega para o site aparecer nas respostas do ChatGPT, Gemini, Perplexity e Google AI Overviews."
+        >
+          <div className="space-y-6">
+            <Prose>
+              <p>
+                Cada artigo publicado leva resposta direta, pontos principais, perguntas frequentes e fontes, além de dados estruturados com o
+                artigo, o FAQ, a empresa e o autor com credenciais. Os dados da empresa e do especialista vêm do cadastro do cliente.
+              </p>
+            </Prose>
+            <div className="overflow-x-auto rounded-[var(--radius-control)] border border-line">
+              <table className="w-full min-w-[560px] text-left text-[13.5px]">
+                <thead className="bg-sunken text-muted">
+                  <tr>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Recurso
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Onde está
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {[
+                    ["llms.txt", "GET /llms.txt: empresa, serviços, artigos e contato. O site OutBox serve em /llms.txt."],
+                    ["llms-full.txt", "GET /llms-full.txt: os 30 artigos mais recentes em texto completo. O site OutBox serve em /llms-full.txt."],
+                    ["JSON-LD", "Campo json_ld de GET /posts/{slug} (artigo, FAQ, empresa, autor, breadcrumbs) e de GET /site (empresa e site, para a home)."],
+                    ["IndexNow", "Aviso automático ao Bing e aos buscadores parceiros a cada publicação, atualização ou despublicação."],
+                  ].map(([name, desc]) => (
+                    <tr key={name}>
+                      <td className="px-3 py-2.5 align-top font-mono text-[12.5px] whitespace-nowrap text-ink">{name}</td>
+                      <td className="px-3 py-2.5 text-text">{desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Block title="llms.txt deste site">
+                <CopyField value={`${api}/llms.txt?key=${key}`} label="Copiar URL do llms.txt" />
+              </Block>
+              <Block title="llms-full.txt deste site">
+                <CopyField value={`${api}/llms-full.txt?key=${key}`} label="Copiar URL do llms-full.txt" />
+              </Block>
+            </div>
+            {selected.indexnow_key ? (
+              <Block title="Arquivo de verificação do IndexNow">
+                <CopyField value={`${siteRoot}/${selected.indexnow_key}.txt`} label="Copiar endereço do arquivo" />
+                <p className="text-[13.5px] text-muted">
+                  O arquivo precisa responder só a chave <Code>{selected.indexnow_key}</Code>. O site OutBox faz isso sozinho; em outros sites,
+                  crie o arquivo na raiz.
+                </p>
+              </Block>
+            ) : null}
+            <Block title="robots.txt recomendado">
+              <CopyField value={S.robotsSnippet(selected.url)} multiline label="Copiar robots.txt" />
+              <p className="text-[13.5px] text-muted">
+                Libera os robôs de busca e de IA para lerem o site. Bloquear GPTBot, PerplexityBot ou ClaudeBot tira o site das respostas desses
+                assistentes.
+              </p>
+            </Block>
+          </div>
         </Panel>
 
         {deliveriesPanel}

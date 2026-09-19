@@ -367,12 +367,26 @@ export function Menu({
 
 // ============ Seção recolhível do painel lateral ============
 
+export const RAIL_OPEN_EVENT = "rail:open";
+
+/** Rola até uma seção do painel lateral, abre se estiver fechada e põe o foco no cabeçalho. */
+export function revealRailSection(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.dispatchEvent(new Event(RAIL_OPEN_EVENT));
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  el.querySelector<HTMLButtonElement>("h2 button")?.focus({ preventScroll: true });
+}
+
 export function RailSection({
+  id,
   title,
   summary,
   defaultOpen = true,
   children,
 }: {
+  id?: string;
   title: string;
   summary?: ReactNode;
   defaultOpen?: boolean;
@@ -380,8 +394,16 @@ export function RailSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const bodyId = useId();
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onOpen = () => setOpen(true);
+    el.addEventListener(RAIL_OPEN_EVENT, onOpen);
+    return () => el.removeEventListener(RAIL_OPEN_EVENT, onOpen);
+  }, []);
   return (
-    <section className="rounded-[var(--radius-panel)] border border-line bg-surface">
+    <section ref={ref} id={id} className="scroll-mt-44 rounded-[var(--radius-panel)] border border-line bg-surface lg:scroll-mt-24">
       <h2>
         <button
           type="button"

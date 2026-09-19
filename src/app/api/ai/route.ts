@@ -11,9 +11,11 @@ export const maxDuration = 300;
 
 const fail = (error: string, status: number) => Response.json({ ok: false, error } satisfies AiResponse, { status });
 
+/** Só contas aprovadas (status "active") usam o assistente. */
 async function currentUser(): Promise<CurrentUser | null> {
   try {
-    return await getUser();
+    const user = await getUser();
+    return user?.status === "active" ? user : null;
   } catch {
     return null;
   }

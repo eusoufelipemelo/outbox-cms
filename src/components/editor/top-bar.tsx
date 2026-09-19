@@ -9,7 +9,7 @@ import { Field, Input } from "@/components/ui/field";
 import type { PostStatus } from "@/lib/types";
 import { cn, formatDateTime } from "@/lib/utils";
 import { formatTime } from "./datetime";
-import { ClientDot, Dialog, Menu, Popover, Tip, type MenuItem } from "./primitives";
+import { ClientDot, Dialog, Menu, Popover, Tip, revealRailSection, type MenuItem } from "./primitives";
 
 export type SaveState = "new" | "dirty" | "saving" | "saved" | "error";
 
@@ -81,6 +81,27 @@ function SaveIndicator({
   );
 }
 
+export interface ScoreSummary {
+  seo: { score: number; total: number };
+  geo: { score: number; total: number };
+}
+
+function ScoreBadge({ name, score, total, target }: { name: string; score: number; total: number; target: string }) {
+  const pct = total ? score / total : 0;
+  return (
+    <button
+      type="button"
+      onClick={() => revealRailSection(target)}
+      aria-label={`${name}: ${score} de ${total} itens atendidos. Ver checklist`}
+      className="inline-flex h-10 cursor-pointer items-center rounded-[var(--radius-control)] px-0.5"
+    >
+      <Badge tone={pct >= 0.8 ? "ok" : pct >= 0.5 ? "warn" : "neutral"} className="tabular-nums">
+        <span className="font-semibold">{name}</span> {score} de {total}
+      </Badge>
+    </button>
+  );
+}
+
 export interface PublishTarget {
   siteId: string;
   name: string;
@@ -93,11 +114,13 @@ export interface PublishTarget {
 function PublishButton({
   targets,
   published,
+  unsent,
   busy,
   onPublish,
 }: {
   targets: PublishTarget[];
   published: boolean;
+  unsent: boolean;
   busy: boolean;
   onPublish: () => void;
 }) {
@@ -141,7 +164,11 @@ function PublishButton({
     >
       <p className="text-[15px] font-semibold text-ink">{label}</p>
       <p className="mt-1 text-[13px] text-muted">
-        {published ? "As mudanças vão ao ar agora nestes sites:" : "O artigo vai ao ar agora nestes sites:"}
+        {!published
+          ? "O artigo vai ao ar agora nestes sites:"
+          : unsent
+            ? "As alterações salvas vão ao ar agora nestes sites:"
+            : "Os sites já estão com a versão atual. Enviar de novo para:"}
       </p>
       <ul className="mt-3 max-h-60 space-y-1.5 overflow-y-auto">
         {targets.map((t) => (
@@ -248,10 +275,12 @@ export function TopBar({
   onBack,
   onPreview,
   targets,
+  unsent,
   publishing,
   onPublish,
   onOpenSchedule,
   menuItems,
+  scores,
 }: {
   saveState: SaveState;
   savedAt: string | null;
@@ -262,10 +291,13 @@ export function TopBar({
   onBack: (e: MouseEvent<HTMLAnchorElement>) => void;
   onPreview: () => void;
   targets: PublishTarget[];
+  /** Publicado, mas o texto salvo é mais novo que a versão no ar em algum site. */
+  unsent: boolean;
   publishing: boolean;
   onPublish: () => void;
   onOpenSchedule: () => void;
   menuItems: MenuItem[];
+  scores?: ScoreSummary;
 }) {
   const scheduled = status === "scheduled" && scheduledAt;
   return (
@@ -281,12 +313,24 @@ export function TopBar({
           <span className="hidden sm:inline">Artigos</span>
         </Link>
         <span aria-hidden className="mx-1 hidden h-5 w-px bg-line sm:block" />
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <SaveIndicator state={saveState} savedAt={savedAt} error={saveError} onRetry={onRetrySave} />
+          {unsent ? (
+            <p className="ml-auto flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-warn">
+              <span aria-hidden className="size-2 shrink-0 rounded-full bg-warn" />
+              <span className="truncate max-sm:sr-only">Alterações ainda não enviadas aos sites</span>
+            </p>
+          ) : null}
         </div>
         <div className="hidden md:block">
           {status !== "draft" ? <PostStatusBadge status={status} /> : null}
         </div>
+        {scores ? (
+          <div className="hidden items-center xl:flex" role="group" aria-label="Pontuação do artigo">
+            <ScoreBadge name="SEO" score={scores.seo.score} total={scores.seo.total} target="editor-seo" />
+            <ScoreBadge name="GEO" score={scores.geo.score} total={scores.geo.total} target="editor-geo" />
+          </div>
+        ) : null}
         <Tip label="Pré-visualizar" side="bottom">
           <Button variant="ghost" onClick={onPreview} aria-label="Pré-visualizar" className="max-lg:w-10 max-lg:justify-center max-lg:px-0">
             <Eye className="size-4" aria-hidden />
@@ -299,7 +343,7 @@ export function TopBar({
             {scheduled ? `Agendado para ${formatDateTime(scheduledAt)}` : "Agendar"}
           </Button>
         ) : null}
-        <PublishButton targets={targets} published={status === "published"} busy={publishing} onPublish={onPublish} />
+        <PublishButton targets={targets} published={status === "published"} unsent={unsent} busy={publishing} onPublish={onPublish} />
         <Menu
           label="Mais ações"
           items={menuItems}

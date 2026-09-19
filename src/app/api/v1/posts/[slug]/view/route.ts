@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     const auth = await authSite(req);
     if (auth.error) return auth.error;
     const { slug } = await ctx.params;
-    const postId = await findVisiblePostId(auth.site, decodeURIComponent(slug));
+    const postId = await findVisiblePostId(auth.site, slug);
     if (!postId) return apiError(404, "Artigo não encontrado neste site.");
 
     const counted = firstView(`${clientIp(req)}|${auth.site.id}|${postId}`);

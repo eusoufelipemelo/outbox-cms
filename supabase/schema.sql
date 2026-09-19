@@ -109,6 +109,15 @@ create table if not exists public.post_sites (
 );
 create index if not exists post_sites_site_idx on public.post_sites(site_id, status);
 
+-- Versão publicada por destino (002_snapshots). A Content API, o embed, o sitemap e o feed servem
+-- só o `snapshot`: o autosave do editor não muda o que está no ar até alguém clicar em Atualizar.
+-- `alter ... if not exists` fica fora do create table para valer também em bancos já criados.
+alter table public.post_sites add column if not exists snapshot jsonb;          -- artigo no formato público, overrides aplicados
+alter table public.post_sites add column if not exists snapshot_at timestamptz; -- quando o snapshot foi gravado
+create index if not exists post_sites_site_snapshot_slug_idx
+  on public.post_sites (site_id, (snapshot->>'slug'))
+  where status = 'published';
+
 -- ============ Log de entregas ============
 create table if not exists public.deliveries (
   id uuid primary key default gen_random_uuid(),
@@ -204,3 +213,114 @@ on conflict (id) do nothing;
 
 -- A contagem de leituras é chamada pelo servidor (service role)
 grant execute on function public.increment_post_view(uuid, uuid) to service_role;
+
+-- ============ Equipe: perfis e aprovação (igual a migrations/003_profiles.sql) ============
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null default '',
+  name text,
+  avatar_url text,
+  role text not null default 'editor' check (role in ('admin','editor')),
+  status text not null default 'pending' check (status in ('pending','active','blocked')),
+  created_at timestamptz not null default now(),
+  approved_at timestamptz,
+  approved_by uuid references auth.users(id) on delete set null
+);
+create index if not exists profiles_status_idx on public.profiles(status);
+
+-- Fechado para acesso direto: só o servidor (service role) lê e escreve.
+alter table public.profiles enable row level security;
+
+-- Cria o perfil quando uma conta nasce em auth.users (e-mail ou Google).
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  meta jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+  is_first boolean;
+begin
+  -- Serializa cadastros simultâneos para existir um único "primeiro" admin.
+  perform pg_advisory_xact_lock(hashtext('public.profiles.first_admin'));
+  select not exists (select 1 from public.profiles) into is_first;
+
+  insert into public.profiles (id, email, name, avatar_url, role, status, approved_at)
+  values (
+    new.id,
+    coalesce(new.email, ''),
+    nullif(btrim(coalesce(meta->>'name', meta->>'full_name', '')), ''),
+    nullif(coalesce(meta->>'avatar_url', meta->>'picture', ''), ''),
+    case when is_first then 'admin' else 'editor' end,
+    case when is_first then 'active' else 'pending' end,
+    case when is_first then now() end
+  )
+  on conflict (id) do nothing;
+  return new;
+end $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- Mantém o e-mail do perfil igual ao da conta.
+create or replace function public.handle_user_email_change()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update public.profiles set email = coalesce(new.email, '') where id = new.id;
+  return new;
+end $$;
+
+drop trigger if exists on_auth_user_email_changed on auth.users;
+create trigger on_auth_user_email_changed
+  after update of email on auth.users
+  for each row when (old.email is distinct from new.email)
+  execute function public.handle_user_email_change();
+
+-- Contas que já existiam antes desta migração já usavam o CMS: entram ativas.
+-- A mais antiga vira admin (se ainda não houver admin).
+with ranked as (
+  select u.*, row_number() over (order by u.created_at, u.id) as rn
+  from auth.users u
+)
+insert into public.profiles (id, email, name, avatar_url, role, status, created_at, approved_at)
+select
+  r.id,
+  coalesce(r.email, ''),
+  nullif(btrim(coalesce(r.raw_user_meta_data->>'name', r.raw_user_meta_data->>'full_name', '')), ''),
+  nullif(coalesce(r.raw_user_meta_data->>'avatar_url', r.raw_user_meta_data->>'picture', ''), ''),
+  case when r.rn = 1 and not exists (select 1 from public.profiles p where p.role = 'admin') then 'admin' else 'editor' end,
+  'active',
+  r.created_at,
+  now()
+from ranked r
+on conflict (id) do nothing;
+-- 004_geo — campos de GEO (otimização para mecanismos de resposta com IA) e entidade do cliente.
+-- Idempotente.
+
+-- Artigo: blocos que as IAs extraem e citam
+alter table public.posts add column if not exists answer_summary text;                          -- resposta direta (40–60 palavras) no topo
+alter table public.posts add column if not exists key_takeaways text[] not null default '{}';   -- pontos principais
+alter table public.posts add column if not exists faq jsonb not null default '[]';              -- [{ "question": "", "answer": "" }]
+alter table public.posts add column if not exists sources jsonb not null default '[]';          -- [{ "title": "", "url": "", "publisher": "" }]
+alter table public.posts add column if not exists content_type text not null default 'article';
+do $$ begin
+  alter table public.posts add constraint posts_content_type_check
+    check (content_type in ('article','howto','guide','list','comparison','news'));
+exception when duplicate_object then null; end $$;
+
+-- Variação por site também cobre os blocos de GEO
+alter table public.post_sites add column if not exists override_answer_summary text;
+alter table public.post_sites add column if not exists override_faq jsonb;
+
+-- Cliente como entidade (Organization/LocalBusiness no schema.org, llms.txt, autoria E-E-A-T)
+alter table public.clients add column if not exists about text;                 -- o que a empresa faz, em 2–3 frases
+alter table public.clients add column if not exists services text[] not null default '{}';
+alter table public.clients add column if not exists service_area text;          -- ex.: "Curitiba e região metropolitana"
+alter table public.clients add column if not exists address text;
+alter table public.clients add column if not exists opening_hours text;
+alter table public.clients add column if not exists social_links text[] not null default '{}';
+alter table public.clients add column if not exists expert_name text;           -- especialista que assina/revisa
+alter table public.clients add column if not exists expert_credentials text;    -- ex.: "Cirurgiã-dentista, CRO-PR 12345"
+alter table public.clients add column if not exists expert_bio text;
+
+-- Site: chave do IndexNow (Bing, Yandex e buscadores que alimentam IAs)
+alter table public.sites add column if not exists indexnow_key text not null default encode(gen_random_bytes(16), 'hex');

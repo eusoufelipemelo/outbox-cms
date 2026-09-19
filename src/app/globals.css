@@ -189,3 +189,81 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+  Telas de entrada (login/cadastro): a única animação de carregamento do CMS.
+  Ensaia a sequência de entrega — o artigo sai, as linhas correm e cada site acende "No ar".
+  O estilo padrão é o estado final; a animação só parte do estado inicial (fill "backwards").
+*/
+.entry-anim {
+  animation-duration: 560ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: backwards;
+  animation-delay: var(--d, 0ms);
+}
+.entry-card {
+  animation-name: entry-card;
+}
+.entry-press {
+  animation-name: entry-press;
+  animation-duration: 420ms;
+}
+.entry-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation-name: entry-draw;
+  animation-duration: 520ms;
+  animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+}
+.entry-row {
+  animation-name: entry-row;
+  animation-duration: 360ms;
+}
+.entry-queued {
+  opacity: 0;
+  animation-name: entry-out;
+  animation-duration: 200ms;
+}
+.entry-live {
+  animation-name: entry-in;
+  animation-duration: 260ms;
+}
+@keyframes entry-card {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+@keyframes entry-press {
+  50% {
+    transform: scale(0.94);
+    filter: brightness(0.92);
+  }
+}
+@keyframes entry-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+@keyframes entry-row {
+  from {
+    border-color: rgb(255 255 255 / 0.1);
+    background-color: rgb(255 255 255 / 0.03);
+  }
+}
+@keyframes entry-out {
+  from {
+    opacity: 1;
+  }
+}
+@keyframes entry-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entry-anim {
+    animation: none !important;
+  }
+}

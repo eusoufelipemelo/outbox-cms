@@ -12,7 +12,7 @@ import { saveSite } from "@/lib/data/site-actions";
 import type { SiteFormValues } from "@/lib/data/sites";
 import type { ActionResult, SitePlatform } from "@/lib/types";
 import { cn, joinUrl, normalizeUrl } from "@/lib/utils";
-import { PLATFORM, SITE_PLATFORMS } from "./options";
+import { DEFAULT_PLATFORM, OUTBOX_REVALIDATE_PATH, PLATFORM, SITE_PLATFORMS } from "./options";
 
 type State = ActionResult<{ id: string }> | null;
 
@@ -31,8 +31,12 @@ function previewUrl(url: string, blogPath: string): string | null {
 export function SiteForm({ clientId, site }: { clientId: string; site?: SiteFormValues }) {
   const router = useRouter();
   const isNew = !site;
-  const [platform, setPlatform] = useState<SitePlatform>(site?.platform ?? "api");
+  const [platform, setPlatform] = useState<SitePlatform>(site?.platform ?? DEFAULT_PLATFORM);
   const [url, setUrl] = useState(site?.url ?? "");
+  // Site novo da OutBox: a URL de atualização acompanha o endereço do site até alguém editar o campo.
+  // Site já salvo sem URL (ex.: blog por script) não muda sozinho: o botão "Usar a rota do site OutBox" preenche.
+  const [webhookUrl, setWebhookUrl] = useState(site?.webhook_url ?? "");
+  const [webhookEdited, setWebhookEdited] = useState(Boolean(site));
   const [blogPath, setBlogPath] = useState(site?.blog_path ?? "/blog");
   const [replacingPassword, setReplacingPassword] = useState(false);
   const hasSavedPassword = Boolean(site?.has_wp_password);
@@ -61,6 +65,12 @@ export function SiteForm({ clientId, site }: { clientId: string; site?: SiteForm
   }
 
   const preview = previewUrl(url, blogPath);
+  const revalidateUrl = url.trim() ? `${normalizeUrl(url)}${OUTBOX_REVALIDATE_PATH}` : "";
+  const apiWebhookValue = webhookEdited ? webhookUrl : revalidateUrl;
+  const editWebhook = (value: string) => {
+    setWebhookEdited(true);
+    setWebhookUrl(value);
+  };
 
   return (
     <form action={formAction} onSubmit={onSubmit} noValidate className="space-y-6">
@@ -183,8 +193,8 @@ export function SiteForm({ clientId, site }: { clientId: string; site?: SiteForm
           {platform === "api" ? (
             <p className="mb-5 rounded-[var(--radius-control)] bg-sunken px-4 py-3 text-sm text-muted">
               {isNew
-                ? "Depois de salvar, esta tela mostra a chave pública e o link para o código de integração."
-                : "A chave pública e o código de integração estão nesta tela e em Integrações."}
+                ? "Depois de salvar, esta tela mostra a chave pública. Em Integrações ficam as 3 variáveis de ambiente do site OutBox."
+                : "A chave pública está nesta tela. As variáveis de ambiente do site OutBox estão em Integrações."}
             </p>
           ) : null}
 
@@ -194,7 +204,7 @@ export function SiteForm({ clientId, site }: { clientId: string; site?: SiteForm
                 label="Endereço do WordPress"
                 htmlFor="wp_url"
                 error={err("wp_url")}
-                hint="Em branco usa o endereço do site."
+                hint="Em branco usa o endereço do site. Salvamos sempre com https:// para proteger a senha de aplicativo."
                 className="sm:col-span-2"
               >
                 <Input
@@ -203,7 +213,7 @@ export function SiteForm({ clientId, site }: { clientId: string; site?: SiteForm
                   inputMode="url"
                   autoComplete="off"
                   defaultValue={site?.wp_url ?? ""}
-                  placeholder={url.trim() ? normalizeUrl(url) : "https://www.cliente.com.br"}
+                  placeholder={url.trim() ? normalizeUrl(url).replace(/^http:\/\//i, "https://") : "https://www.cliente.com.br"}
                   aria-invalid={invalid("wp_url")}
                 />
               </Field>
@@ -305,9 +315,39 @@ export function SiteForm({ clientId, site }: { clientId: string; site?: SiteForm
                 inputMode="url"
                 autoComplete="off"
                 placeholder="https://www.cliente.com.br/api/outbox"
-                defaultValue={site?.webhook_url ?? ""}
+                value={webhookUrl}
+                onChange={(e) => editWebhook(e.target.value)}
                 aria-invalid={invalid("webhook_url")}
               />
+            </Field>
+          ) : platform === "api" ? (
+            <Field
+              label="Atualização instantânea do site"
+              htmlFor="webhook_url"
+              error={err("webhook_url")}
+              hint={
+                apiWebhookValue === revalidateUrl && revalidateUrl
+                  ? "Deixe assim para os artigos aparecerem no site na hora."
+                  : "Rota do site OutBox que atualiza o blog a cada publicação. Em branco, o site atualiza só pelo cache, em alguns minutos."
+              }
+            >
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  id="webhook_url"
+                  name="webhook_url"
+                  inputMode="url"
+                  autoComplete="off"
+                  placeholder={`https://www.cliente.com.br${OUTBOX_REVALIDATE_PATH}`}
+                  value={apiWebhookValue}
+                  onChange={(e) => editWebhook(e.target.value)}
+                  aria-invalid={invalid("webhook_url")}
+                />
+                {revalidateUrl && !apiWebhookValue.trim() ? (
+                  <Button variant="secondary" onClick={() => editWebhook(revalidateUrl)} className="shrink-0 justify-center">
+                    Usar a rota do site OutBox
+                  </Button>
+                ) : null}
+              </div>
             </Field>
           ) : (
             <Field
@@ -322,7 +362,8 @@ export function SiteForm({ clientId, site }: { clientId: string; site?: SiteForm
                 inputMode="url"
                 autoComplete="off"
                 placeholder="https://"
-                defaultValue={site?.webhook_url ?? ""}
+                value={webhookUrl}
+                onChange={(e) => editWebhook(e.target.value)}
                 aria-invalid={invalid("webhook_url")}
               />
             </Field>

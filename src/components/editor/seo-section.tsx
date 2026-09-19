@@ -58,7 +58,7 @@ export function SeoSection({
           id="seo-keyword"
           value={focusKeyword}
           onChange={(e) => onChange({ focusKeyword: e.target.value })}
-          placeholder="Ex.: móveis planejados em Curitiba"
+          placeholder="Ex.: implante dentário em Curitiba"
         />
       </Field>
 

@@ -18,6 +18,8 @@ export interface SeoInput {
   html: string;
   coverImageUrl?: string | null;
   coverImageAlt?: string | null;
+  /** Resposta direta (GEO): aparece no topo do artigo, então também conta como abertura. */
+  answerSummary?: string | null;
 }
 
 export type SeoCheckId =
@@ -73,7 +75,8 @@ function decodeEntities(text: string): string {
     .replace(/&#39;/g, "'");
 }
 
-function textOf(html: string): string {
+/** Texto puro de um trecho de HTML (sem tags, entidades comuns decodificadas). */
+export function textOf(html: string): string {
   return decodeEntities(stripHtml(html));
 }
 
@@ -87,7 +90,8 @@ function firstParagraph(html: string): string {
   return match ? textOf(match[1]) : "";
 }
 
-function headings(html: string, level: number): string[] {
+/** Texto de cada subtítulo de um nível (2 = H2). */
+export function headings(html: string, level: number): string[] {
   const re = new RegExp(`<h${level}\\b[^>]*>([\\s\\S]*?)<\\/h${level}>`, "gi");
   return [...html.matchAll(re)].map((m) => textOf(m[1]));
 }
@@ -125,9 +129,11 @@ export function seoReport(input: SeoInput): SeoReport {
     {
       id: "keyword-intro",
       keyword: true,
-      ok: hasKeyword && includesKeyword(firstParagraph(input.html), keyword),
-      label: "Palavra-chave no primeiro parágrafo",
-      hint: "Use a palavra-chave foco logo no primeiro parágrafo.",
+      ok:
+        hasKeyword &&
+        (includesKeyword(firstParagraph(input.html), keyword) || includesKeyword(input.answerSummary ?? "", keyword)),
+      label: "Palavra-chave na abertura",
+      hint: "Use a palavra-chave foco na resposta direta ou logo no primeiro parágrafo.",
     },
     {
       id: "keyword-heading",

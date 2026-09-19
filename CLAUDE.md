@@ -18,7 +18,14 @@ Idioma da interface: português do Brasil. Modo light apenas.
 - Todas as tabelas têm RLS ligado **sem políticas**. Só o servidor lê/escreve, via `db()` de
   `src/lib/supabase/admin.ts` (service role).
 - Toda server action / route handler do painel começa com `await requireUser()` (`src/lib/auth.ts`).
-- Rotas públicas (sem login) ficam em `/api/v1/*`, `/embed.js`, `/api/cron/*`, `/api/health` — liberadas em `src/proxy.ts`.
+  `requireUser()` também exige conta aprovada (`profiles.status = 'active'`): pendente vai para
+  `/aguardando-aprovacao`, bloqueada volta ao login. Gestão da equipe usa `requireAdmin()`.
+- Cadastro é aberto (Google ou e-mail), mas toda conta nova nasce `pending` até um admin aprovar em `/equipe`
+  (exceto domínios de `AUTO_APPROVE_DOMAINS`). O primeiro perfil criado vira admin.
+- Telas de entrada em `src/app/(entrada)/` (login, cadastro, esqueci-senha, redefinir-senha, aguardando-aprovacao);
+  retorno dos links do Supabase em `src/app/auth/callback/route.ts`. Mensagens de erro em `src/lib/auth-errors.ts`.
+- Rotas públicas (sem login) ficam em `/api/v1/*`, `/embed.js`, `/api/cron/*`, `/api/health`, `/auth/*` — liberadas em `src/proxy.ts`
+  (`PUBLIC_PREFIXES`); as telas de entrada ficam em `AUTH_PAGES` (sessão renovada, sem redirecionar).
   Elas autenticam pelo `sites.public_key` (Content API) ou `CRON_SECRET`.
 - Nunca exponha `wp_app_password`, `webhook_secret` ou a service role ao cliente, exceto o
   `webhook_secret` na tela do site (para o dev do cliente validar assinatura).
@@ -68,8 +75,9 @@ callAi<A extends AiAction>(action: A, input: AiInput[A]): Promise<AiOutput[A]>  
   Erros dizem o que houve e como resolver. Estados vazios convidam à ação.
 - Acessibilidade: foco visível (já global), `aria-label` em botões só com ícone, `<label>` em todo campo,
   alvos ≥ 40px, contraste AA, `prefers-reduced-motion` respeitado (global). Responsivo até 375px.
-- Movimento: só em resposta a ação do usuário (abrir, confirmar). O único momento "coreografado" é a
-  sequência de entrega após Publicar (cada destino acende em ordem).
+- Movimento: só em resposta a ação do usuário (abrir, confirmar). Os únicos momentos "coreografados" são a
+  sequência de entrega após Publicar (cada destino acende em ordem) e o ensaio dela no lado da marca das
+  telas de entrada (classes `.entry-*` em `globals.css`).
 
 ## Checagens
 `npx tsc --noEmit` e `npm run lint` devem passar. `npm run build` antes de entregar.

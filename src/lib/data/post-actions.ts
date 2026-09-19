@@ -4,7 +4,8 @@ import { z } from "zod";
 import { requireUser, type CurrentUser } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
 import { publishPost, unpublishPost, type PublishResult } from "@/lib/delivery";
-import { sanitizeArticleHtml } from "@/lib/sanitize";
+import { FAQ_MAX, TAKEAWAYS_MAX } from "@/lib/geo";
+import { sanitizeArticleHtml, sanitizePlainText } from "@/lib/sanitize";
 import { countWords, readingMinutes, slugify } from "@/lib/utils";
 import { listPublications, listRevisions } from "@/lib/data/posts";
 import type { ActionResult, PostStatus, SitePlatform } from "@/lib/types";
@@ -22,6 +23,29 @@ import type {
 const id = z.guid({ error: "Identificador inválido." });
 const text = (max: number) => z.string().max(max, { error: `Use no máximo ${max} caracteres.` });
 
+const required = (max: number, message: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, { error: message })
+    .max(max, { error: `Use no máximo ${max} caracteres.` });
+
+const faqItemSchema = z.object({
+  question: required(300, "Toda pergunta frequente precisa do texto da pergunta."),
+  answer: required(1500, "Toda pergunta frequente precisa de uma resposta."),
+});
+const faqSchema = z.array(faqItemSchema).max(FAQ_MAX, { error: `Use no máximo ${FAQ_MAX} perguntas frequentes.` });
+
+const sourceSchema = z.object({
+  title: required(300, "Dê um título a cada fonte."),
+  url: z
+    .string()
+    .trim()
+    .max(2000, { error: "Endereço da fonte longo demais." })
+    .pipe(z.httpUrl({ error: "Endereço de fonte inválido. Use um link completo, com https://." })),
+  publisher: text(160),
+});
+
 const destinationSchema = z.object({
   siteId: id,
   isCanonical: z.boolean(),
@@ -30,6 +54,8 @@ const destinationSchema = z.object({
   overrideContentHtml: text(3_000_000),
   overrideSeoTitle: text(300),
   overrideSeoDescription: text(500),
+  overrideAnswerSummary: text(1000),
+  overrideFaq: faqSchema,
 });
 
 const saveSchema = z.object({
@@ -47,6 +73,13 @@ const saveSchema = z.object({
   seoTitle: text(300),
   seoDescription: text(500),
   focusKeyword: text(120),
+  answerSummary: text(1000),
+  keyTakeaways: z
+    .array(required(300, "Remova os pontos principais vazios."))
+    .max(TAKEAWAYS_MAX, { error: `Use no máximo ${TAKEAWAYS_MAX} pontos principais.` }),
+  faq: faqSchema,
+  sources: z.array(sourceSchema).max(30, { error: "Use no máximo 30 fontes." }),
+  contentType: z.enum(["article", "howto", "guide", "list", "comparison", "news"], { error: "Tipo de conteúdo inválido." }),
   scheduledAt: z.iso.datetime({ offset: true, error: "Data de agendamento inválida." }).nullable(),
   sites: z.array(destinationSchema).max(200),
 });
@@ -79,6 +112,13 @@ const nullIfEmpty = (value: string | null | undefined) => {
   const v = (value ?? "").trim();
   return v === "" ? null : v;
 };
+
+/** FAQ em texto puro (sem HTML), pronta para o jsonb e para o schema FAQPage. */
+function cleanFaq(items: { question: string; answer: string }[]) {
+  return items
+    .map((f) => ({ question: sanitizePlainText(f.question), answer: sanitizePlainText(f.answer) }))
+    .filter((f) => f.question && f.answer);
+}
 
 // ============ Persistência ============
 
@@ -131,6 +171,15 @@ async function persist(input: SaveData, user: CurrentUser, opts: { forceRevision
     seo_title: nullIfEmpty(input.seoTitle),
     seo_description: nullIfEmpty(input.seoDescription),
     focus_keyword: nullIfEmpty(input.focusKeyword),
+    answer_summary: nullIfEmpty(sanitizePlainText(input.answerSummary)),
+    key_takeaways: input.keyTakeaways.map(sanitizePlainText).filter(Boolean),
+    faq: cleanFaq(input.faq),
+    sources: input.sources.map((s) => ({
+      title: sanitizePlainText(s.title),
+      url: s.url,
+      publisher: nullIfEmpty(sanitizePlainText(s.publisher)),
+    })),
+    content_type: input.contentType,
     scheduled_at: input.scheduledAt,
     word_count: words,
     reading_minutes: words === 0 ? 0 : readingMinutes(words),
@@ -198,6 +247,8 @@ async function persist(input: SaveData, user: CurrentUser, opts: { forceRevision
             override_content_html: nullIfEmpty(sanitizeArticleHtml(s.overrideContentHtml)),
             override_seo_title: nullIfEmpty(s.overrideSeoTitle),
             override_seo_description: nullIfEmpty(s.overrideSeoDescription),
+            override_answer_summary: nullIfEmpty(sanitizePlainText(s.overrideAnswerSummary)),
+            override_faq: s.overrideFaq.length ? cleanFaq(s.overrideFaq) : null,
           })),
           { onConflict: "post_id,site_id" },
         );
@@ -211,8 +262,9 @@ async function persist(input: SaveData, user: CurrentUser, opts: { forceRevision
         .in("site_id", siteIds);
     }
   }
-  // Remove destinos desmarcados que não estão no ar (os publicados só saem via despublicar).
-  let removal = db().from("post_sites").delete().eq("post_id", postId).neq("status", "published");
+  // Remove destinos desmarcados que nunca foram ao ar (pendentes ou com falha). Publicados só saem via
+  // despublicar; despublicados ficam no histórico até alguém remover o destino (removeDestination).
+  let removal = db().from("post_sites").delete().eq("post_id", postId).in("status", ["pending", "failed"]);
   if (siteIds.length) removal = removal.not("site_id", "in", `(${siteIds.join(",")})`);
   const { error: removeError } = await removal;
   if (removeError) throw new Error(removeError.message);
@@ -310,18 +362,14 @@ export async function publishArticle(input: SavePostInput, onlySiteIds?: string[
       }));
     }
 
+    // publishPost já marcou o artigo como publicado (e alinhou snapshot_at); aqui só lê o estado final.
     let status = saved.status;
     let publishedAt = saved.publishedAt;
-    if (results.some((r) => r.ok)) {
-      publishedAt = publishedAt ?? new Date().toISOString();
-      const { data: updated } = await db()
-        .from("posts")
-        .update({ status: "published", published_at: publishedAt, scheduled_at: null })
-        .eq("id", saved.id)
-        .select("updated_at")
-        .single();
-      status = "published";
-      if (updated) saved.savedAt = updated.updated_at;
+    const { data: after } = await db().from("posts").select("status,published_at,updated_at").eq("id", saved.id).maybeSingle();
+    if (after) {
+      status = after.status as PostStatus;
+      publishedAt = after.published_at;
+      saved.savedAt = after.updated_at;
     }
 
     const publications = await listPublications(saved.id);
@@ -379,7 +427,39 @@ export async function cancelSchedule(postId: string): Promise<ActionResult<{ sav
   }
 }
 
-/** Tira o artigo do ar em um site. */
+/**
+ * Remove o destino do artigo de vez (some o selo e o histórico de publicação daquele site; o log de
+ * entregas fica). Se estiver no ar, tira do ar antes.
+ */
+export async function removeDestination(
+  postId: string,
+  siteId: string,
+): Promise<ActionResult<{ publications: Publication[] }>> {
+  try {
+    await requireUser();
+    const pid = parseId(postId);
+    const sid = parseId(siteId);
+    const { data: link } = await db().from("post_sites").select("status").eq("post_id", pid).eq("site_id", sid).maybeSingle();
+    if (link?.status === "published") {
+      let results: PublishResult[];
+      try {
+        results = await unpublishPost(pid, [sid]);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "erro desconhecido";
+        throw new UserError(`Não foi possível despublicar: ${message}. Tente de novo em instantes.`);
+      }
+      const failed = results.find((r) => !r.ok);
+      if (failed) throw new UserError(`Não foi possível despublicar de ${failed.siteName}: ${failed.message}`);
+    }
+    const { error } = await db().from("post_sites").delete().eq("post_id", pid).eq("site_id", sid).neq("status", "published");
+    if (error) throw new Error(error.message);
+    return { ok: true, data: { publications: await listPublications(pid) } };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/** Tira o artigo do ar em um site. O destino fica como despublicado (selo e histórico continuam). */
 export async function unpublishFromSite(
   postId: string,
   siteId: string,
