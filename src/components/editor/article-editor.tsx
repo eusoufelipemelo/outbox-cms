@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { useRouter } from "next/navigation";
+import { unstable_isUnrecognizedActionError, useRouter } from "next/navigation";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Archive, ArchiveRestore, CalendarClock, CalendarX, ImagePlus, Sparkles, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -51,6 +51,7 @@ import type {
   SourceDraft,
 } from "./types";
 import { VariationsSection } from "./variations-section";
+import { saveDraftBackup, takeDraftBackup } from "./draft-backup";
 
 const AUTOSAVE_MS = 1500;
 
@@ -173,6 +174,7 @@ const emptyDestination = (siteId: string): DestinationDraft => ({
 });
 
 const OFFLINE = "Sem conexão com o servidor. Suas alterações continuam aqui; salvaremos assim que der.";
+const STALE = "O CMS foi atualizado enquanto esta página estava aberta. Recarregando: suas alterações foram guardadas e voltam em seguida.";
 
 function TitleInput({ value, onChange, onEnter }: { value: string; onChange: (v: string) => void; onEnter: () => void }) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -360,6 +362,24 @@ export function ArticleEditor({
     setSaveState(versionRef.current === version ? "saved" : "dirty");
   }, []);
 
+  /**
+   * Falha de uma ação no servidor. Se a página ficou de uma versão antiga do CMS (deploy novo com a
+   * aba aberta), guarda o rascunho no navegador e recarrega na versão nova; o texto volta sozinho.
+   */
+  const staleRef = useRef(false);
+  const failed = useCallback((err: unknown, offlineMessage: string = OFFLINE) => {
+    if (unstable_isUnrecognizedActionError(err)) {
+      if (!staleRef.current) {
+        staleRef.current = true;
+        saveDraftBackup(postIdRef.current, draftRef.current);
+        toast.info(STALE, { duration: 4000 });
+        setTimeout(() => window.location.reload(), 1500);
+      }
+      return { ok: false as const, error: STALE };
+    }
+    return { ok: false as const, error: offlineMessage };
+  }, []);
+
   /** Enfileira operações que gravam o artigo, para nunca rodarem em paralelo (nem criarem dois rascunhos). */
   const enqueue = useCallback(<T,>(fn: () => Promise<T>): Promise<T> => {
     const next = queueRef.current.then(fn, fn);
@@ -378,7 +398,7 @@ export function ArticleEditor({
       }
       const version = versionRef.current;
       setSaveState("saving");
-      const res = await savePost(toPayload(d, currentId)).catch(() => ({ ok: false as const, error: OFFLINE }));
+      const res = await savePost(toPayload(d, currentId)).catch((e: unknown) => failed(e));
       if (!res.ok) {
         lastErrorRef.current = res.error;
         setSaveError(res.error);
@@ -388,7 +408,7 @@ export function ArticleEditor({
       applySaved(res.data!, version);
       return res.data!.id;
     });
-  }, [enqueue, applySaved]);
+  }, [enqueue, applySaved, failed]);
 
   // ---- editor ----
   const editor = useEditor({
@@ -405,6 +425,21 @@ export function ArticleEditor({
     },
     onUpdate: ({ editor: e }) => update({ contentHtml: e.isEmpty ? "" : e.getHTML(), contentJson: e.getJSON() }),
   });
+
+  // ---- rascunho guardado antes de recarregar por atualização do CMS ----
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (!editor || restoredRef.current) return;
+    restoredRef.current = true;
+    const backup = takeDraftBackup<Draft>(postIdRef.current, post?.updatedAt);
+    if (!backup) return;
+    const t = setTimeout(() => {
+      editor.commands.setContent(backup.contentHtml ?? "", { emitUpdate: false });
+      update(() => backup);
+      toast.success("Recuperamos as alterações que ainda não tinham sido salvas. Confira e, se for o caso, publique de novo.");
+    }, 0);
+    return () => clearTimeout(t);
+  }, [editor, post?.updatedAt, update]);
 
   // ---- autosave com debounce ----
   useEffect(() => {
@@ -601,10 +636,9 @@ export function ArticleEditor({
     setPublishing(true);
     void enqueue(async () => {
       const version = versionRef.current;
-      const res = await publishArticle(toPayload(draftRef.current, postIdRef.current), onlySiteIds).catch(() => ({
-        ok: false as const,
-        error: "Sem conexão com o servidor. Nada foi publicado. Confira a internet e tente de novo.",
-      }));
+      const res = await publishArticle(toPayload(draftRef.current, postIdRef.current), onlySiteIds).catch((e: unknown) =>
+        failed(e, "Sem conexão com o servidor. Nada foi publicado. Confira a internet e tente de novo."),
+      );
       setPublishing(false);
       if (!res.ok) {
         setDelivery((cur) => (cur && cur.round === round ? { ...cur, error: res.error } : cur));
@@ -638,7 +672,7 @@ export function ArticleEditor({
     setScheduling(true);
     void enqueue(async () => {
       const version = versionRef.current;
-      const res = await schedulePost(toPayload(draftRef.current, postIdRef.current)).catch(() => ({ ok: false as const, error: OFFLINE }));
+      const res = await schedulePost(toPayload(draftRef.current, postIdRef.current)).catch((e: unknown) => failed(e));
       setScheduling(false);
       if (!res.ok) {
         toast.error(res.error);
@@ -655,7 +689,7 @@ export function ArticleEditor({
     const id = postIdRef.current;
     if (!id) return;
     setScheduling(true);
-    const res = await cancelSchedule(id).catch(() => ({ ok: false as const, error: OFFLINE }));
+    const res = await cancelSchedule(id).catch((e: unknown) => failed(e));
     setScheduling(false);
     if (!res.ok) {
       toast.error(res.error);
@@ -683,7 +717,7 @@ export function ArticleEditor({
     setBusySiteId(siteId);
     // na fila de gravação: um autosave em andamento não recria o destino depois da remoção
     const res = await enqueue(() =>
-      (removing ? removeDestination(id, siteId) : unpublishFromSite(id, siteId)).catch(() => ({ ok: false as const, error: OFFLINE })),
+      (removing ? removeDestination(id, siteId) : unpublishFromSite(id, siteId)).catch((e: unknown) => failed(e)),
     );
     setBusySiteId(null);
     if (!res.ok) {
@@ -702,7 +736,7 @@ export function ArticleEditor({
     const id = postIdRef.current;
     if (!id) return;
     setBusySiteId(siteId);
-    const res = await enqueue(() => removeDestination(id, siteId).catch(() => ({ ok: false as const, error: OFFLINE })));
+    const res = await enqueue(() => removeDestination(id, siteId).catch((e: unknown) => failed(e)));
     setBusySiteId(null);
     if (!res.ok) {
       toast.error(res.error);
@@ -770,7 +804,7 @@ export function ArticleEditor({
     if (!ok) return;
     setRestoringId(rev.id);
     await save(); // o texto atual (com as últimas edições) vai para o histórico antes de trocar
-    const res = await enqueue(() => restoreRevision(id, rev.id).catch(() => ({ ok: false as const, error: OFFLINE })));
+    const res = await enqueue(() => restoreRevision(id, rev.id).catch((e: unknown) => failed(e)));
     setRestoringId(null);
     if (!res.ok) {
       toast.error(res.error);
@@ -807,7 +841,7 @@ export function ArticleEditor({
     });
     if (!ok) return;
     await save();
-    const res = await archivePost(id).catch(() => ({ ok: false as const, error: OFFLINE }));
+    const res = await archivePost(id).catch((e: unknown) => failed(e));
     if (!res.ok) {
       toast.error(res.error);
       return;
@@ -821,7 +855,7 @@ export function ArticleEditor({
   const onUnarchive = async () => {
     const id = postIdRef.current;
     if (!id) return;
-    const res = await unarchivePost(id).catch(() => ({ ok: false as const, error: OFFLINE }));
+    const res = await unarchivePost(id).catch((e: unknown) => failed(e));
     if (!res.ok) {
       toast.error(res.error);
       return;
@@ -841,7 +875,7 @@ export function ArticleEditor({
       tone: "danger",
     });
     if (!ok) return;
-    let res = await deletePost(id).catch(() => ({ ok: false as const, error: OFFLINE }));
+    let res = await deletePost(id).catch((e: unknown) => failed(e));
     if (!res.ok && "fieldErrors" in res && res.fieldErrors?.force) {
       const force = await confirm({
         title: "Excluir mesmo assim?",
@@ -850,7 +884,7 @@ export function ArticleEditor({
         tone: "danger",
       });
       if (!force) return;
-      res = await deletePost(id, { force: true }).catch(() => ({ ok: false as const, error: OFFLINE }));
+      res = await deletePost(id, { force: true }).catch((e: unknown) => failed(e));
     }
     if (!res.ok) {
       toast.error(res.error);

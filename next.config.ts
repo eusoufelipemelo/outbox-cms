@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Identifica cada versão publicada: depois de um deploy, a navegação recarrega a página na versão nova.
+  deploymentId: process.env.NEXT_DEPLOYMENT_ID || undefined,
   poweredByHeader: false,
   images: {
     remotePatterns: [

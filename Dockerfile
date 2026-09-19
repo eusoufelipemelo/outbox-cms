@@ -9,6 +9,9 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# O Easypanel passa o commit em GIT_SHA: vira o identificador da versão (deploymentId)
+ARG GIT_SHA
+ENV NEXT_DEPLOYMENT_ID=$GIT_SHA
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
