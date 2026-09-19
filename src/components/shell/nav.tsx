@@ -10,10 +10,10 @@ import { ThemeToggle } from "./theme-toggle";
 
 const items = [
   { href: "/", label: "Painel", icon: LayoutGrid, exact: true },
+  { href: "/clientes", label: "Clientes e sites", icon: Users },
   { href: "/artigos", label: "Artigos", icon: FileText },
   { href: "/pautas", label: "Pautas", icon: Lightbulb },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
-  { href: "/clientes", label: "Clientes e sites", icon: Users },
   { href: "/midia", label: "Mídia", icon: Images },
   { href: "/integracoes", label: "Integrações", icon: Plug },
 ];
