@@ -21,6 +21,8 @@
   --color-line-hover: #b6b9c0;  /* borda de campo em hover */
   --color-on-ink: #ffffff;      /* texto sobre fundo ink */
   --color-ink-hover: #262626;
+  --color-chart: #e0461f;       /* série dos gráficos (laranja OutBox validado p/ contraste) */
+  --color-grid: #eceef1;        /* linhas de grade */
 
   --color-brand: #f15532;       /* laranja OutBox */
   --color-brand-hover: #e0461f;
@@ -70,6 +72,8 @@ html.dark {
   --color-line-hover: #555962;
   --color-on-ink: #0b0b0c;
   --color-ink-hover: #e2e2e2;
+  --color-chart: #f15532;
+  --color-grid: #25272b;
 
   --color-brand: #f15532;
   --color-brand-hover: #ff6a47;
