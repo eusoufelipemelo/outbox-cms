@@ -2,7 +2,7 @@ import { forwardRef, type InputHTMLAttributes, type ReactNode, type SelectHTMLAt
 import { cn } from "@/lib/utils";
 
 const control =
-  "w-full rounded-[var(--radius-control)] border border-line-strong bg-surface px-3 text-[15px] text-text placeholder:text-faint transition-colors duration-150 hover:border-[#b6b9c0] focus:border-ink focus:outline-none focus:ring-2 focus:ring-brand/25 disabled:bg-sunken disabled:text-muted aria-[invalid=true]:border-danger";
+  "w-full rounded-[var(--radius-control)] border border-line-strong bg-surface px-3 text-[15px] text-text placeholder:text-faint transition-colors duration-150 hover:border-line-hover focus:border-ink focus:outline-none focus:ring-2 focus:ring-brand/25 disabled:bg-sunken disabled:text-muted aria-[invalid=true]:border-danger";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(
   { className, ...props },

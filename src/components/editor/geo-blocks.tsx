@@ -388,7 +388,7 @@ export function SourcesBlock({
                         aria-hidden
                         className={cn(
                           "mt-px flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand",
-                          checked ? "border-ink bg-ink text-white" : "border-line-strong bg-surface",
+                          checked ? "border-ink bg-ink text-on-ink" : "border-line-strong bg-surface",
                         )}
                       >
                         {checked ? <Check className="size-3" strokeWidth={3} /> : null}

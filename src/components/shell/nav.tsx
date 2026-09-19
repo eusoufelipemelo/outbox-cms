@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { CalendarDays, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "./theme-toggle";
 
 const items = [
   { href: "/", label: "Painel", icon: LayoutGrid, exact: true },
@@ -45,7 +46,7 @@ function NavLinks({ user, pendingCount, onNavigate }: { user: NavUser; pendingCo
               <Icon className="size-[18px] shrink-0" strokeWidth={active ? 2.2 : 1.8} aria-hidden />
               {label}
               {badge ? (
-                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1.5 text-[11.5px] font-semibold text-white tabular-nums">
+                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1.5 text-[11.5px] font-semibold text-on-ink tabular-nums">
                   {badge}
                   <span className="sr-only"> {badge === 1 ? "conta aguardando aprovação" : "contas aguardando aprovação"}</span>
                 </span>
@@ -65,7 +66,8 @@ function SidebarBody({ user, pendingCount = 0, signOut, onNavigate }: ShellProps
     <div className="flex h-full flex-col">
       <div className="px-5 pt-6 pb-5">
         <Link href="/" onClick={onNavigate} aria-label="OutBox CMS, ir para o painel" className="inline-flex items-end gap-2">
-          <Image src="/brand/logo-horizontal.svg" alt="OutBox" width={122} height={30} priority />
+          <Image src="/brand/logo-horizontal.svg" alt="OutBox" width={122} height={30} priority className="dark:hidden" />
+          <Image src="/brand/logo-horizontal-branco.svg" alt="OutBox" width={122} height={30} priority className="hidden dark:block" />
           <span className="mb-[1px] text-[12px] font-semibold text-brand-ink">CMS</span>
         </Link>
       </div>
@@ -73,7 +75,7 @@ function SidebarBody({ user, pendingCount = 0, signOut, onNavigate }: ShellProps
         <Link
           href="/artigos/novo"
           onClick={onNavigate}
-          className="mb-5 flex h-10 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-ink text-sm font-medium text-white transition-colors hover:bg-[#262626]"
+          className="mb-5 flex h-10 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-ink text-sm font-medium text-on-ink transition-colors hover:bg-ink-hover"
         >
           <Plus className="size-4" aria-hidden /> Novo artigo
         </Link>
@@ -82,8 +84,9 @@ function SidebarBody({ user, pendingCount = 0, signOut, onNavigate }: ShellProps
         <NavLinks user={user} pendingCount={pendingCount} onNavigate={onNavigate} />
       </nav>
       <div className="border-t border-line p-3">
+        <ThemeToggle className="mb-2" />
         <div className="flex items-center gap-3 rounded-[var(--radius-control)] px-2 py-2">
-          <div aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink text-[13px] font-semibold text-white uppercase">
+          <div aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink text-[13px] font-semibold text-on-ink uppercase">
             {user.name.slice(0, 1)}
           </div>
           <div className="min-w-0 flex-1">
@@ -118,7 +121,8 @@ export function AppNav({ user, pendingCount = 0, signOut }: ShellProps) {
       {/* mobile */}
       <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-surface/95 px-4 backdrop-blur lg:hidden">
         <Link href="/" aria-label="OutBox CMS">
-          <Image src="/brand/logo-horizontal.svg" alt="OutBox" width={104} height={26} priority />
+          <Image src="/brand/logo-horizontal.svg" alt="OutBox" width={104} height={26} priority className="dark:hidden" />
+          <Image src="/brand/logo-horizontal-branco.svg" alt="OutBox" width={104} height={26} priority className="hidden dark:block" />
         </Link>
         <button
           type="button"

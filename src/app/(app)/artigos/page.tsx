@@ -46,7 +46,7 @@ function Dot({ color }: { color: string | null }) {
   return (
     <span
       aria-hidden
-      className="inline-block size-2 shrink-0 rounded-full border border-black/10"
+      className="inline-block size-2 shrink-0 rounded-full border border-black/10 dark:border-white/20"
       style={{ backgroundColor: color || "var(--color-line-strong)" }}
     />
   );
@@ -188,7 +188,7 @@ export default async function ArticlesPage({ searchParams }: PageProps<"/artigos
                       )}
                     >
                       {t.label}
-                      <span className={cn("rounded-[var(--radius-chip)] px-1.5 text-[12px] tabular-nums", active ? "bg-ink text-white" : "bg-sunken text-muted")}>
+                      <span className={cn("rounded-[var(--radius-chip)] px-1.5 text-[12px] tabular-nums", active ? "bg-ink text-on-ink" : "bg-sunken text-muted")}>
                         {counts[t.status]}
                       </span>
                       {active ? <span aria-hidden className="absolute inset-x-2 -bottom-px h-[3px] rounded-t bg-brand" /> : null}

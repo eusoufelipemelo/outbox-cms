@@ -166,7 +166,7 @@ export function DestinationsSection({
                       aria-hidden
                       className={cn(
                         "flex size-5 shrink-0 items-center justify-center rounded-[5px] border",
-                        isSelected ? "border-ink bg-ink text-white" : "border-line-strong bg-surface",
+                        isSelected ? "border-ink bg-ink text-on-ink" : "border-line-strong bg-surface",
                       )}
                     >
                       {isSelected ? <Check className="size-3.5" strokeWidth={3} /> : null}

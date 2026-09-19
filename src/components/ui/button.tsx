@@ -7,7 +7,7 @@ type Size = "sm" | "md" | "lg" | "icon";
 
 const variants: Record<Variant, string> = {
   // preto: ação principal comum (salvar, criar)
-  primary: "bg-ink text-white hover:bg-[#262626] disabled:bg-[#3a3a3a]",
+  primary: "bg-ink text-on-ink hover:bg-ink-hover",
   // laranja com texto preto (6,3:1): exclusivo para publicar
   publish: "bg-brand text-ink hover:bg-brand-hover font-semibold",
   secondary: "bg-surface text-ink border border-line-strong hover:border-ink",

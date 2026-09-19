@@ -22,7 +22,7 @@ export function Tip({ label, children, side = "top", className }: { label: strin
       <span
         aria-hidden
         className={cn(
-          "pointer-events-none absolute left-1/2 z-40 -translate-x-1/2 rounded-md bg-ink px-2 py-1 text-[12px] font-medium whitespace-nowrap text-white opacity-0 transition-opacity delay-300 duration-100 group-focus-within/tip:opacity-100 group-hover/tip:opacity-100",
+          "pointer-events-none absolute left-1/2 z-40 -translate-x-1/2 rounded-md bg-ink px-2 py-1 text-[12px] font-medium whitespace-nowrap text-on-ink opacity-0 transition-opacity delay-300 duration-100 group-focus-within/tip:opacity-100 group-hover/tip:opacity-100",
           side === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5",
         )}
       >
@@ -443,7 +443,7 @@ export function ClientDot({ color, className }: { color: string | null; classNam
   return (
     <span
       aria-hidden
-      className={cn("inline-block size-2.5 shrink-0 rounded-full border border-black/10", className)}
+      className={cn("inline-block size-2.5 shrink-0 rounded-full border border-black/10 dark:border-white/20", className)}
       style={{ backgroundColor: color || "var(--color-line-strong)" }}
     />
   );

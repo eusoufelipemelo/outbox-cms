@@ -78,7 +78,7 @@ export default async function PreviewPage({ params, searchParams }: PageProps<"/
                 aria-current={!active ? "page" : undefined}
                 className={cn(
                   "inline-flex h-10 items-center rounded-[var(--radius-chip)] border px-4 text-sm font-medium transition-colors",
-                  !active ? "border-ink bg-ink text-white" : "border-line-strong bg-surface text-ink hover:border-ink",
+                  !active ? "border-ink bg-ink text-on-ink" : "border-line-strong bg-surface text-ink hover:border-ink",
                 )}
               >
                 Texto principal
@@ -93,7 +93,7 @@ export default async function PreviewPage({ params, searchParams }: PageProps<"/
                     aria-current={on ? "page" : undefined}
                     className={cn(
                       "inline-flex h-10 items-center gap-2 rounded-[var(--radius-chip)] border px-4 text-sm font-medium transition-colors",
-                      on ? "border-ink bg-ink text-white" : "border-line-strong bg-surface text-ink hover:border-ink",
+                      on ? "border-ink bg-ink text-on-ink" : "border-line-strong bg-surface text-ink hover:border-ink",
                     )}
                   >
                     <span

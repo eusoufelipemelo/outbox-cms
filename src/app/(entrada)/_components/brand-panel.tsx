@@ -128,7 +128,7 @@ export function BrandPanel() {
       {/* desktop */}
       <aside
         aria-label="OutBox CMS"
-        className="relative hidden overflow-hidden bg-ink lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:justify-between lg:p-12 xl:p-16"
+        className="relative hidden overflow-hidden bg-black lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:justify-between lg:p-12 xl:p-16"
       >
         <Corner className="-top-[140px] -right-[140px] w-[280px] xl:-top-[180px] xl:-right-[180px] xl:w-[360px] 2xl:-top-[210px] 2xl:-right-[210px] 2xl:w-[420px]" />
         <Wordmark />
@@ -154,7 +154,7 @@ export function BrandPanel() {
       </aside>
 
       {/* mobile e tablet: faixa compacta */}
-      <header className="relative overflow-hidden bg-ink px-4 pt-5 pb-6 sm:px-8 lg:hidden">
+      <header className="relative overflow-hidden bg-black px-4 pt-5 pb-6 sm:px-8 lg:hidden">
         <Corner className="-top-[88px] -right-[88px] w-[176px]" />
         <Wordmark size={24} />
         <p className="display mt-6 pr-16 text-[clamp(1.75rem,7.4vw,2.5rem)] !text-white">

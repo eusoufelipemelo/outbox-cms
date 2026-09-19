@@ -53,7 +53,7 @@ export function DeliveryFilter({ failedOnly, siteParam }: { failedOnly: boolean;
       aria-current={active ? "page" : undefined}
       className={cn(
         "inline-flex h-10 items-center rounded-[var(--radius-chip)] border px-4 text-[13.5px] transition-colors",
-        active ? "border-ink bg-ink font-medium text-white" : "border-line-strong text-muted hover:border-ink hover:text-ink",
+        active ? "border-ink bg-ink font-medium text-on-ink" : "border-line-strong text-muted hover:border-ink hover:text-ink",
       )}
     >
       {label}

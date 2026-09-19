@@ -52,7 +52,7 @@ export function KeywordInput({
   return (
     <div
       className={cn(
-        "flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-[var(--radius-control)] border border-line-strong bg-surface px-2 py-1.5 transition-colors duration-150 hover:border-[#b6b9c0] focus-within:border-ink focus-within:ring-2 focus-within:ring-brand/25",
+        "flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-[var(--radius-control)] border border-line-strong bg-surface px-2 py-1.5 transition-colors duration-150 hover:border-line-hover focus-within:border-ink focus-within:ring-2 focus-within:ring-brand/25",
         invalid && "border-danger",
       )}
     >

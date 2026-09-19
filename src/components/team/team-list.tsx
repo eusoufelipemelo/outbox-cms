@@ -26,7 +26,7 @@ function Avatar({ profile }: { profile: Profile }) {
     );
   }
   return (
-    <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-full bg-ink text-[14px] font-semibold text-white">
+    <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-full bg-ink text-[14px] font-semibold text-on-ink">
       {initial}
     </span>
   );

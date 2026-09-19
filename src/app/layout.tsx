@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo, Source_Serif_4, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { THEME_SCRIPT } from "@/components/shell/theme-toggle";
 import "./globals.css";
 
 const archivo = Archivo({ subsets: ["latin"], axes: ["wdth"], variable: "--font-archivo", display: "swap" });
@@ -16,18 +17,30 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#f2f3f5",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f2f3f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#131416" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pt-BR" className={`${archivo.variable} ${sourceSerif.variable} ${jetbrains.variable}`}>
+    <html lang="pt-BR" className={`${archivo.variable} ${sourceSerif.variable} ${jetbrains.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-dvh bg-paper text-text">
         {children}
         <Toaster
           position="bottom-right"
           toastOptions={{
-            style: { fontFamily: "var(--font-sans)", borderRadius: 12, border: "1px solid var(--color-line)" },
+            style: {
+              fontFamily: "var(--font-sans)",
+              borderRadius: 12,
+              border: "1px solid var(--color-line)",
+              background: "var(--color-surface)",
+              color: "var(--color-text)",
+            },
           }}
         />
       </body>

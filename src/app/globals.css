@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Modo escuro por classe no <html> (escolha salva pelo usuário; "Automático" segue o sistema). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
   OutBox CMS — tokens (modo light)
   Laranja e preto vêm direto do símbolo da marca. O laranja é reservado para
@@ -15,6 +18,9 @@
   --color-faint: #80838c;       /* metadados não essenciais */
   --color-line: #e3e4e8;
   --color-line-strong: #cdd0d6;
+  --color-line-hover: #b6b9c0;  /* borda de campo em hover */
+  --color-on-ink: #ffffff;      /* texto sobre fundo ink */
+  --color-ink-hover: #262626;
 
   --color-brand: #f15532;       /* laranja OutBox */
   --color-brand-hover: #e0461f;
@@ -44,6 +50,42 @@
 
 :root {
   color-scheme: light;
+}
+
+/*
+  Modo escuro OutBox: grafite neutro (sem tom azulado nem marrom), preto e branco invertidos
+  para títulos e botão principal, laranja da marca mantido. Estados clareados para contraste AA.
+*/
+html.dark {
+  color-scheme: dark;
+  --color-paper: #131416;
+  --color-surface: #1b1c1f;
+  --color-sunken: #17181b;
+  --color-ink: #ffffff;
+  --color-text: #e4e5e8;
+  --color-muted: #a4a7ae;
+  --color-faint: #7e818a;
+  --color-line: #2b2d32;
+  --color-line-strong: #3b3e45;
+  --color-line-hover: #555962;
+  --color-on-ink: #0b0b0c;
+  --color-ink-hover: #e2e2e2;
+
+  --color-brand: #f15532;
+  --color-brand-hover: #ff6a47;
+  --color-brand-ink: #ff8c6e;
+  --color-brand-soft: #3a1c14;
+
+  --color-ok: #52c98f;
+  --color-ok-soft: #13291f;
+  --color-warn: #e8b85a;
+  --color-warn-soft: #2d2411;
+  --color-danger: #ff7b6e;
+  --color-danger-soft: #35171a;
+  --color-info: #7fb0ff;
+  --color-info-soft: #152238;
+
+  --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -12px rgb(0 0 0 / 0.7);
 }
 
 html {
