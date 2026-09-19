@@ -4,7 +4,11 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   images: {
-    remotePatterns: [{ protocol: "https", hostname: "*.supabase.co" }],
+    remotePatterns: [
+      { protocol: "https", hostname: "*.supabase.co" },
+      // imagens no Cloudflare R2 (endereço público r2.dev)
+      { protocol: "https", hostname: "**.r2.dev" },
+    ],
   },
   experimental: {
     serverActions: { bodySizeLimit: "12mb" },

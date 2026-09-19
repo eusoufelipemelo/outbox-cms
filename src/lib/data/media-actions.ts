@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
+import { deleteImage } from "@/lib/storage";
 import type { ActionResult } from "@/lib/types";
 import { MEDIA_ALT_MAX } from "@/components/media/constants";
 
@@ -38,8 +39,9 @@ export async function deleteMedia(id: string): Promise<ActionResult> {
   if (readError) return { ok: false, error: "Não foi possível excluir a imagem. Tente de novo." };
   if (!row) return { ok: true, message: "Imagem excluída" };
 
-  const { error: storageError } = await supabase.storage.from("media").remove([(row as { path: string }).path]);
-  if (storageError) {
+  try {
+    await deleteImage((row as { path: string }).path);
+  } catch {
     return { ok: false, error: "O arquivo não pôde ser removido do armazenamento. Tente de novo em instantes." };
   }
   const { error } = await supabase.from("media").delete().eq("id", parsedId.data);

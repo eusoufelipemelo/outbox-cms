@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Media } from "@/lib/types";
-import { validateImageFile } from "./constants";
+import { MEDIA_MAX_BYTES, MEDIA_MAX_SIDE, validateImageFile } from "./constants";
 
 /** Lê largura e altura no navegador antes do envio. */
 export async function readImageSize(file: File): Promise<{ width: number; height: number } | null> {
@@ -29,6 +29,41 @@ export async function readImageSize(file: File): Promise<{ width: number; height
     };
     img.src = url;
   });
+}
+
+/**
+ * Deixa a imagem dentro do limite antes de enviar: se passar de 2 MB ou de 2400 px no lado
+ * maior, reduz e converte para WebP (qualidade decrescente até caber). GIF fica como está
+ * (perderia a animação) e é recusado se passar do limite.
+ */
+export async function prepareImage(file: File): Promise<File> {
+  if (file.type === "image/gif" || !file.type.startsWith("image/")) return file;
+  const size = await readImageSize(file);
+  const tooBig = file.size > MEDIA_MAX_BYTES;
+  const tooWide = size ? Math.max(size.width, size.height) > MEDIA_MAX_SIDE : false;
+  if (!tooBig && !tooWide) return file;
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return file; // formato que o navegador não decodifica: segue e a validação decide
+  }
+  const scale = Math.min(1, MEDIA_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const name = file.name.replace(/\.[^.]+$/, "") + ".webp";
+  for (const quality of [0.86, 0.78, 0.7, 0.6, 0.5]) {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+    if (blob && blob.type === "image/webp" && blob.size <= MEDIA_MAX_BYTES) {
+      return new File([blob], name, { type: "image/webp", lastModified: Date.now() });
+    }
+  }
+  return file; // não coube: a validação mostra o erro com o tamanho
 }
 
 /** POST /api/media com progresso (XHR, porque fetch não informa progresso de envio). */
@@ -83,7 +118,8 @@ export function useUploader({ clientId, onUploaded }: { clientId?: string | null
 
   const addFiles = useCallback(
     async (files: File[]) => {
-      const jobs: { item: UploadItem; file: File }[] = files.map((file) => {
+      const prepared = await Promise.all(files.map((f) => prepareImage(f).catch(() => f)));
+      const jobs: { item: UploadItem; file: File }[] = prepared.map((file) => {
         const error = validateImageFile(file);
         return {
           file,

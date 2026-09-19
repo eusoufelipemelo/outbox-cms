@@ -111,7 +111,7 @@ export function UploadBox({ onFiles, title, compact }: { onFiles: (files: File[]
         <ImageUp className="size-6 text-muted" aria-hidden />
         <div>
           <p className="text-[16px] font-semibold text-ink">{title ?? "Arraste imagens para cá"}</p>
-          <p className="mt-1 max-w-[52ch] text-sm text-muted">JPG, PNG, WebP, GIF ou AVIF, até 10 MB cada. Dá para enviar várias de uma vez.</p>
+          <p className="mt-1 max-w-[52ch] text-sm text-muted">JPG, PNG, WebP, GIF ou AVIF, até 2 MB cada. Fotos maiores são reduzidas e convertidas para WebP automaticamente. Dá para enviar várias de uma vez.</p>
         </div>
         <Button variant="primary" onClick={() => picker.current?.open()}>
           Escolher imagens

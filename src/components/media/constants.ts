@@ -1,6 +1,9 @@
 // Regras de upload compartilhadas entre o navegador e o POST /api/media.
 
-export const MEDIA_MAX_BYTES = 10 * 1024 * 1024;
+/** 2 MB por imagem: o navegador reduz e converte para WebP antes de enviar (ver upload.ts). */
+export const MEDIA_MAX_BYTES = 2 * 1024 * 1024;
+/** Lado maior depois da redução automática. */
+export const MEDIA_MAX_SIDE = 2400;
 export const MEDIA_PAGE_SIZE = 30;
 export const MEDIA_ALT_MAX = 300;
 
@@ -36,7 +39,7 @@ export function validateImageFile(file: { name: string; type: string; size: numb
     return "Formato não aceito. Envie JPG, PNG, WebP, GIF ou AVIF.";
   }
   if (file.size > MEDIA_MAX_BYTES) {
-    return `A imagem tem ${formatBytes(file.size)} e o limite é 10 MB. Comprima o arquivo e envie de novo.`;
+    return `A imagem tem ${formatBytes(file.size)} e o limite é 2 MB. Comprima o arquivo e envie de novo.`;
   }
   if (file.size === 0) return "O arquivo está vazio. Escolha outra imagem.";
   return null;

@@ -224,7 +224,7 @@ function CoverImage({
         >
           <ImagePlus className="size-6 text-muted" aria-hidden />
           <span className="text-[15px] font-semibold text-ink">Enviar imagem de capa</span>
-          <span className="text-[13px] text-muted">1600 × 900 px (formato 16:9), JPG, PNG ou WebP até 10 MB</span>
+          <span className="text-[13px] text-muted">1600 × 900 px (formato 16:9), JPG, PNG ou WebP até 2 MB. Imagens maiores são reduzidas automaticamente.</span>
         </button>
       </div>
     );

@@ -4,6 +4,7 @@ import { slugify } from "@/lib/utils";
 import { MEDIA_COLUMNS, isUuid, listMedia } from "@/lib/data/media";
 import { MEDIA_ALT_MAX, MEDIA_MAX_BYTES, MEDIA_TYPES, formatBytes, type MediaMime } from "@/components/media/constants";
 import { dayKey } from "@/components/agenda/dates";
+import { deleteImage, putImage } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -35,14 +36,14 @@ export async function POST(request: Request) {
   try {
     form = await request.formData();
   } catch {
-    return fail("Não foi possível ler o arquivo enviado. Confira se a imagem tem até 10 MB e tente de novo.");
+    return fail("Não foi possível ler o arquivo enviado. Confira se a imagem tem até 2 MB e tente de novo.");
   }
 
   const file = form.get("file");
   if (!(file instanceof File)) return fail("Nenhuma imagem recebida. Escolha um arquivo e envie de novo.");
   if (file.size === 0) return fail("O arquivo está vazio. Escolha outra imagem.");
   if (file.size > MEDIA_MAX_BYTES) {
-    return fail(`A imagem tem ${formatBytes(file.size)} e o limite é 10 MB. Comprima o arquivo e envie de novo.`, 413);
+    return fail(`A imagem tem ${formatBytes(file.size)} e o limite é 2 MB. Comprima o arquivo e envie de novo.`, 413);
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -64,17 +65,16 @@ export async function POST(request: Request) {
 
   const base = slugify(file.name.replace(/\.[^.]+$/, "")).slice(0, 60) || "imagem";
   const [year, month] = dayKey(new Date()).split("-");
-  const path = `${year}/${month}/${crypto.randomUUID()}-${base}.${MEDIA_TYPES[mime]}`;
+  const key = `${year}/${month}/${crypto.randomUUID()}-${base}.${MEDIA_TYPES[mime]}`;
 
-  const storage = db().storage.from("media");
-  const { error: uploadError } = await storage.upload(path, bytes, {
-    contentType: mime,
-    cacheControl: "31536000",
-    upsert: false,
-  });
-  if (uploadError) return fail("O armazenamento recusou a imagem. Tente de novo em instantes.", 502);
-
-  const url = storage.getPublicUrl(path).data.publicUrl;
+  let path: string;
+  let url: string;
+  try {
+    ({ path, url } = await putImage(key, bytes, mime));
+  } catch (err) {
+    console.error("[media] envio falhou:", err instanceof Error ? err.message : err);
+    return fail("O armazenamento recusou a imagem. Tente de novo em instantes.", 502);
+  }
   const { data: row, error } = await db()
     .from("media")
     .insert({
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error || !row) {
-    await storage.remove([path]);
+    await deleteImage(path).catch(() => {});
     return fail("A imagem foi enviada, mas não entrou na biblioteca. Tente de novo.", 500);
   }
   return Response.json(row, { status: 201 });
