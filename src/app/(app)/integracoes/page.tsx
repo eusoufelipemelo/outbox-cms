@@ -161,7 +161,6 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const keep: Record<string, string> = failedOnly ? { entregas: "falhas" } : {};
   const siteRoot = selected.url.replace(/\/+$/, "");
   const revalidateUrl = `${siteRoot}${S.REVALIDATE_PATH}`;
-  const revalidateOk = (selected.webhook_url ?? "").replace(/\/+$/, "") === revalidateUrl;
 
   const tabs = [
     {
@@ -169,50 +168,29 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       label: "Site OutBox (Next.js)",
       content: (
         <ol className="space-y-7">
-          <Step n={1} title="Variáveis de ambiente do site">
+          <Step n={1} title="Domínio no código do site">
             <Prose>
               <p>
-                Sites feitos com o starter da OutBox só precisam destas 3 variáveis. Blog, páginas de artigo com SEO e JSON-LD, sitemap, llms.txt e
-                o arquivo do IndexNow já vêm prontos no starter.
+                Sites feitos com o starter da OutBox se conectam pelo próprio domínio. Não há chave nem variável para configurar: basta o campo{" "}
+                <Code>url</Code> do <Code>src/site.config.ts</Code> ter o mesmo domínio cadastrado aqui.
               </p>
             </Prose>
-            <CopyField value={S.outboxEnvSnippet(appUrl, key)} multiline label="Copiar variáveis de ambiente" />
-            <p className="text-[13.5px] text-muted">
-              O valor de <Code>OUTBOX_WEBHOOK_SECRET</Code> fica na{" "}
+            <CopyField value={`url: "${siteRoot}",`} label="Copiar linha do site.config.ts" />
+          </Step>
+          <Step n={2} title="Publique o site no Easypanel">
+            <p className="text-[14px] text-muted">
+              Crie o app a partir do repositório do site, com o domínio <Code>{siteRoot.replace(/^https?:\/\//, "")}</Code> apontando para a porta 3000.
+              O aviso de publicação e o arquivo do IndexNow já funcionam sozinhos.
+            </p>
+          </Step>
+          <Step n={3} title="Teste e publique">
+            <p className="text-[14px] text-muted">
+              Na{" "}
               <Link href={configHref} className="font-medium text-ink underline underline-offset-4">
                 página do site
               </Link>
-              .
-            </p>
-          </Step>
-          <Step n={2} title="Atualização instantânea">
-            {revalidateOk ? (
-              <Badge tone="ok">
-                <StatusDot tone="ok" />
-                Configurada neste site
-              </Badge>
-            ) : (
-              <Badge tone="warn">
-                <StatusDot tone="warn" />
-                Ainda não configurada
-              </Badge>
-            )}
-            <CopyField value={revalidateUrl} label="Copiar URL de atualização" />
-            <p className="text-[13.5px] text-muted">
-              {revalidateOk
-                ? "A cada publicação o OutBox chama esta rota do site e o artigo aparece na hora."
-                : "Na configuração do site, deixe este endereço em Atualização instantânea do site para os artigos aparecerem na hora."}{" "}
-              {revalidateOk ? null : (
-                <Link href={configHref} className="font-medium text-ink underline underline-offset-4">
-                  Abrir configuração do site
-                </Link>
-              )}
-            </p>
-          </Step>
-          <Step n={3} title="Publique e confira">
-            <p className="text-[14px] text-muted">
-              Depois do deploy, use Testar conexão na configuração do site e publique um artigo. Ele aparece em{" "}
-              <Code>{`${siteRoot}${selected.blog_path}`}</Code> assim que a publicação termina.
+              , clique em Testar conexão: deve aparecer &ldquo;Blog conectado&rdquo;. Depois publique um artigo; ele aparece em{" "}
+              <Code>{`${siteRoot}${selected.blog_path}`}</Code> na hora.
             </p>
           </Step>
         </ol>

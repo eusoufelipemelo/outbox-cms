@@ -742,6 +742,40 @@ export async function getSiteByKey(key: string): Promise<ContentSite | null> {
   };
 }
 
+/** "https://www.Cliente.com.br/blog" → "cliente.com.br" */
+export function normalizeDomain(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/[:/?#].*$/, "")
+    .replace(/\.$/, "");
+}
+
+let domainCache: { at: number; rows: { id: string; url: string; public_key: string }[] } | null = null;
+
+/**
+ * Site identificado só pelo domínio (ex.: `?site=cliente.com.br`). O conteúdo servido é o
+ * mesmo que já está público no blog do cliente, então o domínio basta — sem chave por site.
+ */
+export async function getSiteByDomain(domain: string): Promise<ContentSite | null> {
+  const wanted = normalizeDomain(domain);
+  if (!wanted || !/^[a-z0-9.-]+\.[a-z0-9-]+$/.test(wanted)) return null;
+  if (!domainCache || Date.now() - domainCache.at > 30_000) {
+    const { data, error } = await db().from("sites").select("id, url, public_key");
+    if (error) throw new Error(error.message);
+    domainCache = { at: Date.now(), rows: (data ?? []) as { id: string; url: string; public_key: string }[] };
+  }
+  const match = domainCache.rows.find((r) => normalizeDomain(r.url) === wanted);
+  if (!match) {
+    // site recém-cadastrado: força recarregar na próxima consulta
+    domainCache = null;
+    return null;
+  }
+  return getSiteByKey(match.public_key);
+}
+
 /** Destinos no ar neste site: status 'published' e com snapshot gravado. */
 function visibleQuery(siteId: string, columns: string, opts?: { count?: boolean }) {
   return db()

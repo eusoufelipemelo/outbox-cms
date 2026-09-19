@@ -1,6 +1,6 @@
 import "server-only";
 import type { NextRequest } from "next/server";
-import { getSiteByKey, type ContentSite } from "@/lib/content";
+import { getSiteByKey, getSiteByDomain, type ContentSite } from "@/lib/content";
 
 // Utilitários HTTP da Content API pública (CORS aberto, cache curto, erros em pt-BR).
 
@@ -53,15 +53,29 @@ export function readKey(req: NextRequest): string {
   return "";
 }
 
-/** Autentica o site pela chave pública. Retorna o site ou a resposta de erro pronta. */
+/** Domínio do site: `?site=cliente.com.br` (ou `?domain=`) ou cabeçalho `x-outbox-site`. */
+export function readDomain(req: NextRequest): string {
+  const q = req.nextUrl.searchParams;
+  return (q.get("site") || q.get("domain") || req.headers.get("x-outbox-site") || "").trim();
+}
+
+/**
+ * Identifica o site pelo domínio (jeito padrão dos sites OutBox) ou pela chave pública
+ * (integrações antigas). Retorna o site ou a resposta de erro pronta.
+ */
 export async function authSite(req: NextRequest): Promise<{ site: ContentSite; error?: never } | { site?: never; error: Response }> {
   const key = readKey(req);
-  if (!key) {
-    return { error: apiError(401, "Informe a chave pública do site em ?key=pk_…, no cabeçalho x-outbox-key ou em Authorization: Bearer.") };
+  const domain = key ? "" : readDomain(req);
+  if (!key && !domain) {
+    return { error: apiError(400, "Informe o domínio do site em ?site=cliente.com.br.") };
   }
   try {
-    const site = await getSiteByKey(key);
-    if (!site) return { error: apiError(401, "Chave pública inválida. Copie a chave correta na página do site no OutBox CMS.") };
+    const site = key ? await getSiteByKey(key) : await getSiteByDomain(domain);
+    if (!site) {
+      return key
+        ? { error: apiError(401, "Chave pública inválida. Copie a chave correta na página do site no OutBox CMS.") }
+        : { error: apiError(404, `O domínio ${domain} não está cadastrado no OutBox CMS. Cadastre o site do cliente com esse domínio.`) };
+    }
     if (site.status !== "active") return { error: apiError(403, "Este site está pausado no OutBox CMS.") };
     return { site };
   } catch (err) {

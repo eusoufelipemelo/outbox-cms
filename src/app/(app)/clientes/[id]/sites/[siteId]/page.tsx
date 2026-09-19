@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
-import { BookOpen, ExternalLink } from "lucide-react";
+import { BookOpen, ExternalLink, ChevronDown } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getClient } from "@/lib/data/clients";
 import { getSite, listSiteDeliveries, toSiteFormValues } from "@/lib/data/sites";
@@ -78,7 +78,16 @@ export default async function SitePage({ params }: Props) {
             lastCheckOk={site.last_check_ok}
             lastCheckMessage={site.last_check_message}
           />
-          <SiteKeysPanel siteId={site.id} publicKey={site.public_key} webhookSecret={site.webhook_secret} indexnowKey={site.indexnow_key} siteUrl={site.url} />
+          <details className="group rounded-[var(--radius-panel)] border border-line bg-surface open:border-transparent open:bg-transparent">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm group-open:mb-4 group-open:px-0">
+              <span>
+                <span className="font-medium text-ink">Chaves técnicas</span>
+                <span className="ml-2 text-muted">Só para integrações feitas fora do padrão OutBox.</span>
+              </span>
+              <ChevronDown aria-hidden className="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <SiteKeysPanel siteId={site.id} publicKey={site.public_key} webhookSecret={site.webhook_secret} indexnowKey={site.indexnow_key} siteUrl={site.url} />
+          </details>
         </div>
 
         <div className="min-w-0 space-y-6 lg:order-1">

@@ -122,14 +122,22 @@ function indexNowUrls(site: SiteRow, articleUrl: string | null, event: DeliveryE
   return urls;
 }
 
-/** Webhook de aviso para sites `api` (Next.js/Astro revalidam na hora). Nunca falha a publicação. */
+/** Rota padrão dos sites OutBox que recebe o aviso de publicação. */
+export function defaultRevalidateUrl(siteUrl: string): string {
+  return joinUrl(siteUrl, "api/outbox/revalidate");
+}
+
+/**
+ * Aviso ao site `api` para atualizar o blog na hora. Usa o webhook configurado ou, sem ele,
+ * a rota padrão dos sites OutBox. Nunca falha a publicação (o site também relê a API sozinho).
+ */
 async function notifyApiWebhook(site: SiteRow, event: DeliveryEvent, payload: unknown): Promise<string> {
-  if (!site.webhook_url) return "";
+  const target = { ...site, webhook_url: site.webhook_url || defaultRevalidateUrl(site.url) };
   try {
-    const r = await sendWebhook(site, event, payload);
-    return r.ok ? " Aviso de webhook enviado." : ` Aviso de webhook falhou: ${r.message}`;
-  } catch (err) {
-    return ` Aviso de webhook falhou: ${err instanceof Error ? err.message : String(err)}`;
+    const r = await sendWebhook(target, event, payload);
+    return r.ok ? " Site avisado: o blog já mostra a mudança." : " O site não confirmou o aviso; o blog atualiza sozinho em até 1 minuto.";
+  } catch {
+    return " O site não confirmou o aviso; o blog atualiza sozinho em até 1 minuto.";
   }
 }
 
@@ -415,24 +423,33 @@ export async function backfillSnapshots(): Promise<number> {
 }
 
 async function testApiSite(site: SiteRow): Promise<ChannelOutcome> {
-  const res = await request(site.url, { timeoutMs: 10_000, retries: 0, headers: { accept: "text/html,*/*" } });
-  await res.body?.cancel().catch(() => {});
-  const reachable = res.status < 400 || res.status === 401 || res.status === 403;
-  let outcome: ChannelOutcome = reachable
-    ? { ok: true, statusCode: res.status, message: `Site no ar (HTTP ${res.status}). A Content API está pronta para a chave pública deste site.` }
-    : { ok: false, statusCode: res.status, message: `${hostOf(site.url)} respondeu HTTP ${res.status}. Confira a URL do site.` };
-
-  if (site.webhook_url) {
-    try {
-      const hook = await sendWebhook(site, "test", null);
-      outcome = hook.ok
-        ? { ...outcome, message: `${outcome.message} Webhook de aviso respondeu HTTP ${hook.statusCode}.` }
-        : { ok: false, statusCode: hook.statusCode, message: `${outcome.message} Webhook de aviso falhou: ${hook.message}` };
-    } catch (err) {
-      outcome = { ok: false, statusCode: null, message: `${outcome.message} Webhook de aviso falhou: ${err instanceof Error ? err.message : err}` };
-    }
+  const host = hostOf(site.url);
+  let res: Response;
+  try {
+    res = await request(site.url, { timeoutMs: 10_000, retries: 0, headers: { accept: "text/html,*/*" } });
+    await res.body?.cancel().catch(() => {});
+  } catch {
+    return { ok: false, statusCode: null, message: `Não foi possível abrir ${host}. Confira se o domínio já aponta para o servidor e se o site foi publicado no Easypanel.` };
   }
-  return outcome;
+  if (res.status >= 400 && res.status !== 401 && res.status !== 403) {
+    return { ok: false, statusCode: res.status, message: `${host} respondeu com erro (HTTP ${res.status}). Confira se o site foi publicado no Easypanel.` };
+  }
+
+  // Sites OutBox expõem /api/outbox/status quando o blog está instalado.
+  try {
+    const st = await request(joinUrl(site.url, "api/outbox/status"), { timeoutMs: 8_000, retries: 0, headers: { accept: "application/json" } });
+    const body = (await st.json().catch(() => null)) as { outbox?: boolean } | null;
+    if (st.ok && body?.outbox) {
+      return { ok: true, statusCode: st.status, message: `Blog conectado. Os artigos publicados para ${host} aparecem no site na hora.` };
+    }
+  } catch {
+    // cai na mensagem abaixo
+  }
+  return {
+    ok: false,
+    statusCode: res.status,
+    message: `${host} está no ar, mas o blog OutBox ainda não foi instalado nesse site. Peça a instalação do blog no código do site.`,
+  };
 }
 
 /** Testa a conexão com o site e grava o resultado em `sites.last_check_*` e em `deliveries`. */

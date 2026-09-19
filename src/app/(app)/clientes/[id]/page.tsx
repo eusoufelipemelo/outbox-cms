@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getClient, listClientPublications } from "@/lib/data/clients";
 import { listClientSites } from "@/lib/data/sites";
@@ -63,8 +63,8 @@ export default async function ClientPage({ params }: Props) {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-        <div className="min-w-0 space-y-6 lg:order-2">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
+        <div className="min-w-0 space-y-6">
           <Panel
             title="Sites"
             description="Destinos onde os artigos deste cliente vão ao ar."
@@ -140,8 +140,19 @@ export default async function ClientPage({ params }: Props) {
           </Panel>
         </div>
 
-        <div className="min-w-0 space-y-6 lg:order-1">
-          <ClientForm key={client.updated_at} client={client} />
+        <div className="min-w-0 space-y-6">
+          <details className="group rounded-[var(--radius-panel)] border border-line bg-surface open:border-transparent open:bg-transparent">
+            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 group-open:mb-4 group-open:px-0">
+              <span>
+                <span className="block text-[15px] font-semibold text-ink">Dados do cliente (opcional)</span>
+                <span className="block text-sm text-muted">
+                  Contato, serviços, tom de voz e especialista. Não são necessários para publicar; só deixam os textos da IA mais certeiros.
+                </span>
+              </span>
+              <ChevronDown aria-hidden className="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <ClientForm key={client.updated_at} client={client} />
+          </details>
           <DeleteClientPanel clientId={client.id} clientName={client.name} siteCount={sites.length} />
         </div>
       </div>
