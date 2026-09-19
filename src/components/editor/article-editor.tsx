@@ -263,6 +263,7 @@ function CoverImage({
 }
 
 export function ArticleEditor({
+  canPublish = true,
   post,
   sites,
   categories,
@@ -272,6 +273,8 @@ export function ArticleEditor({
   initialClientId = "",
   initialAi,
 }: {
+  /** Redatores escrevem e salvam; publicar fica com editores e administradores. */
+  canPublish?: boolean;
   post: EditorPost | null;
   sites: DestinationSite[];
   categories: string[];
@@ -1032,6 +1035,7 @@ export function ArticleEditor({
   return (
     <div className="-mx-4 -mt-8 sm:-mx-6 lg:-mx-10 lg:-mt-10">
       <TopBar
+        canPublish={canPublish}
         saveState={saveState}
         savedAt={savedAt}
         saveError={saveError}

@@ -1,7 +1,9 @@
 "use server";
 
 import { z } from "zod";
-import { requireUser, type CurrentUser } from "@/lib/auth";
+import { canPublish, requireUser, type CurrentUser } from "@/lib/auth";
+
+const WRITER_BLOCKED = "Redatores escrevem e salvam; publicar, agendar, arquivar ou excluir é com um editor ou administrador. O artigo está salvo.";
 import { db } from "@/lib/supabase/admin";
 import { publishPost, unpublishPost, type PublishResult } from "@/lib/delivery";
 import { FAQ_MAX, TAKEAWAYS_MAX } from "@/lib/geo";
@@ -332,6 +334,7 @@ export async function savePost(input: SavePostInput): Promise<ActionResult<SaveO
 export async function publishArticle(input: SavePostInput, onlySiteIds?: string[]): Promise<ActionResult<PublishOutcome>> {
   try {
     const user = await requireUser();
+    if (!canPublish(user)) return { ok: false, error: WRITER_BLOCKED };
     const data = parseInput(input);
     if (!data.title.trim()) throw new UserError("Dê um título ao artigo antes de publicar.");
     if (!data.sites.length) throw new UserError("Escolha ao menos um site em Destinos para publicar.");
@@ -383,6 +386,7 @@ export async function publishArticle(input: SavePostInput, onlySiteIds?: string[
 export async function schedulePost(input: SavePostInput): Promise<ActionResult<SaveOutcome>> {
   try {
     const user = await requireUser();
+    if (!canPublish(user)) return { ok: false, error: WRITER_BLOCKED };
     const data = parseInput(input);
     if (!data.title.trim()) throw new UserError("Dê um título ao artigo antes de agendar.");
     if (!data.sites.length) throw new UserError("Escolha ao menos um site em Destinos para agendar.");
@@ -410,7 +414,8 @@ export async function schedulePost(input: SavePostInput): Promise<ActionResult<S
 
 export async function cancelSchedule(postId: string): Promise<ActionResult<{ savedAt: string }>> {
   try {
-    await requireUser();
+    const user = await requireUser();
+    if (!canPublish(user)) return { ok: false, error: WRITER_BLOCKED };
     const pid = parseId(postId);
     const { data, error } = await db()
       .from("posts")
@@ -436,7 +441,8 @@ export async function removeDestination(
   siteId: string,
 ): Promise<ActionResult<{ publications: Publication[] }>> {
   try {
-    await requireUser();
+    const user = await requireUser();
+    if (!canPublish(user)) return { ok: false, error: WRITER_BLOCKED };
     const pid = parseId(postId);
     const sid = parseId(siteId);
     const { data: link } = await db().from("post_sites").select("status").eq("post_id", pid).eq("site_id", sid).maybeSingle();
@@ -465,7 +471,8 @@ export async function unpublishFromSite(
   siteId: string,
 ): Promise<ActionResult<{ publications: Publication[] }>> {
   try {
-    await requireUser();
+    const user = await requireUser();
+    if (!canPublish(user)) return { ok: false, error: WRITER_BLOCKED };
     const pid = parseId(postId);
     const sid = parseId(siteId);
     let results: PublishResult[];
@@ -500,7 +507,8 @@ async function takeDown(postId: string): Promise<string | null> {
 /** Arquiva: tira do ar nos sites (se estiver publicado) e esconde da lista principal. */
 export async function archivePost(postId: string): Promise<ActionResult<{ savedAt: string }>> {
   try {
-    await requireUser();
+    const user = await requireUser();
+    if (!canPublish(user)) return { ok: false, error: WRITER_BLOCKED };
     const pid = parseId(postId);
     const problem = await takeDown(pid);
     if (problem) throw new UserError(`${problem} O artigo não foi arquivado. Tente de novo.`);
@@ -519,7 +527,8 @@ export async function archivePost(postId: string): Promise<ActionResult<{ savedA
 
 export async function unarchivePost(postId: string): Promise<ActionResult<{ savedAt: string }>> {
   try {
-    await requireUser();
+    const user = await requireUser();
+    if (!canPublish(user)) return { ok: false, error: WRITER_BLOCKED };
     const pid = parseId(postId);
     const { data, error } = await db()
       .from("posts")
@@ -545,7 +554,8 @@ export async function deletePost(
   opts: { force?: boolean } = {},
 ): Promise<ActionResult<{ needsForce?: boolean }>> {
   try {
-    await requireUser();
+    const user = await requireUser();
+    if (!canPublish(user)) return { ok: false, error: WRITER_BLOCKED };
     const pid = parseId(postId);
     const problem = await takeDown(pid);
     if (problem && !opts.force) {

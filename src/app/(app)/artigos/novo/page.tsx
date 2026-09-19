@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireUser } from "@/lib/auth";
+import { canPublish, requireUser } from "@/lib/auth";
 import { listCategorySuggestions, listClientOptions, listDestinationSites } from "@/lib/data/posts";
 import { ArticleEditor } from "@/components/editor/article-editor";
 import { dateParamToLocalInput } from "@/components/editor/datetime";
@@ -24,7 +24,7 @@ function first(value: string | string[] | undefined): string {
  * - `?ia=1` abre o mesmo diálogo vazio.
  */
 export default async function NewArticlePage({ searchParams }: PageProps<"/artigos/novo">) {
-  await requireUser();
+  const user = await requireUser();
   const sp = await searchParams;
   const [sites, categories, clients] = await Promise.all([listDestinationSites(), listCategorySuggestions(), listClientOptions()]);
   const clienteRaw = first(sp.cliente);
@@ -46,6 +46,7 @@ export default async function NewArticlePage({ searchParams }: PageProps<"/artig
   return (
     <ArticleEditor
       key={key}
+      canPublish={canPublish(user)}
       post={null}
       sites={sites}
       categories={categories}

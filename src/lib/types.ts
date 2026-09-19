@@ -170,7 +170,7 @@ export type ActionResult<T = undefined> =
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 // ============ Equipe (supabase/migrations/003_profiles.sql) ============
-export type ProfileRole = "admin" | "editor";
+export type ProfileRole = "admin" | "editor" | "writer";
 export type ProfileStatus = "pending" | "active" | "blocked";
 
 export interface Profile {
@@ -178,6 +178,9 @@ export interface Profile {
   email: string;
   name: string | null;
   avatar_url: string | null;
+  phone: string | null;
+  job_title: string | null;
+  bio: string | null;
   role: ProfileRole;
   status: ProfileStatus;
   created_at: string;

@@ -14,9 +14,24 @@ export type CurrentUser = {
   role: ProfileRole;
   status: ProfileStatus;
   avatarUrl: string | null;
+  phone: string | null;
+  jobTitle: string | null;
+  bio: string | null;
+  /** Nome, cargo, WhatsApp e foto preenchidos (obrigatórios para usar o CMS). */
+  profileComplete: boolean;
 };
 
-export const PROFILE_COLUMNS = "id, email, name, avatar_url, role, status, created_at, approved_at, approved_by";
+/** Campos obrigatórios do perfil. */
+export function isProfileComplete(p: { name: string | null; job_title: string | null; phone: string | null; avatar_url: string | null }): boolean {
+  return Boolean(p.name?.trim() && p.job_title?.trim() && p.phone?.trim() && p.avatar_url?.trim());
+}
+
+/** Quem pode publicar, agendar e tirar artigos do ar (redatores só escrevem). */
+export function canPublish(user: { role: ProfileRole }): boolean {
+  return user.role === "admin" || user.role === "editor";
+}
+
+export const PROFILE_COLUMNS = "id, email, name, avatar_url, phone, job_title, bio, role, status, created_at, approved_at, approved_by";
 
 function metaString(meta: Record<string, unknown>, ...keys: string[]): string | null {
   for (const key of keys) {
@@ -100,6 +115,10 @@ export const getUser = cache(async (): Promise<CurrentUser | null> => {
     role: profile.role,
     status: profile.status,
     avatarUrl: profile.avatar_url,
+    phone: profile.phone ?? null,
+    jobTitle: profile.job_title ?? null,
+    bio: profile.bio ?? null,
+    profileComplete: isProfileComplete(profile),
   };
 });
 

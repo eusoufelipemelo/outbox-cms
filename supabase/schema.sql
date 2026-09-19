@@ -324,3 +324,10 @@ alter table public.clients add column if not exists expert_bio text;
 
 -- Site: chave do IndexNow (Bing, Yandex e buscadores que alimentam IAs)
 alter table public.sites add column if not exists indexnow_key text not null default encode(gen_random_bytes(16), 'hex');
+-- 005 — perfil completo (dados obrigatórios no CMS) e função "Redator" (escreve, não publica).
+-- Idempotente.
+alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists job_title text;
+alter table public.profiles add column if not exists bio text;
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles add constraint profiles_role_check check (role in ('admin','editor','writer'));

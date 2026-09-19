@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Check, UserRoundCheck } from "lucide-react";
-import { updateTeamMember, type TeamChange } from "@/lib/data/team-actions";
+import { removeTeamMember, updateTeamMember, type TeamChange } from "@/lib/data/team-actions";
+import { Select } from "@/components/ui/field";
 import { Badge, StatusDot } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
@@ -33,7 +34,10 @@ function Avatar({ profile }: { profile: Profile }) {
 }
 
 type Pending = { id: string; change: TeamChange } | null;
-type Confirm = { profile: Profile; change: "block" | "make_editor" } | null;
+type Confirm = { profile: Profile; change: "block" | "remove" | "demote"; to?: TeamChange } | null;
+
+const ROLE_LABEL = { admin: "Administrador", editor: "Editor", writer: "Redator" } as const;
+const ROLE_CHANGE: Record<string, TeamChange> = { admin: "make_admin", editor: "make_editor", writer: "make_writer" };
 
 function MemberRow({
   profile,
@@ -61,7 +65,10 @@ function MemberRow({
             {profile.name || profile.email.split("@")[0]}
             {isMe ? <span className="ml-2 text-[13px] font-normal text-muted">(você)</span> : null}
           </p>
-          <p className="truncate text-[13.5px] text-muted">{profile.email}</p>
+          <p className="truncate text-[13.5px] text-muted">
+            {profile.job_title ? `${profile.job_title}, ` : ""}
+            {profile.email}
+          </p>
         </div>
       </div>
 
@@ -70,7 +77,7 @@ function MemberRow({
           <StatusDot tone={status.tone} />
           {status.label}
         </Badge>
-        <Badge tone="neutral">{profile.role === "admin" ? "Administrador" : "Editor"}</Badge>
+        {isMe || profile.status !== "active" ? <Badge tone="neutral">{ROLE_LABEL[profile.role]}</Badge> : null}
         <span className="whitespace-nowrap">desde {formatDate(profile.created_at)}</span>
       </div>
 
@@ -86,23 +93,40 @@ function MemberRow({
             </Button>
           </>
         ) : profile.status === "blocked" ? (
-          <Button size="sm" variant="secondary" onClick={() => run(profile, "approve")} loading={loading("approve")} disabled={disabled}>
-            <UserRoundCheck className="size-4" aria-hidden />
-            Reativar
-          </Button>
+          <>
+            <Button size="sm" variant="secondary" onClick={() => run(profile, "approve")} loading={loading("approve")} disabled={disabled}>
+              <UserRoundCheck className="size-4" aria-hidden />
+              Reativar
+            </Button>
+            <Button size="sm" variant="danger" onClick={() => ask({ profile, change: "remove" })} disabled={disabled}>
+              Remover
+            </Button>
+          </>
         ) : (
           <>
-            {profile.role === "admin" ? (
-              <Button size="sm" variant="secondary" onClick={() => ask({ profile, change: "make_editor" })} disabled={disabled}>
-                Tornar editor
-              </Button>
-            ) : (
-              <Button size="sm" variant="secondary" onClick={() => run(profile, "make_admin")} loading={loading("make_admin")} disabled={disabled}>
-                Tornar admin
-              </Button>
-            )}
-            <Button size="sm" variant="danger" onClick={() => ask({ profile, change: "block" })} disabled={disabled}>
+            <label className="sr-only" htmlFor={`role-${profile.id}`}>
+              Função de {profile.name || profile.email}
+            </label>
+            <Select
+              id={`role-${profile.id}`}
+              value={profile.role}
+              disabled={disabled}
+              className="h-8 w-[150px] text-[13px]"
+              onChange={(e) => {
+                const change = ROLE_CHANGE[e.target.value];
+                if (profile.role === "admin") ask({ profile, change: "demote", to: change });
+                else run(profile, change);
+              }}
+            >
+              <option value="admin">Administrador</option>
+              <option value="editor">Editor</option>
+              <option value="writer">Redator</option>
+            </Select>
+            <Button size="sm" variant="secondary" onClick={() => ask({ profile, change: "block" })} disabled={disabled}>
               Bloquear
+            </Button>
+            <Button size="sm" variant="danger" onClick={() => ask({ profile, change: "remove" })} disabled={disabled}>
+              Remover
             </Button>
           </>
         )}
@@ -116,10 +140,10 @@ export function TeamList({ pending, members, meId }: { pending: Profile[]; membe
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [, startTransition] = useTransition();
 
-  function run(profile: Profile, change: TeamChange) {
-    setBusy({ id: profile.id, change });
+  function run(profile: Profile, change: TeamChange | "remove") {
+    setBusy({ id: profile.id, change: change === "remove" ? "block" : change });
     startTransition(async () => {
-      const result = await updateTeamMember(profile.id, change);
+      const result = change === "remove" ? await removeTeamMember(profile.id) : await updateTeamMember(profile.id, change);
       setBusy(null);
       setConfirm(null);
       if (result.ok) toast.success(`${result.message}: ${profile.name || profile.email}`);
@@ -145,7 +169,7 @@ export function TeamList({ pending, members, meId }: { pending: Profile[]; membe
         </Panel>
       ) : null}
 
-      <Panel title="Membros" description="Administradores aprovam contas e gerenciam a equipe. Editores escrevem e publicam artigos.">
+      <Panel title="Membros" description="Administradores gerenciam a equipe. Editores escrevem e publicam. Redatores escrevem e salvam; um editor publica.">
         {members.length ? (
           <ul className="divide-y divide-line">
             {members.map((p) => (
@@ -160,20 +184,36 @@ export function TeamList({ pending, members, meId }: { pending: Profile[]; membe
       <ConfirmDialog
         open={confirm !== null}
         onClose={() => setConfirm(null)}
-        onConfirm={() => confirm && run(confirm.profile, confirm.change)}
+        onConfirm={() => {
+          if (!confirm) return;
+          if (confirm.change === "demote") run(confirm.profile, confirm.to ?? "make_editor");
+          else run(confirm.profile, confirm.change);
+        }}
         pending={busy !== null}
-        destructive={confirm?.change === "block"}
+        destructive={confirm?.change !== "demote"}
         title={
-          confirm?.change === "make_editor"
-            ? `Tornar ${who} editor?`
-            : confirm?.profile.status === "pending"
-              ? `Recusar o pedido de ${who}?`
-              : `Bloquear ${who}?`
+          confirm?.change === "demote"
+            ? `Tirar ${who} da administração?`
+            : confirm?.change === "remove"
+              ? `Remover ${who} do CMS?`
+              : confirm?.profile.status === "pending"
+                ? `Recusar o pedido de ${who}?`
+                : `Bloquear ${who}?`
         }
-        confirmLabel={confirm?.change === "make_editor" ? "Tornar editor" : confirm?.profile.status === "pending" ? "Recusar pedido" : "Bloquear conta"}
+        confirmLabel={
+          confirm?.change === "demote"
+            ? "Confirmar mudança"
+            : confirm?.change === "remove"
+              ? "Remover pessoa"
+              : confirm?.profile.status === "pending"
+                ? "Recusar pedido"
+                : "Bloquear conta"
+        }
       >
-        {confirm?.change === "make_editor" ? (
-          <p>Esta pessoa deixa de aprovar contas e de gerenciar a equipe, mas continua escrevendo e publicando artigos.</p>
+        {confirm?.change === "demote" ? (
+          <p>Esta pessoa deixa de aprovar contas e de gerenciar a equipe.</p>
+        ) : confirm?.change === "remove" ? (
+          <p>A conta é apagada e a pessoa perde o acesso na hora. Os artigos que ela escreveu continuam no CMS e nos sites. Para voltar, será preciso um convite novo.</p>
         ) : (
           <p>A conta perde o acesso ao CMS na hora. Os artigos que ela escreveu continuam no ar. Você pode reativar depois.</p>
         )}

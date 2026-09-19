@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { listTeam } from "@/lib/data/team";
 import { PageHeader } from "@/components/ui/panel";
 import { TeamList } from "@/components/team/team-list";
+import { TeamInvite } from "@/components/team/team-invite";
 
 export const metadata: Metadata = { title: "Equipe" };
 
@@ -16,9 +17,12 @@ export default async function TeamPage() {
     <>
       <PageHeader
         title="Equipe"
-        description="Quem pode entrar no CMS. Contas novas, com Google ou e-mail, ficam aguardando até um administrador aprovar."
+        description="Convide pessoas, defina funções e remova acessos. Quem se cadastra sozinho fica aguardando aprovação."
       />
-      <TeamList pending={pending} members={others} meId={me.id} />
+      <div className="space-y-6">
+        <TeamInvite />
+        <TeamList pending={pending} members={others} meId={me.id} />
+      </div>
     </>
   );
 }

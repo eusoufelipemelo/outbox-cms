@@ -21,7 +21,7 @@ const items = [
 // Só administradores veem (e acessam) a gestão da equipe.
 const adminItems = [{ href: "/equipe", label: "Equipe", icon: UserCog, exact: false }];
 
-export type NavUser = { name: string; email: string; role: "admin" | "editor" };
+export type NavUser = { name: string; email: string; role: "admin" | "editor" | "writer"; avatarUrl: string | null; jobTitle: string | null };
 
 function NavLinks({ user, pendingCount, onNavigate }: { user: NavUser; pendingCount: number; onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -85,14 +85,26 @@ function SidebarBody({ user, pendingCount = 0, signOut, onNavigate }: ShellProps
       </nav>
       <div className="border-t border-line p-3">
         <ThemeToggle className="mb-2" />
-        <div className="flex items-center gap-3 rounded-[var(--radius-control)] px-2 py-2">
-          <div aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink text-[13px] font-semibold text-on-ink uppercase">
-            {user.name.slice(0, 1)}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[13.5px] font-medium text-ink">{user.name}</p>
-            <p className="truncate text-[12px] text-muted">{user.email}</p>
-          </div>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/perfil"
+            onClick={onNavigate}
+            title="Meu perfil"
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-[var(--radius-control)] px-2 py-2 transition-colors hover:bg-sunken"
+          >
+            {user.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- foto do perfil (R2 ou Google)
+              <img src={user.avatarUrl} alt="" className="size-8 shrink-0 rounded-full object-cover" />
+            ) : (
+              <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink text-[13px] font-semibold text-on-ink uppercase">
+                {user.name.slice(0, 1)}
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13.5px] font-medium text-ink">{user.name}</span>
+              <span className="block truncate text-[12px] text-muted">{user.jobTitle || user.email}</span>
+            </span>
+          </Link>
           <form action={signOut}>
             <button
               type="submit"

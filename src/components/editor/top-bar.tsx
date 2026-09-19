@@ -280,6 +280,7 @@ export function ScheduleDialog({
 }
 
 export function TopBar({
+  canPublish = true,
   saveState,
   savedAt,
   saveError,
@@ -296,6 +297,7 @@ export function TopBar({
   menuItems,
   scores,
 }: {
+  canPublish?: boolean;
   saveState: SaveState;
   savedAt: string | null;
   saveError: string | null;
@@ -357,7 +359,15 @@ export function TopBar({
             {scheduled ? `Agendado para ${formatDateTime(scheduledAt)}` : "Agendar"}
           </Button>
         ) : null}
-        <PublishButton targets={targets} published={status === "published"} unsent={unsent} busy={publishing} onPublish={onPublish} />
+        {canPublish ? (
+          <PublishButton targets={targets} published={status === "published"} unsent={unsent} busy={publishing} onPublish={onPublish} />
+        ) : (
+          <Tip label="Redatores escrevem e salvam. Um editor ou administrador revisa e publica." side="bottom">
+            <Button variant="secondary" disabled>
+              Aguardando um editor publicar
+            </Button>
+          </Tip>
+        )}
         <Menu
           label="Mais ações"
           items={menuItems}
