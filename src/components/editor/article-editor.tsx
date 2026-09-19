@@ -217,12 +217,15 @@ function CoverImage({
   if (!url) {
     return (
       <div className="px-5 pt-6 sm:px-10 lg:px-14">
-        <div className="mx-auto max-w-[720px]">
-          <Button variant="ghost" onClick={onPick} className="-ml-3">
-            <ImagePlus className="size-4" aria-hidden />
-            Adicionar imagem de capa
-          </Button>
-        </div>
+        <button
+          type="button"
+          onClick={onPick}
+          className="mx-auto flex aspect-[16/6] w-full max-w-[720px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-panel)] border-2 border-dashed border-line-strong bg-sunken px-4 text-center transition-colors duration-150 hover:border-ink hover:bg-surface"
+        >
+          <ImagePlus className="size-6 text-muted" aria-hidden />
+          <span className="text-[15px] font-semibold text-ink">Enviar imagem de capa</span>
+          <span className="text-[13px] text-muted">1600 × 900 px (formato 16:9), JPG, PNG ou WebP até 10 MB</span>
+        </button>
       </div>
     );
   }
@@ -230,7 +233,7 @@ function CoverImage({
     <div className="border-b border-line">
       <div className="group relative">
         {/* eslint-disable-next-line @next/next/no-img-element -- imagens vêm de hosts variados (mídia, IA, sites) */}
-        <img src={url} alt={alt} className="aspect-[2/1] w-full rounded-t-[var(--radius-panel)] bg-sunken object-cover" />
+        <img src={url} alt={alt} className="aspect-video w-full rounded-t-[var(--radius-panel)] bg-sunken object-cover" />
         <div className="absolute top-3 right-3 flex gap-2">
           <Button variant="secondary" size="md" onClick={onPick}>
             Trocar capa

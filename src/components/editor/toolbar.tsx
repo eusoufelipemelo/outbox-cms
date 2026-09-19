@@ -158,7 +158,7 @@ export function EditorToolbar({
             <>
               <Sep />
               {onRequestImage ? (
-                <ToolButton label="Inserir imagem" onClick={onRequestImage}>
+                <ToolButton label="Inserir imagem no texto (1200 px de largura)" onClick={onRequestImage}>
                   <ImagePlus aria-hidden />
                 </ToolButton>
               ) : null}
