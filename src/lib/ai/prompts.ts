@@ -163,6 +163,7 @@ function geoRules(client: ClientContext | null, opts: { faqInHtml: boolean }): s
     "- Títulos de seção (H2) em forma de pergunta real de busca quando soar natural (\"Quanto tempo dura...?\", \"Qual a diferença entre...?\", \"Quando procurar...?\"); os demais, descritivos. Não force pergunta em todos.",
     "- Seções curtas e autossuficientes: cada H2 abre com uma frase que responde ao próprio título e faz sentido lida isoladamente. Retome o assunto pelo nome em vez de \"isso\", \"ele\" ou \"como vimos acima\".",
     "- Fatos concretos (números, prazos, medidas, faixas) só quando forem verificáveis e amplamente aceitos, ou apresentados claramente como orientação geral (\"em geral\", \"costuma\", \"depende de\"). Nenhuma estatística, porcentagem, pesquisa ou fonte inventada.",
+    "- Escreva quantidades, prazos, medidas, percentuais e datas sempre em algarismos (3 formatos, 15 dias, 1.500 caracteres, 2026), nunca por extenso. Inclua ao menos 2 dados numéricos verificáveis quando existirem no material ou na pesquisa fornecida.",
     "- Nunca crie links nem URLs novos. Mantenha apenas links que já existam no material fornecido.",
     entity,
     opts.faqInHtml
@@ -277,8 +278,20 @@ ${ctaLine(client)}
 
 // ---------------------------------------------------------------- full_article
 
+export type ResearchNote = { title: string; url: string; publisher: string | null; fact: string };
+
+function researchBlock(notes: ResearchNote[]): string {
+  if (!notes.length) return "";
+  const lines = notes.map((n, i) => `${i + 1}. ${n.title}${n.publisher ? ` (${n.publisher})` : ""}: ${n.fact}`);
+  return `<pesquisa>
+Fontes reais encontradas na web para este tema, com um dado de cada uma:
+${lines.join("\n")}
+</pesquisa>
+Use estes dados para dar fatos concretos ao texto (ao menos 2, com os números em algarismos) e atribua a origem de forma natural ("segundo o Google", "de acordo com o IBGE"). Não escreva URLs no HTML: as fontes são listadas à parte. Não atribua a uma fonte nada que não esteja na linha dela.`;
+}
+
 export function fullArticlePrompt(
-  input: { topic: string; keyword?: string; contentType?: ContentType; words: number },
+  input: { topic: string; keyword?: string; contentType?: ContentType; words: number; research?: ResearchNote[] },
   client: ClientContext | null,
 ): Prompt {
   const typeLine = input.contentType
@@ -296,6 +309,7 @@ export function fullArticlePrompt(
       typeLine,
       clientRules(client),
       geoRules(client, { faqInHtml: false }),
+      researchBlock(input.research ?? []),
       `Escreva o artigo completo, pronto para revisão e publicação, com todos os blocos abaixo.
 
 Devolva:
@@ -477,6 +491,50 @@ Para cada pauta, devolva:
 - intent: informacional, comercial, local ou comparativa.
 - content_type: article, howto, guide, list, comparison ou news (news só para mudança real e conhecida do setor; na dúvida, não use).
 - angle: uma frase (até 160 caracteres) dizendo o ângulo e por que essa pauta interessa ao público do cliente agora.`,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  };
+}
+
+
+// ---------------------------------------------------------------- pesquisa de fontes (busca na web)
+
+export function researchPrompt(input: { topic: string; keyword?: string }, client: ClientContext | null): Prompt {
+  const place = placeOf(client);
+  return {
+    system:
+      "Você é pesquisador de conteúdo de uma agência brasileira. Usa a busca na web para encontrar fontes confiáveis e verificáveis que sustentem um artigo de blog. Nunca inventa títulos, endereços ou dados.",
+    user: [
+      `<tema>${input.topic}</tema>`,
+      input.keyword ? `<palavra_chave>${input.keyword}</palavra_chave>` : "",
+      client?.segment ? `<segmento>${client.segment}</segmento>` : "",
+      place ? `<local>${place}</local>` : "",
+      `Pesquise na web de 2 a 4 fontes confiáveis sobre o tema, de preferência em português e do Brasil: órgãos oficiais (.gov.br), conselhos profissionais, entidades do setor, documentação oficial de empresas e plataformas, institutos de pesquisa. Evite blogs de concorrentes, fóruns e agregadores.
+
+De cada fonte, tire 1 dado concreto e verificável que esteja escrito nela (número, prazo, limite, data, percentual ou regra oficial).
+
+Responda só com as linhas abaixo, uma por fonte, sem mais nada:
+FONTE: título da página || endereço completo exatamente como apareceu na busca || nome do site ou órgão || o dado, em uma frase, com o número em algarismos`,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  };
+}
+
+// ---------------------------------------------------------------- correção pelo checklist
+
+export function fixArticlePrompt(article: unknown, issues: string[], client: ClientContext | null): Prompt {
+  return {
+    system: BASE_SYSTEM,
+    user: [
+      clientBlock(client),
+      geoRules(client, { faqInHtml: false }),
+      `<artigo>\n${JSON.stringify(article)}\n</artigo>`,
+      `O checklist de SEO e GEO do CMS apontou estes itens neste artigo:
+${issues.map((i) => `- ${i}`).join("\n")}
+
+Corrija só o necessário para atender a cada item, mantendo o restante igual: mesmos fatos, mesma estrutura, mesmo tom. Não invente dados, fontes nem links. Devolva o artigo completo, com todos os campos, no mesmo formato recebido.`,
     ]
       .filter(Boolean)
       .join("\n\n"),

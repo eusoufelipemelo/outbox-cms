@@ -1,6 +1,6 @@
 // Contrato do assistente de IA, compartilhado entre servidor (/api/ai) e cliente (callAi).
 
-import type { ContentType, FaqItem } from "@/lib/types";
+import type { ContentType, FaqItem, SourceItem } from "@/lib/types";
 
 export type AiAction = "titles" | "outline" | "draft" | "improve" | "seo" | "variation" | "geo" | "full_article" | "ideas";
 
@@ -55,6 +55,10 @@ export interface AiOutput {
     content_type: ContentType;
     /** O que citar como fonte (descrições para o redator verificar). A IA nunca inventa URLs. */
     source_suggestions: string[];
+    /** Fontes reais encontradas pela busca na web (URL conferida nos resultados da busca). */
+    sources?: SourceItem[];
+    /** Autor sugerido: especialista do cliente ou quem está usando o CMS. */
+    author_name?: string | null;
   };
   ideas: {
     ideas: {

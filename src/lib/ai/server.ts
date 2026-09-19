@@ -4,12 +4,16 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { env } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
-import type { ContentType, FaqItem } from "@/lib/types";
+import type { ContentType, FaqItem, SourceItem } from "@/lib/types";
+import { seoReport } from "@/lib/seo";
+import { geoReport } from "@/lib/geo";
 import type { AiAction, AiInput, AiOutput, AiStatus } from "./types";
 import { CONTENT_TYPES, IDEA_INTENTS, type IdeaIntent } from "./labels";
 import {
   draftPrompt,
+  fixArticlePrompt,
   fullArticlePrompt,
+  researchPrompt,
   geoPrompt,
   ideasPrompt,
   improvePrompt,
@@ -19,6 +23,7 @@ import {
   variationPrompt,
   type ClientContext,
   type Prompt,
+  type ResearchNote,
   type VariationSite,
   type VariationSource,
 } from "./prompts";
@@ -426,7 +431,138 @@ const faqSchema = z.array(z.object({ question: z.string(), answer: z.string() })
 // Texto livre no schema (ver `toContentType`); a lista de valores vai no prompt e na descrição.
 const contentTypeSchema = z.string().describe(`Um destes: ${CONTENT_TYPES.join(", ")}`);
 
-type Handlers = { [A in AiAction]: (input: AiInput[A], signal?: AbortSignal) => Promise<AiOutput[A]> };
+/** Quem está usando o assistente (autor padrão dos artigos gerados). */
+export type AiContext = { userName?: string | null };
+
+type Handlers = { [A in AiAction]: (input: AiInput[A], signal?: AbortSignal, ctx?: AiContext) => Promise<AiOutput[A]> };
+
+// ---------------------------------------------------------------- pesquisa de fontes (busca na web)
+
+function normUrl(u: string): string {
+  try {
+    const url = new URL(u.trim());
+    url.hash = "";
+    return `${url.protocol}//${url.host.toLowerCase()}${url.pathname.replace(/\/+$/, "")}${url.search}`;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Busca fontes reais na web antes de escrever. Só aceita endereços que apareceram nos
+ * resultados da busca (nada inventado). Falha em silêncio: o artigo sai sem pesquisa.
+ */
+async function researchSources(
+  input: { topic: string; keyword?: string },
+  client: ClientContext | null,
+  signal?: AbortSignal,
+): Promise<ResearchNote[]> {
+  const model = aiModel();
+  if (!supportsAdaptive(model)) return [];
+  const prompt = researchPrompt(input, client);
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt.user }];
+  const seen = new Map<string, string>();
+  let text = "";
+  try {
+    for (let turn = 0; turn < 3; turn++) {
+      const msg = await anthropic().messages.create(
+        {
+          model,
+          max_tokens: 8_000,
+          system: prompt.system,
+          messages,
+          tools: [
+            {
+              type: "web_search_20260209",
+              name: "web_search",
+              max_uses: 5,
+              user_location: { type: "approximate", country: "BR" },
+            },
+          ],
+          thinking: { type: "adaptive" },
+          output_config: { effort: "low" },
+        },
+        { timeout: 90_000, signal },
+      );
+      for (const block of msg.content) {
+        if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
+          for (const r of block.content) if (r.type === "web_search_result") seen.set(normUrl(r.url), r.url);
+        } else if (block.type === "text") {
+          text += block.text;
+        }
+      }
+      // busca longa: a API pausa o turno; reenviar a resposta retoma de onde parou
+      if (msg.stop_reason !== "pause_turn") break;
+      messages.push({ role: "assistant", content: msg.content });
+    }
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    console.error("[ai] pesquisa de fontes falhou:", err instanceof Anthropic.APIError ? `${err.status} ${err.type ?? ""}` : (err as Error)?.name);
+    return [];
+  }
+
+  const notes: ResearchNote[] = [];
+  for (const line of text.split("\n")) {
+    const m = line.match(/FONTE:\s*(.+)$/i);
+    if (!m) continue;
+    const [title, url, publisher, fact] = m[1].split("||").map((x) => x.trim());
+    const original = url ? seen.get(normUrl(url)) : undefined;
+    if (!title || !original || !fact) continue; // endereço que não veio da busca é descartado
+    if (notes.some((n) => normUrl(n.url) === normUrl(original))) continue;
+    notes.push({ title: clampText(title, 160), url: original, publisher: publisher ? clampText(publisher, 80) : null, fact: clampText(fact, 300) });
+    if (notes.length >= 4) break;
+  }
+  return notes;
+}
+
+// ---------------------------------------------------------------- conferência pelo checklist
+
+type FullArticleOut = AiOutput["full_article"];
+
+/** Itens do checklist de SEO/GEO que o próprio texto consegue resolver (capa, fontes e autor ficam de fora). */
+const FIXABLE = new Set([
+  "keyword-title",
+  "keyword-intro",
+  "keyword-heading",
+  "keyword-description",
+  "keyword-slug",
+  "length",
+  "headings",
+  "title-length",
+  "description-length",
+  "answer-length",
+  "answer-entity",
+  "question-headings",
+  "short-sections",
+  "takeaways",
+  "faq",
+  "concrete-data",
+]);
+
+function checklistIssues(a: FullArticleOut, entities: string[]): string[] {
+  const seo = seoReport({
+    title: a.title,
+    seoTitle: a.seo_title,
+    seoDescription: a.seo_description,
+    excerpt: a.excerpt,
+    slug: a.slug,
+    focusKeyword: a.focus_keyword,
+    html: a.content_html,
+    answerSummary: a.answer_summary,
+  });
+  const geo = geoReport({
+    answerSummary: a.answer_summary,
+    focusKeyword: a.focus_keyword,
+    entities,
+    html: a.content_html,
+    keyTakeaways: a.key_takeaways,
+    faq: a.faq,
+    sources: a.sources ?? [],
+    authorName: a.author_name ?? null,
+    now: Date.now(),
+  });
+  return [...seo.checks, ...geo.checks].filter((c) => !c.ok && FIXABLE.has(c.id)).map((c) => `${c.label}: ${c.hint}`);
+}
 
 const handlers: Handlers = {
   async titles(input, signal) {
@@ -564,45 +700,77 @@ const handlers: Handlers = {
     };
   },
 
-  async full_article(input, signal) {
+  async full_article(input, signal, ctx) {
+    const startedAt = Date.now();
     const client = await loadClient(input.clientId);
     const words = input.words ?? DEFAULT_FULL_ARTICLE_WORDS;
-    const out = await generate(
-      z.object({
-        title: z.string(),
-        slug: z.string(),
-        focus_keyword: z.string(),
-        content_type: contentTypeSchema,
-        content_html: z.string(),
-        answer_summary: z.string(),
-        key_takeaways: z.array(z.string()),
-        faq: faqSchema,
-        excerpt: z.string(),
-        seo_title: z.string(),
-        seo_description: z.string(),
-        source_suggestions: z.array(z.string()),
-      }),
-      fullArticlePrompt({ topic: input.topic, keyword: input.keyword, contentType: input.contentType, words }, client),
-      { maxTokens: clampInt(14_000 + words * 7, 18_000, 32_000), timeoutMs: 280_000, effort: "medium" },
+    // 1) pesquisa fontes reais na web (fatos concretos + links conferidos)
+    const research = await researchSources({ topic: input.topic, keyword: input.keyword }, client, signal);
+
+    const schema = z.object({
+      title: z.string(),
+      slug: z.string(),
+      focus_keyword: z.string(),
+      content_type: contentTypeSchema,
+      content_html: z.string(),
+      answer_summary: z.string(),
+      key_takeaways: z.array(z.string()),
+      faq: faqSchema,
+      excerpt: z.string(),
+      seo_title: z.string(),
+      seo_description: z.string(),
+      source_suggestions: z.array(z.string()),
+    });
+    const callCfg = { maxTokens: clampInt(14_000 + words * 7, 18_000, 32_000), timeoutMs: 280_000, effort: "medium" as const };
+
+    const sources: SourceItem[] = research.map((r) => ({ title: r.title, url: r.url, publisher: r.publisher }));
+    const author_name = client?.expert_name?.trim() || ctx?.userName?.trim() || null;
+    const finish = (out: z.infer<typeof schema>): FullArticleOut => {
+      // Os links do texto vêm só da pesquisa; qualquer outro seria inventado.
+      const content_html = keepSourceLinks(safeHtml(out.content_html), "", research.map((r) => r.url).join(" "));
+      const title = clampText(cleanTitle(out.title), 80) || clampText(cleanTitle(input.topic), 80);
+      return {
+        title,
+        slug: slugify(out.slug) || slugify(title),
+        excerpt: clampText(out.excerpt, 220),
+        content_html,
+        answer_summary: answerSummary(out.answer_summary, content_html),
+        key_takeaways: cleanList(out.key_takeaways, 6, 240),
+        faq: cleanFaq(out.faq, 5),
+        seo_title: clampText(out.seo_title, 60),
+        seo_description: clampText(out.seo_description, 160),
+        focus_keyword: input.keyword ?? clampText(out.focus_keyword, 80),
+        content_type: input.contentType ?? toContentType(out.content_type),
+        source_suggestions: sources.length ? [] : cleanList(out.source_suggestions, 5, 240),
+        sources,
+        author_name,
+      };
+    };
+
+    // 2) escreve o artigo com a pesquisa
+    const raw = await generate(
+      schema,
+      fullArticlePrompt({ topic: input.topic, keyword: input.keyword, contentType: input.contentType, words, research }, client),
+      callCfg,
       signal,
     );
-    // Artigo nasce de um tema, sem material de origem: qualquer link seria inventado.
-    const content_html = keepSourceLinks(safeHtml(out.content_html));
-    const title = clampText(cleanTitle(out.title), 80) || clampText(cleanTitle(input.topic), 80);
-    return {
-      title,
-      slug: slugify(out.slug) || slugify(title),
-      excerpt: clampText(out.excerpt, 220),
-      content_html,
-      answer_summary: answerSummary(out.answer_summary, content_html),
-      key_takeaways: cleanList(out.key_takeaways, 6, 240),
-      faq: cleanFaq(out.faq, 5),
-      seo_title: clampText(out.seo_title, 60),
-      seo_description: clampText(out.seo_description, 160),
-      focus_keyword: input.keyword ?? clampText(out.focus_keyword, 80),
-      content_type: input.contentType ?? toContentType(out.content_type),
-      source_suggestions: cleanList(out.source_suggestions, 5, 240),
-    };
+    let article = finish(raw);
+
+    // 3) confere pelo checklist do CMS e corrige uma vez o que faltar
+    const entities = [client?.name, client?.city].filter((x): x is string => Boolean(x));
+    const issues = checklistIssues(article, entities);
+    // sem correção se o artigo já demorou (a pessoa está esperando na tela)
+    if (issues.length && Date.now() - startedAt < 200_000) {
+      try {
+        const fixed = await generate(schema, fixArticlePrompt(raw, issues, client), callCfg, signal);
+        const candidate = finish(fixed);
+        if (checklistIssues(candidate, entities).length < issues.length) article = candidate;
+      } catch (err) {
+        if (signal?.aborted) throw err;
+        // a versão original continua valendo; o checklist no editor mostra o que falta
+      }
+    }
+    return article;
   },
 
   async ideas(input, signal) {
@@ -652,9 +820,9 @@ const handlers: Handlers = {
 };
 
 /** Executa uma ação do assistente. Lança `AiError` (mensagem pt-BR) ou erros do SDK — passe por `toAiError`. */
-export function runAi<A extends AiAction>(action: A, input: AiInput[A], signal?: AbortSignal): Promise<AiOutput[A]> {
-  const handler = handlers[action] as (input: AiInput[A], signal?: AbortSignal) => Promise<AiOutput[A]>;
-  return handler(input, signal);
+export function runAi<A extends AiAction>(action: A, input: AiInput[A], signal?: AbortSignal, ctx?: AiContext): Promise<AiOutput[A]> {
+  const handler = handlers[action] as (input: AiInput[A], signal?: AbortSignal, ctx?: AiContext) => Promise<AiOutput[A]>;
+  return handler(input, signal, ctx);
 }
 
 // ---------------------------------------------------------------- erros

@@ -29,7 +29,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!(await currentUser())) return fail(UNAUTHORIZED, 401);
+  const user = await currentUser();
+  if (!user) return fail(UNAUTHORIZED, 401);
   if (!env.anthropicApiKey) return fail(AI_DISABLED_MESSAGE, 503);
 
   const body: unknown = await request.json().catch(() => null);
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   if (!input.success) return fail(firstIssue(input.error), 400);
 
   try {
-    const result = await runAi(action, input.data as AiInput[typeof action], request.signal);
+    const result = await runAi(action, input.data as AiInput[typeof action], request.signal, { userName: user.name });
     return Response.json({ ok: true, result } satisfies AiResponse);
   } catch (err) {
     const aiErr = toAiError(err, action);

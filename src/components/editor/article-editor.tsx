@@ -947,11 +947,20 @@ export function ArticleEditor({
         seoDescription: out.seo_description?.trim() || cur.seoDescription,
         focusKeyword: out.focus_keyword?.trim() || req.keyword || cur.focusKeyword,
         contentType: out.content_type || req.contentType,
+        // fontes reais da pesquisa na web; mantém as que a pessoa já tinha colocado
+        sources: out.sources?.length
+          ? out.sources.map((x) => ({ title: x.title, url: x.url, publisher: x.publisher ?? "" }))
+          : cur.sources,
+        authorName: cur.authorName.trim() || out.author_name?.trim() || cur.authorName,
         ...(clientSites.length ? { destinations: clientSites } : {}),
       };
     });
     setSourceSuggestions((out.source_suggestions ?? []).map((x) => x.trim()).filter(Boolean));
-    toast.success("Artigo criado. Revise o texto, confira as fontes e publique.");
+    toast.success(
+      out.sources?.length
+        ? `Artigo criado com ${out.sources.length} fonte${out.sources.length > 1 ? "s" : ""} da web. Revise, suba a capa e publique.`
+        : "Artigo criado. Revise o texto, confira as fontes e publique.",
+    );
     return true;
   };
 

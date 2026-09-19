@@ -148,7 +148,7 @@ export function FullArticleDialog({
             <div className="h-full w-1/3 animate-pulse rounded-full bg-ink" />
           </div>
           <p className="text-[13px] text-muted">
-            <span className="tabular-nums">{clock(elapsed)}</span>. Costuma levar de 1 a 2 minutos; artigos longos, um pouco mais. Pode
+            <span className="tabular-nums">{clock(elapsed)}</span>. O CMS pesquisa fontes na web, escreve e confere o checklist de SEO e GEO. Costuma levar de 2 a 4 minutos. Pode
             continuar aqui ou cancelar.
           </p>
         </div>
