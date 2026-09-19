@@ -956,9 +956,13 @@ export function ArticleEditor({
       };
     });
     setSourceSuggestions((out.source_suggestions ?? []).map((x) => x.trim()).filter(Boolean));
+    if (out.pending_checks?.length) {
+      toast.warning(`Artigo criado, mas ${out.pending_checks.length === 1 ? "1 item do checklist ficou pendente" : `${out.pending_checks.length} itens do checklist ficaram pendentes`}: ${out.pending_checks.join("; ")}. Veja as seções SEO e GEO.`, { duration: 12000 });
+      return true;
+    }
     toast.success(
       out.sources?.length
-        ? `Artigo criado com ${out.sources.length} fonte${out.sources.length > 1 ? "s" : ""} da web. Revise, suba a capa e publique.`
+        ? `Artigo criado com 10 de 10 em SEO e GEO e ${out.sources.length} fonte${out.sources.length > 1 ? "s" : ""} da web. Revise, suba a capa e publique.`
         : "Artigo criado. Revise o texto, confira as fontes e publique.",
     );
     return true;

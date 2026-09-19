@@ -500,7 +500,7 @@ Para cada pauta, devolva:
 
 // ---------------------------------------------------------------- pesquisa de fontes (busca na web)
 
-export function researchPrompt(input: { topic: string; keyword?: string }, client: ClientContext | null): Prompt {
+export function researchPrompt(input: { topic: string; keyword?: string }, client: ClientContext | null, broad = false): Prompt {
   const place = placeOf(client);
   return {
     system:
@@ -510,6 +510,9 @@ export function researchPrompt(input: { topic: string; keyword?: string }, clien
       input.keyword ? `<palavra_chave>${input.keyword}</palavra_chave>` : "",
       client?.segment ? `<segmento>${client.segment}</segmento>` : "",
       place ? `<local>${place}</local>` : "",
+      broad
+        ? "A primeira busca não achou fontes. Amplie: use termos mais gerais do assunto e aceite fontes oficiais de outros países (documentação oficial, órgãos governamentais, entidades internacionais, universidades)."
+        : "",
       `Pesquise na web de 2 a 4 fontes confiáveis sobre o tema, de preferência em português e do Brasil: órgãos oficiais (.gov.br), conselhos profissionais, entidades do setor, documentação oficial de empresas e plataformas, institutos de pesquisa. Evite blogs de concorrentes, fóruns e agregadores.
 
 De cada fonte, tire 1 dado concreto e verificável que esteja escrito nela (número, prazo, limite, data, percentual ou regra oficial).

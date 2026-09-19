@@ -148,7 +148,7 @@ export function FullArticleDialog({
             <div className="h-full w-1/3 animate-pulse rounded-full bg-ink" />
           </div>
           <p className="text-[13px] text-muted">
-            <span className="tabular-nums">{clock(elapsed)}</span>. O CMS pesquisa fontes na web, escreve e confere o checklist de SEO e GEO. Costuma levar de 2 a 4 minutos. Pode
+            <span className="tabular-nums">{clock(elapsed)}</span>. O CMS pesquisa fontes na web, escreve e corrige o texto até fechar 10 de 10 em SEO e GEO. Costuma levar de 2 a 5 minutos. Pode
             continuar aqui ou cancelar.
           </p>
         </div>

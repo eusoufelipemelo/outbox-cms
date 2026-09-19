@@ -456,10 +456,11 @@ async function researchSources(
   input: { topic: string; keyword?: string },
   client: ClientContext | null,
   signal?: AbortSignal,
+  broad = false,
 ): Promise<ResearchNote[]> {
   const model = aiModel();
   if (!supportsAdaptive(model)) return [];
-  const prompt = researchPrompt(input, client);
+  const prompt = researchPrompt(input, client, broad);
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt.user }];
   const seen = new Map<string, string>();
   let text = "";
@@ -539,7 +540,9 @@ const FIXABLE = new Set([
   "concrete-data",
 ]);
 
-function checklistIssues(a: FullArticleOut, entities: string[]): string[] {
+type Checklist = { fixable: string[]; pending: string[] };
+
+function checklist(a: FullArticleOut, entities: string[]): Checklist {
   const seo = seoReport({
     title: a.title,
     seoTitle: a.seo_title,
@@ -561,7 +564,25 @@ function checklistIssues(a: FullArticleOut, entities: string[]): string[] {
     authorName: a.author_name ?? null,
     now: Date.now(),
   });
-  return [...seo.checks, ...geo.checks].filter((c) => !c.ok && FIXABLE.has(c.id)).map((c) => `${c.label}: ${c.hint}`);
+  const failed = [...seo.checks, ...geo.checks].filter((c) => !c.ok);
+  return {
+    fixable: failed.filter((c) => FIXABLE.has(c.id)).map((c) => `${c.label}: ${c.hint}`),
+    pending: failed.map((c) => c.label),
+  };
+}
+
+/** Correções que não precisam de IA: slug com a palavra-chave. */
+function fixDeterministic(a: FullArticleOut): FullArticleOut {
+  const kw = slugify(a.focus_keyword || "");
+  if (kw && !a.slug.includes(kw)) {
+    const rest = slugify(a.title)
+      .split("-")
+      .filter((w) => !kw.split("-").includes(w))
+      .slice(0, 4)
+      .join("-");
+    return { ...a, slug: [kw, rest].filter(Boolean).join("-").slice(0, 80).replace(/-+$/, "") };
+  }
+  return a;
 }
 
 const handlers: Handlers = {
@@ -705,7 +726,9 @@ const handlers: Handlers = {
     const client = await loadClient(input.clientId);
     const words = input.words ?? DEFAULT_FULL_ARTICLE_WORDS;
     // 1) pesquisa fontes reais na web (fatos concretos + links conferidos)
-    const research = await researchSources({ topic: input.topic, keyword: input.keyword }, client, signal);
+    let research = await researchSources({ topic: input.topic, keyword: input.keyword }, client, signal);
+    // sem fonte na primeira busca: tenta de novo, mais ampla (fontes oficiais de qualquer país)
+    if (!research.length) research = await researchSources({ topic: input.topic, keyword: input.keyword }, client, signal, true);
 
     const schema = z.object({
       title: z.string(),
@@ -754,22 +777,30 @@ const handlers: Handlers = {
       callCfg,
       signal,
     );
-    let article = finish(raw);
+    let article = fixDeterministic(finish(raw));
 
-    // 3) confere pelo checklist do CMS e corrige uma vez o que faltar
+    // 3) regra da OutBox: todo artigo gerado sai com 10 de 10 em SEO e GEO.
+    //    Confere pelo checklist do CMS e corrige até 3 vezes o que faltar.
     const entities = [client?.name, client?.city].filter((x): x is string => Boolean(x));
-    const issues = checklistIssues(article, entities);
-    // sem correção se o artigo já demorou (a pessoa está esperando na tela)
-    if (issues.length && Date.now() - startedAt < 200_000) {
+    let current = raw;
+    let report = checklist(article, entities);
+    for (let round = 0; round < 3 && report.fixable.length; round++) {
+      if (Date.now() - startedAt > 330_000) break; // a pessoa está esperando na tela
       try {
-        const fixed = await generate(schema, fixArticlePrompt(raw, issues, client), callCfg, signal);
-        const candidate = finish(fixed);
-        if (checklistIssues(candidate, entities).length < issues.length) article = candidate;
+        const fixed = await generate(schema, fixArticlePrompt(current, report.fixable, client), callCfg, signal);
+        const candidate = fixDeterministic(finish(fixed));
+        const next = checklist(candidate, entities);
+        if (next.pending.length <= report.pending.length) {
+          article = candidate;
+          current = fixed;
+          report = next;
+        }
       } catch (err) {
         if (signal?.aborted) throw err;
-        // a versão original continua valendo; o checklist no editor mostra o que falta
+        break; // mantém a melhor versão até aqui
       }
     }
+    article = { ...article, pending_checks: report.pending };
     return article;
   },
 

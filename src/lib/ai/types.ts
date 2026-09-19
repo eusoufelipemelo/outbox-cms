@@ -59,6 +59,8 @@ export interface AiOutput {
     sources?: SourceItem[];
     /** Autor sugerido: especialista do cliente ou quem está usando o CMS. */
     author_name?: string | null;
+    /** Itens do checklist de SEO/GEO que ainda não passaram (vazio = 10 de 10 em ambos). */
+    pending_checks?: string[];
   };
   ideas: {
     ideas: {
