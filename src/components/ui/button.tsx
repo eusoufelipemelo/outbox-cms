@@ -9,7 +9,8 @@ const variants: Record<Variant, string> = {
   // preto: ação principal comum (salvar, criar)
   primary: "bg-ink text-on-ink hover:bg-ink-hover",
   // laranja com texto preto (6,3:1): exclusivo para publicar
-  publish: "bg-brand text-ink hover:bg-brand-hover font-semibold",
+  // texto sempre preto: o laranja é o mesmo nos dois temas (6,3:1 de contraste)
+  publish: "bg-brand text-black hover:bg-brand-hover font-semibold",
   secondary: "bg-surface text-ink border border-line-strong hover:border-ink",
   ghost: "text-muted hover:text-ink hover:bg-sunken",
   danger: "bg-surface text-danger border border-line-strong hover:border-danger hover:bg-danger-soft",

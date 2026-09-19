@@ -150,19 +150,33 @@ function PublishButton({
       label={`Confirmar: ${label}`}
       className="max-sm:fixed max-sm:inset-x-4 max-sm:top-[7.75rem] max-sm:w-auto"
       trigger={
-        <Button
-          variant="publish"
-          loading={busy}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          data-popover-trigger
-          onClick={() => setOpen((o) => !o)}
-        >
-          {label}
-        </Button>
+        published && !unsent && !busy ? (
+          // No ar e sem alterações: só o estado, discreto. Clicar ainda permite reenviar.
+          <Button
+            variant="secondary"
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            data-popover-trigger
+            onClick={() => setOpen((o) => !o)}
+          >
+            <span aria-hidden className="size-2 rounded-full bg-ok" />
+            {`No ar em ${n} ${n === 1 ? "site" : "sites"}`}
+          </Button>
+        ) : (
+          <Button
+            variant="publish"
+            loading={busy}
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            data-popover-trigger
+            onClick={() => setOpen((o) => !o)}
+          >
+            {label}
+          </Button>
+        )
       }
     >
-      <p className="text-[15px] font-semibold text-ink">{label}</p>
+      <p className="text-[15px] font-semibold text-ink">{published && !unsent ? `Reenviar para ${n} ${n === 1 ? "site" : "sites"}` : label}</p>
       <p className="mt-1 text-[13px] text-muted">
         {!published
           ? "O artigo vai ao ar agora nestes sites:"
@@ -196,7 +210,7 @@ function PublishButton({
             onPublish();
           }}
         >
-          {published ? "Atualizar agora" : "Publicar agora"}
+          {!published ? "Publicar agora" : unsent ? "Atualizar agora" : "Reenviar agora"}
         </Button>
       </div>
     </Popover>
