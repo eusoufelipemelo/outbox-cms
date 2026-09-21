@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   // Identifica cada versão publicada: depois de um deploy, a navegação recarrega a página na versão nova.
   deploymentId: process.env.NEXT_DEPLOYMENT_ID || undefined,
   poweredByHeader: false,
+  // fontes da imagem de compartilhamento do relatório (lidas do disco em tempo de execução)
+  outputFileTracingIncludes: { "/relatorio/[token]/opengraph-image": ["./src/assets/fonts/*.ttf", "./public/brand/*.svg"] },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "*.supabase.co" },

@@ -11,6 +11,8 @@ export type SiteChecks = {
   finalUrl?: string;
   title?: string | null;
   description?: string | null;
+  /** Imagem de compartilhamento do próprio site (og:image), em URL absoluta. */
+  ogImage?: string | null;
   checks: Check[];
   /** Frequência do blog medida pelo sitemap (datas de atualização dos artigos). */
   blogActivity?: { posts: number; recent: number | null; lastPost: string | null };
@@ -185,5 +187,24 @@ export async function checkSite(url: string): Promise<SiteChecks> {
     { id: "tel", group: "conversao", label: "Telefone clicável", ok: tel, detail: tel ? "Encontrado." : "Telefone não é clicável no celular." },
   ];
 
-  return { ok: true, finalUrl: url, title, description, checks, blogActivity: activity };
+  let ogImageUrl: string | null = null;
+  try {
+    ogImageUrl = ogImage ? new URL(decode(ogImage), url).toString() : null;
+  } catch {
+    ogImageUrl = null;
+  }
+
+  return { ok: true, finalUrl: url, title, description, ogImage: ogImageUrl, checks, blogActivity: activity };
+}
+
+/** og:image do site (para diagnósticos antigos, que não guardaram a imagem). */
+export async function findOgImage(url: string): Promise<string | null> {
+  const home = await fetchText(url);
+  if (!home || home.status >= 400) return null;
+  const og = meta(home.text, "og:image") ?? meta(home.text, "twitter:image");
+  try {
+    return og ? new URL(decode(og), url).toString() : null;
+  } catch {
+    return null;
+  }
 }
