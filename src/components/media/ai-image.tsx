@@ -17,6 +17,31 @@ const STYLES = [
   { value: "composição minimalista, muito espaço vazio, fundo liso, sem texto", label: "Minimalista" },
 ] as const;
 
+// Preço por imagem na tabela do Google, convertido a R$ 5,50 (só para orientar a escolha).
+const MODELS = [
+  {
+    value: "gemini-3-pro-image",
+    label: "Pro (máxima qualidade)",
+    sizes: ["2K", "4K"] as const,
+    price: { "1K": "R$ 0,74", "2K": "R$ 0,74", "4K": "R$ 1,32" } as Record<string, string>,
+    note: "Melhor em cenas complexas e texto na imagem. Mais lento.",
+  },
+  {
+    value: "gemini-3.1-flash-image",
+    label: "Flash (equilibrado)",
+    sizes: ["1K", "2K", "4K"] as const,
+    price: { "1K": "R$ 0,37", "2K": "R$ 0,56", "4K": "R$ 0,83" } as Record<string, string>,
+    note: "Rápido e barato, ótimo para a maioria das capas.",
+  },
+  {
+    value: "gemini-3.1-flash-lite-image",
+    label: "Flash Lite (econômico)",
+    sizes: ["1K"] as const,
+    price: { "1K": "R$ 0,19" } as Record<string, string>,
+    note: "O mais barato e rápido. Só 1K, suficiente para imagens dentro do texto.",
+  },
+] as const;
+
 const ASPECTS = [
   { value: "16:9", label: "16:9 (capa do artigo)" },
   { value: "4:3", label: "4:3 (imagem no texto)" },
@@ -38,7 +63,9 @@ export function AiImagePanel({
   const [prompt, setPrompt] = useState(suggest ? `Imagem de capa para um artigo sobre ${suggest}.` : "");
   const [style, setStyle] = useState<string>(STYLES[0].value);
   const [aspect, setAspect] = useState<string>("16:9");
-  const [size, setSize] = useState<"2K" | "4K">("2K");
+  const [model, setModel] = useState<string>(MODELS[0].value);
+  const [size, setSize] = useState<string>("2K");
+  const current = MODELS.find((m) => m.value === model) ?? MODELS[0];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -75,7 +102,7 @@ export function AiImagePanel({
       const res = await fetch("/api/ai/imagem", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: `${prompt.trim()} Estilo: ${style}.`, aspect, size, clientId }),
+        body: JSON.stringify({ prompt: `${prompt.trim()} Estilo: ${style}.`, aspect, size, model, clientId }),
         signal: abort.current.signal,
       });
       const data = (await res.json().catch(() => ({}))) as Media & { error?: string };
@@ -134,12 +161,33 @@ export function AiImagePanel({
           </Select>
         </Field>
         <Field label="Resolução" htmlFor="ia-resolucao">
-          <Select id="ia-resolucao" value={size} disabled={busy} onChange={(e) => setSize(e.target.value as "2K" | "4K")}>
-            <option value="2K">2K (recomendada para blog)</option>
-            <option value="4K">4K (máxima, arquivo maior)</option>
+          <Select id="ia-resolucao" value={size} disabled={busy} onChange={(e) => setSize(e.target.value)}>
+            {current.sizes.map((sz) => (
+              <option key={sz} value={sz}>
+                {sz === "1K" ? "1K (leve)" : sz === "2K" ? "2K (recomendada)" : "4K (máxima)"}
+              </option>
+            ))}
           </Select>
         </Field>
       </div>
+      <Field label="Modelo" htmlFor="ia-modelo" hint={`${current.note} Custo aproximado: ${current.price[size] ?? current.price[current.sizes[0]]} por imagem.`}>
+        <Select
+          id="ia-modelo"
+          value={model}
+          disabled={busy}
+          onChange={(e) => {
+            const next = MODELS.find((m) => m.value === e.target.value) ?? MODELS[0];
+            setModel(next.value);
+            if (!next.sizes.includes(size as never)) setSize(next.sizes.includes("2K" as never) ? "2K" : next.sizes[0]);
+          }}
+        >
+          {MODELS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
       {error ? (
         <p role="alert" className="rounded-[var(--radius-control)] bg-danger-soft px-3 py-2 text-sm text-danger">
           {error}

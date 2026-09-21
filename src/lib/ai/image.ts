@@ -9,7 +9,11 @@ import { env } from "@/lib/env";
 export const IMAGE_ASPECTS = ["16:9", "1:1", "4:5", "9:16", "4:3", "3:2"] as const;
 export type ImageAspect = (typeof IMAGE_ASPECTS)[number];
 
-export const IMAGE_SIZES = ["2K", "4K"] as const;
+export const IMAGE_SIZES = ["1K", "2K", "4K"] as const;
+
+/** Modelos de imagem liberados no CMS (o padrão vem de GEMINI_IMAGE_MODEL). */
+export const IMAGE_MODELS = ["gemini-3-pro-image", "gemini-3.1-flash-image", "gemini-3.1-flash-lite-image"] as const;
+export type ImageModel = (typeof IMAGE_MODELS)[number];
 export type ImageSize = (typeof IMAGE_SIZES)[number];
 
 export type GeneratedImage = { bytes: Uint8Array; mime: string };
@@ -54,6 +58,7 @@ export async function generateImage(input: {
   prompt: string;
   aspect?: ImageAspect;
   size?: ImageSize;
+  model?: ImageModel;
   signal?: AbortSignal;
 }): Promise<GeneratedImage> {
   const key = env.geminiApiKey;
@@ -65,7 +70,7 @@ export async function generateImage(input: {
       method: "POST",
       headers: { "x-goog-api-key": key, "content-type": "application/json" },
       body: JSON.stringify({
-        model: env.geminiImageModel,
+        model: input.model ?? env.geminiImageModel,
         input: [{ type: "text", text: input.prompt }],
         response_format: {
           type: "image",

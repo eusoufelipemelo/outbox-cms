@@ -2,7 +2,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
 import { putImage } from "@/lib/storage";
-import { generateImage, imagesEnabled, IMAGE_ASPECTS, IMAGE_SIZES, ImageError } from "@/lib/ai/image";
+import { generateImage, imagesEnabled, IMAGE_ASPECTS, IMAGE_MODELS, IMAGE_SIZES, ImageError } from "@/lib/ai/image";
 import { MEDIA_COLUMNS, isUuid } from "@/lib/data/media";
 import { slugify } from "@/lib/utils";
 import { dayKey } from "@/components/agenda/dates";
@@ -14,6 +14,7 @@ const schema = z.object({
   prompt: z.string().trim().min(10, "Descreva a imagem em pelo menos 10 caracteres.").max(1200),
   aspect: z.enum(IMAGE_ASPECTS).optional(),
   size: z.enum(IMAGE_SIZES).optional(),
+  model: z.enum(IMAGE_MODELS).optional(),
   alt: z.string().trim().max(300).optional(),
   clientId: z.string().optional(),
 });
@@ -29,10 +30,10 @@ export async function POST(request: Request) {
   const body: unknown = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Pedido inválido." }, { status: 400 });
-  const { prompt, aspect, size, alt, clientId } = parsed.data;
+  const { prompt, aspect, size, model, alt, clientId } = parsed.data;
 
   try {
-    const { bytes, mime } = await generateImage({ prompt, aspect, size, signal: request.signal });
+    const { bytes, mime } = await generateImage({ prompt, aspect, size, model, signal: request.signal });
     const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
     const [year, month] = dayKey(new Date()).split("-");
     const base = slugify(prompt).slice(0, 50) || "imagem-ia";
