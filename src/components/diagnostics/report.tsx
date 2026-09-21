@@ -5,6 +5,7 @@ import { SCORE_LABELS, scoreTone, scoreWord } from "@/lib/diagnostics/scoring";
 import type { PageSpeedResult } from "@/lib/diagnostics/pagespeed";
 import type { Report } from "@/lib/diagnostics/report";
 import { AiSpotlight } from "./ai-spotlight";
+import { Reveal } from "./reveal";
 
 const toneText = { ok: "text-ok", warn: "text-warn", danger: "text-danger", neutral: "text-faint" } as const;
 const toneBar = { ok: "bg-ok", warn: "bg-warn", danger: "bg-danger", neutral: "bg-line-strong" } as const;
@@ -53,8 +54,8 @@ function Problems({ items }: { items: Report["problems"] }) {
   return (
     <ol className="divide-y divide-line rounded-[var(--radius-panel)] border border-line bg-surface">
       {items.map((p, i) => (
-        <li key={i} className="grid gap-4 p-5 break-inside-avoid md:grid-cols-[1fr_1fr]">
-          <div>
+        <Reveal key={i} delay={Math.min(i, 3) * 60} className="grid gap-4 p-5 break-inside-avoid md:grid-cols-[1fr_1fr] md:items-start">
+          <div className="reveal-problem">
             <div className="flex flex-wrap items-center gap-2">
               <span className={cn("rounded-full px-2.5 py-0.5 text-[12.5px] font-medium", severity[p.severity].cls)}>{severity[p.severity].label}</span>
               <span className="text-[13px] text-muted">{p.area}</span>
@@ -62,11 +63,16 @@ function Problems({ items }: { items: Report["problems"] }) {
             <p className="mt-2 text-[17px] font-semibold text-ink">{p.title}</p>
             <p className="mt-1 text-[15px] text-text">{p.impact}</p>
           </div>
-          <div className="rounded-[var(--radius-control)] bg-sunken p-4">
-            <p className="text-[13px] font-semibold text-ink">Como corrigimos</p>
-            <p className="mt-1 text-[15px] text-text">{p.fix}</p>
+          <div className="reveal-fix group relative flex gap-3 rounded-[var(--radius-control)] border border-ok/25 bg-ok-soft p-4 transition-[border-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-ok/60 hover:shadow-[var(--shadow-pop)]">
+            <span className="fix-check mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-ok text-surface">
+              <Check className="size-3.5" strokeWidth={3} aria-hidden />
+            </span>
+            <div>
+              <p className="text-[13px] font-semibold text-ok">Como corrigimos</p>
+              <p className="mt-1 text-[15px] text-text">{p.fix}</p>
+            </div>
           </div>
-        </li>
+        </Reveal>
       ))}
     </ol>
   );

@@ -314,6 +314,44 @@ body {
   }
 }
 
+/*
+  Relatório de diagnóstico: cada problema entra na tela e, logo depois, a correção
+  aparece em verde com o selo de check. Sem JavaScript, sem animação ou na impressão, tudo já aparece pronto.
+*/
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  .reveal .reveal-problem,
+  .reveal .reveal-fix {
+    transition:
+      opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 520ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 200ms,
+      box-shadow 200ms;
+  }
+  .reveal:not([data-shown]) .reveal-problem {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  .reveal:not([data-shown]) .reveal-fix {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  .reveal[data-shown] .reveal-problem {
+    transition-delay: var(--d, 0ms);
+  }
+  .reveal[data-shown] .reveal-fix {
+    transition-delay: calc(var(--d, 0ms) + 220ms), calc(var(--d, 0ms) + 220ms), 0ms, 0ms;
+  }
+  .reveal[data-shown] .fix-check {
+    animation: fix-check 480ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+    animation-delay: calc(var(--d, 0ms) + 460ms);
+  }
+}
+@keyframes fix-check {
+  from {
+    transform: scale(0);
+  }
+}
+
 /* Relatório de diagnóstico impresso / salvo em PDF: sempre claro, sem fundo cinza. */
 @media print {
   @page {
@@ -326,6 +364,11 @@ body {
   }
   [data-sonner-toaster] {
     display: none !important;
+  }
+  .reveal .reveal-problem,
+  .reveal .reveal-fix {
+    opacity: 1 !important;
+    transform: none !important;
   }
   /* no modo escuro, imprime com as cores do modo claro */
   html.dark {
