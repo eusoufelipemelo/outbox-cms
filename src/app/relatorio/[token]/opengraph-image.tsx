@@ -97,7 +97,7 @@ export async function reportOgImage(d: Diagnostic | null) {
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", alignItems: shot ? "stretch" : "flex-end", justifyContent: shot ? "space-between" : "flex-end", width: shot ? 420 : 300 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: shot ? "stretch" : "flex-end", justifyContent: shot ? "space-between" : "flex-end", width: 420 }}>
           {shot ? (
             <img src={shot} width={420} height={220} alt="" style={{ objectFit: "cover", borderRadius: 18, border: "2px solid #2b2d32" }} />
           ) : null}
