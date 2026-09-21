@@ -12,7 +12,46 @@ export type SiteChecks = {
   title?: string | null;
   description?: string | null;
   checks: Check[];
+  /** Frequência do blog medida pelo sitemap (datas de atualização dos artigos). */
+  blogActivity?: { posts: number; recent: number | null; lastPost: string | null };
 };
+
+const POST_PATH = /\/(blog|artigos?|conteudos?|noticias|posts?|insights|materias)\/[^/?#]+/i;
+
+function sitemapEntries(xml: string): { loc: string; lastmod: string | null }[] {
+  return [...xml.matchAll(/<(url|sitemap)>([\s\S]*?)<\/\1>/gi)].map((m) => ({
+    loc: m[2].match(/<loc>\s*(?:<!\[CDATA\[)?([^<\]]+)/i)?.[1]?.trim() ?? "",
+    lastmod: m[2].match(/<lastmod>\s*([^<]+)/i)?.[1]?.trim() ?? null,
+  }));
+}
+
+/** Conta artigos do blog no sitemap (segue até 4 sitemaps filhos) e quantos mudaram nos últimos 90 dias. */
+async function blogActivity(sitemapXml: string): Promise<SiteChecks["blogActivity"]> {
+  let entries = sitemapEntries(sitemapXml);
+  if (/<sitemapindex/i.test(sitemapXml)) {
+    const children = entries
+      .map((e) => e.loc)
+      .filter(Boolean)
+      .sort((a, b) => Number(/post|blog|artigo/i.test(b)) - Number(/post|blog|artigo/i.test(a)))
+      .slice(0, 4);
+    const xmls = await Promise.all(children.map((u) => fetchText(u)));
+    entries = xmls.flatMap((x) => (x && x.status < 400 ? sitemapEntries(x.text) : []));
+  }
+  const posts = entries.filter((e) => {
+    try {
+      return POST_PATH.test(new URL(e.loc).pathname);
+    } catch {
+      return false;
+    }
+  });
+  const dates = posts.map((p) => (p.lastmod ? Date.parse(p.lastmod) : NaN)).filter((d) => Number.isFinite(d));
+  const since = Date.now() - 90 * 86_400_000;
+  return {
+    posts: posts.length,
+    recent: dates.length ? dates.filter((d) => d >= since).length : null,
+    lastPost: dates.length ? new Date(Math.max(...dates)).toISOString() : null,
+  };
+}
 
 const AI_BOTS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "PerplexityBot", "Google-Extended"];
 
@@ -109,7 +148,9 @@ export async function checkSite(url: string): Promise<SiteChecks> {
   const noAlt = imgs.filter((t) => attr(t, "alt") === null).length;
   const whatsapp = /wa\.me\/|api\.whatsapp\.com|whatsapp:\/\//i.test(html);
   const tel = /href\s*=\s*["']tel:/i.test(html);
-  const blog = /href\s*=\s*["'][^"']*\/(blog|artigos|conteudos?|noticias)(\/|["'?#])/i.test(html);
+  const activity = sitemap && sitemap.status < 400 ? await blogActivity(sitemap.text).catch(() => undefined) : undefined;
+  const blogLink = /href\s*=\s*["'][^"']*\/(blog|artigos|conteudos?|noticias)(\/|["'?#])/i.test(html);
+  const blog = blogLink || (activity?.posts ?? 0) > 0;
   const words = decode(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]*>/g, " ")).split(" ").length;
   const robotsText = robots && robots.status < 400 ? robots.text : "";
   const blocked = blockedBots(robotsText);
@@ -144,5 +185,5 @@ export async function checkSite(url: string): Promise<SiteChecks> {
     { id: "tel", group: "conversao", label: "Telefone clicável", ok: tel, detail: tel ? "Encontrado." : "Telefone não é clicável no celular." },
   ];
 
-  return { ok: true, finalUrl: url, title, description, checks };
+  return { ok: true, finalUrl: url, title, description, checks, blogActivity: activity };
 }

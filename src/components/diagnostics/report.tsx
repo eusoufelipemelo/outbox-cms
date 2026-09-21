@@ -4,6 +4,7 @@ import type { Diagnostic } from "@/lib/data/diagnostics";
 import { SCORE_LABELS, scoreTone, scoreWord } from "@/lib/diagnostics/scoring";
 import type { PageSpeedResult } from "@/lib/diagnostics/pagespeed";
 import type { Report } from "@/lib/diagnostics/report";
+import { AiSpotlight } from "./ai-spotlight";
 
 const toneText = { ok: "text-ok", warn: "text-warn", danger: "text-danger", neutral: "text-faint" } as const;
 const toneBar = { ok: "bg-ok", warn: "bg-warn", danger: "bg-danger", neutral: "bg-line-strong" } as const;
@@ -245,6 +246,8 @@ export function DiagnosticReport({ d }: { d: Diagnostic }) {
           ))}
         </div>
       </Section>
+
+      <AiSpotlight d={d} />
 
       {report?.problems.length ? (
         <Section title="Principais problemas" description="Do mais urgente ao menos urgente, com o que cada um custa e como vamos resolver.">

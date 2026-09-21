@@ -64,6 +64,7 @@ export async function writeReport(input: {
     notas: input.scores,
     pagespeedCelular: compact(input.pagespeed.mobile),
     pagespeedComputador: compact(input.pagespeed.desktop),
+    blogFrequencia: input.site.blogActivity ?? null,
     checagensDoSite: input.site.ok ? input.site.checks.map((c) => ({ item: c.label, ok: c.ok, detalhe: c.detail })) : { erro: input.site.error },
     googleEmpresas: input.business.found
       ? { nome: input.business.name, categoria: input.business.category, nota: input.business.rating, avaliacoes: input.business.reviews, checagens: input.business.checks }
