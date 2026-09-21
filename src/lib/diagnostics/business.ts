@@ -78,7 +78,16 @@ export async function findBusiness(input: { url: string; name?: string | null; c
     return { found: false, query, error: "A busca no Google Empresas não respondeu.", checks: [] };
   }
 
-  const place = places.find((p) => host(p.websiteUri) === domain) ?? (input.name && !input.strict ? places[0] : undefined);
+  const norm = (v?: string | null) => (v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const wanted = norm(input.name);
+  const sameName = (p: Place) => {
+    const n = norm(p.displayName?.text);
+    return Boolean(wanted && n && (n.includes(wanted) || wanted.includes(n)));
+  };
+  const place =
+    places.find((p) => host(p.websiteUri) === domain) ??
+    places.find(sameName) ??
+    (input.name && !input.strict ? places[0] : undefined);
   if (!place) return { found: false, query, checks: [] };
 
   const reviews = place.userRatingCount ?? 0;

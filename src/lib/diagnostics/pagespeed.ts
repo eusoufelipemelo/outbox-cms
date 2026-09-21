@@ -57,6 +57,9 @@ export async function runPageSpeed(url: string, strategy: Strategy): Promise<Pag
     json = (await res.json()) as Record<string, unknown>;
     if (!res.ok) {
       const msg = ((json.error as { message?: string } | undefined)?.message ?? "").slice(0, 200);
+      if (/are blocked|API_KEY_SERVICE_BLOCKED|has not been used|is disabled/i.test(msg)) {
+        return { ...empty, error: "A chave do Google não está liberada para o PageSpeed Insights API. Ative a API e marque-a nas restrições da chave." };
+      }
       return { ...empty, error: res.status === 429 ? "Limite do PageSpeed atingido. Configure GOOGLE_API_KEY." : msg || `HTTP ${res.status}` };
     }
   } catch {
