@@ -60,6 +60,6 @@ export const env = {
     return process.env.GEMINI_API_KEY?.trim() || null;
   },
   get geminiImageModel() {
-    return process.env.GEMINI_IMAGE_MODEL?.trim() || "gemini-3.1-flash-image";
+    return process.env.GEMINI_IMAGE_MODEL?.trim() || "gemini-3-pro-image"; // Nano Banana Pro
   },
 };

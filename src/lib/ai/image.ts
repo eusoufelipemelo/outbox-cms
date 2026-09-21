@@ -9,6 +9,9 @@ import { env } from "@/lib/env";
 export const IMAGE_ASPECTS = ["16:9", "1:1", "4:5", "9:16", "4:3", "3:2"] as const;
 export type ImageAspect = (typeof IMAGE_ASPECTS)[number];
 
+export const IMAGE_SIZES = ["2K", "4K"] as const;
+export type ImageSize = (typeof IMAGE_SIZES)[number];
+
 export type GeneratedImage = { bytes: Uint8Array; mime: string };
 
 export class ImageError extends Error {
@@ -50,7 +53,7 @@ export function imagesEnabled(): boolean {
 export async function generateImage(input: {
   prompt: string;
   aspect?: ImageAspect;
-  size?: "1K" | "2K";
+  size?: ImageSize;
   signal?: AbortSignal;
 }): Promise<GeneratedImage> {
   const key = env.geminiApiKey;
@@ -71,7 +74,8 @@ export async function generateImage(input: {
           image_size: input.size ?? "2K",
         },
       }),
-      signal: input.signal ?? AbortSignal.timeout(180_000),
+      // o Pro em 4K demora mais
+      signal: input.signal ?? AbortSignal.timeout(240_000),
     });
   } catch {
     throw new ImageError("Não foi possível falar com o Gemini agora. Tente de novo em instantes.");

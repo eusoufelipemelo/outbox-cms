@@ -38,6 +38,7 @@ export function AiImagePanel({
   const [prompt, setPrompt] = useState(suggest ? `Imagem de capa para um artigo sobre ${suggest}.` : "");
   const [style, setStyle] = useState<string>(STYLES[0].value);
   const [aspect, setAspect] = useState<string>("16:9");
+  const [size, setSize] = useState<"2K" | "4K">("2K");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -74,7 +75,7 @@ export function AiImagePanel({
       const res = await fetch("/api/ai/imagem", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: `${prompt.trim()} Estilo: ${style}.`, aspect, clientId }),
+        body: JSON.stringify({ prompt: `${prompt.trim()} Estilo: ${style}.`, aspect, size, clientId }),
         signal: abort.current.signal,
       });
       const data = (await res.json().catch(() => ({}))) as Media & { error?: string };
@@ -113,7 +114,7 @@ export function AiImagePanel({
           placeholder="Ex.: bancada de marcenaria com ferramentas e um armário planejado ao fundo, luz de fim de tarde"
         />
       </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Estilo" htmlFor="ia-estilo">
           <Select id="ia-estilo" value={style} disabled={busy} onChange={(e) => setStyle(e.target.value)}>
             {STYLES.map((s) => (
@@ -132,6 +133,12 @@ export function AiImagePanel({
             ))}
           </Select>
         </Field>
+        <Field label="Resolução" htmlFor="ia-resolucao">
+          <Select id="ia-resolucao" value={size} disabled={busy} onChange={(e) => setSize(e.target.value as "2K" | "4K")}>
+            <option value="2K">2K (recomendada para blog)</option>
+            <option value="4K">4K (máxima, arquivo maior)</option>
+          </Select>
+        </Field>
       </div>
       {error ? (
         <p role="alert" className="rounded-[var(--radius-control)] bg-danger-soft px-3 py-2 text-sm text-danger">
@@ -145,7 +152,7 @@ export function AiImagePanel({
         </Button>
         {busy ? (
           <span className="text-[13px] text-muted tabular-nums">
-            {elapsed}s. Costuma levar de 10 a 40 segundos.{" "}
+            {elapsed}s. Costuma levar de 20 a 60 segundos.{" "}
             <button type="button" className="cursor-pointer underline underline-offset-4" onClick={() => abort.current?.abort()}>
               Cancelar
             </button>
