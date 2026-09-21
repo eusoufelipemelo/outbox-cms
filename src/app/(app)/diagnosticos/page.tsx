@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/env";
+import { aiStatus } from "@/lib/ai/server";
 import { listDiagnostics } from "@/lib/data/diagnostics";
 import { scoreTone } from "@/lib/diagnostics/scoring";
 import { PageHeader } from "@/components/ui/panel";
@@ -29,7 +30,7 @@ export default async function DiagnosticosPage() {
           Falta a chave GOOGLE_API_KEY no Easypanel. Sem ela o Google Empresas fica de fora e o PageSpeed pode recusar por limite de uso.
         </p>
       ) : null}
-      <NewDiagnosticForm />
+      <NewDiagnosticForm aiEnabled={aiStatus().enabled} />
 
       <section className="mt-10">
         <h2 className="text-[17px] font-semibold text-ink">Histórico</h2>

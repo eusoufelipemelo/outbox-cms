@@ -365,3 +365,5 @@ create table if not exists public.diagnostics (
 );
 create index if not exists diagnostics_created_idx on public.diagnostics (created_at desc);
 alter table public.diagnostics enable row level security;
+alter table public.diagnostics add column if not exists ai boolean not null default true;
+alter table public.diagnostics add column if not exists report_source text check (report_source in ('ai', 'template'));

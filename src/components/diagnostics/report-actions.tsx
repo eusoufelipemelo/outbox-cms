@@ -2,12 +2,12 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Link2, Printer, RotateCcw, Trash2 } from "lucide-react";
+import { Link2, Printer, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteDiagnostic, rerunDiagnostic } from "@/lib/data/diagnostic-actions";
 import { Button } from "@/components/ui/button";
 
-export function ReportActions({ id, shareUrl, done }: { id: string; shareUrl: string; done: boolean }) {
+export function ReportActions({ id, shareUrl, done, canUpgrade }: { id: string; shareUrl: string; done: boolean; canUpgrade: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
 
@@ -20,9 +20,9 @@ export function ReportActions({ id, shareUrl, done }: { id: string; shareUrl: st
     }
   };
 
-  const rerun = () =>
+  const rerun = (ai?: boolean) =>
     start(async () => {
-      const r = await rerunDiagnostic(id);
+      const r = await rerunDiagnostic(id, ai);
       if (r.ok) {
         toast.success("Diagnóstico reiniciado");
         router.refresh();
@@ -54,7 +54,13 @@ export function ReportActions({ id, shareUrl, done }: { id: string; shareUrl: st
           </Button>
         </>
       ) : null}
-      <Button variant="secondary" onClick={rerun} loading={pending}>
+      {canUpgrade ? (
+        <Button variant="secondary" onClick={() => rerun(true)} disabled={pending}>
+          <Sparkles className="size-4" aria-hidden />
+          Refazer com IA
+        </Button>
+      ) : null}
+      <Button variant="secondary" onClick={() => rerun()} loading={pending}>
         <RotateCcw className="size-4" aria-hidden />
         Refazer
       </Button>

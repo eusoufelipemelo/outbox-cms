@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase/admin";
 import { findBusiness, type BusinessResult } from "./business";
 import { runPageSpeed } from "./pagespeed";
 import { writeReport } from "./report";
+import { templateReport } from "./template-report";
 import { computeScores } from "./scoring";
 import { checkSite } from "./site-checks";
 
@@ -18,7 +19,7 @@ function nameFromTitle(title?: string | null): string | null {
 
 /** Executa o diagnóstico completo (1 a 2 minutos) e grava cada etapa na linha. */
 export async function runDiagnostic(id: string): Promise<void> {
-  const { data: row } = await db().from("diagnostics").select("url, business_name, city").eq("id", id).maybeSingle();
+  const { data: row } = await db().from("diagnostics").select("url, business_name, city, ai").eq("id", id).maybeSingle();
   if (!row) return;
   const url = row.url as string;
 
@@ -40,14 +41,22 @@ export async function runDiagnostic(id: string): Promise<void> {
     const scores = computeScores(pagespeed, site, business);
     await update(id, { business, scores, step: "Escrevendo o relatório e o plano de 6 a 12 meses" });
 
+    // IA (pago) quando escolhida; se falhar ou estiver desligada, cai no relatório padrão (gratuito).
+    const data = { url, scores, pagespeed, site, business };
     let report = null;
+    let source: "ai" | "template" = "template";
     let reportError: string | null = null;
-    try {
-      report = await writeReport({ url, scores, pagespeed, site, business });
-    } catch (err) {
-      reportError = err instanceof Error ? err.message : "Não foi possível escrever o relatório.";
+    if (row.ai) {
+      try {
+        report = await writeReport(data);
+        if (report) source = "ai";
+        else reportError = "A IA está desligada (sem ANTHROPIC_API_KEY). Usamos o relatório padrão.";
+      } catch (err) {
+        reportError = `A IA não respondeu (${err instanceof Error ? err.message : "erro desconhecido"}). Usamos o relatório padrão.`;
+      }
     }
-    await update(id, { report, status: "done", step: null, error: reportError, finished_at: new Date().toISOString() });
+    report ??= templateReport(data);
+    await update(id, { report, report_source: source, status: "done", step: null, error: reportError, finished_at: new Date().toISOString() });
   } catch (err) {
     await update(id, {
       status: "failed",

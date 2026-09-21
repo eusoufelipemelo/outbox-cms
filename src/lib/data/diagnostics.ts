@@ -20,6 +20,8 @@ export type Diagnostic = {
   site_checks: SiteChecks | null;
   business: BusinessResult | null;
   report: Report | null;
+  ai: boolean;
+  report_source: "ai" | "template" | null;
   share_token: string;
   created_at: string;
   finished_at: string | null;

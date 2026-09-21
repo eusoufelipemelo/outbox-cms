@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import type { ActionResult } from "@/lib/types";
 
-export function NewDiagnosticForm() {
+export function NewDiagnosticForm({ aiEnabled }: { aiEnabled: boolean }) {
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(createDiagnostic, null);
   const err = (k: string) => (state && !state.ok ? state.fieldErrors?.[k] : undefined);
 
@@ -32,6 +32,27 @@ export function NewDiagnosticForm() {
           </Button>
         </div>
       </Field>
+      <fieldset className="mt-4">
+        <legend className="text-sm font-medium text-ink">Texto do relatório</legend>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <label className="flex cursor-pointer gap-3 rounded-[var(--radius-control)] border border-line-strong p-3 has-[:checked]:border-ink has-[:checked]:bg-sunken">
+            <input type="radio" name="ai" value="off" defaultChecked={!aiEnabled} className="mt-1 accent-[var(--color-ink)]" />
+            <span>
+              <span className="block text-[14.5px] font-semibold text-ink">Padrão, gratuito</span>
+              <span className="block text-[13px] text-muted">Textos prontos da OutBox para cada problema encontrado. Fica pronto na hora.</span>
+            </span>
+          </label>
+          <label className={`flex gap-3 rounded-[var(--radius-control)] border border-line-strong p-3 has-[:checked]:border-ink has-[:checked]:bg-sunken ${aiEnabled ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}>
+            <input type="radio" name="ai" value="on" defaultChecked={aiEnabled} disabled={!aiEnabled} className="mt-1 accent-[var(--color-ink)]" />
+            <span>
+              <span className="block text-[14.5px] font-semibold text-ink">Escrito pela IA, cerca de R$ 0,40</span>
+              <span className="block text-[13px] text-muted">
+                {aiEnabled ? "Texto personalizado para o negócio do cliente, com o plano ligado aos problemas." : "Indisponível: configure ANTHROPIC_API_KEY."}
+              </span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
       <details className="group mt-4">
         <summary className="cursor-pointer text-sm text-muted hover:text-ink">
           Ajudar a achar o perfil no Google Empresas (opcional)

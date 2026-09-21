@@ -35,6 +35,7 @@ export async function createDiagnostic(_prev: ActionResult | null, formData: For
     business_name: formData.get("business_name") || undefined,
     city: formData.get("city") || undefined,
   });
+  const ai = formData.get("ai") === "on";
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
     for (const issue of parsed.error.issues) fieldErrors[String(issue.path[0])] ??= issue.message;
@@ -52,6 +53,7 @@ export async function createDiagnostic(_prev: ActionResult | null, formData: For
       url: parsed.data.url,
       business_name: parsed.data.business_name ?? null,
       city: parsed.data.city ?? null,
+      ai,
       created_by: user.id,
       step: "Na fila",
     })
@@ -64,11 +66,11 @@ export async function createDiagnostic(_prev: ActionResult | null, formData: For
   redirect(`/diagnosticos/${data.id}`);
 }
 
-export async function rerunDiagnostic(id: string): Promise<ActionResult> {
+export async function rerunDiagnostic(id: string, ai?: boolean): Promise<ActionResult> {
   await requireUser();
   const { error } = await db()
     .from("diagnostics")
-    .update({ status: "running", step: "Na fila", error: null, created_at: new Date().toISOString(), finished_at: null })
+    .update({ ...(typeof ai === "boolean" ? { ai } : {}), status: "running", step: "Na fila", error: null, created_at: new Date().toISOString(), finished_at: null })
     .eq("id", id);
   if (error) return { ok: false, error: "Não foi possível refazer o diagnóstico." };
   after(() => runDiagnostic(id));

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/env";
+import { aiStatus } from "@/lib/ai/server";
 import { getDiagnostic } from "@/lib/data/diagnostics";
 import { DiagnosticReport } from "@/components/diagnostics/report";
 import { LiveProgress } from "@/components/diagnostics/live-progress";
@@ -26,7 +27,12 @@ export default async function DiagnosticoPage({ params }: PageProps<"/diagnostic
           <ArrowLeft className="size-4" aria-hidden />
           Diagnósticos
         </Link>
-        <ReportActions id={d.id} shareUrl={shareUrl} done={d.status === "done"} />
+        <ReportActions
+          id={d.id}
+          shareUrl={shareUrl}
+          done={d.status === "done"}
+          canUpgrade={d.status === "done" && d.report_source !== "ai" && aiStatus().enabled}
+        />
       </div>
 
       {d.status === "running" ? (
@@ -45,10 +51,11 @@ export default async function DiagnosticoPage({ params }: PageProps<"/diagnostic
         </div>
       ) : (
         <>
-          {d.error && !d.report ? (
-            <p className="mb-6 rounded-[var(--radius-control)] bg-warn-soft px-4 py-3 text-sm text-warn print:hidden">
-              As medições ficaram prontas, mas o texto do relatório não: {d.error} Clique em Refazer para tentar de novo.
-            </p>
+          <p className="mb-6 text-[13px] text-muted print:hidden">
+            {d.report_source === "ai" ? "Texto escrito pela IA." : "Texto padrão da OutBox (gratuito)."} Só a equipe vê este aviso.
+          </p>
+          {d.error ? (
+            <p className="mb-6 rounded-[var(--radius-control)] bg-warn-soft px-4 py-3 text-sm text-warn print:hidden">{d.error}</p>
           ) : null}
           <DiagnosticReport d={d} />
         </>
