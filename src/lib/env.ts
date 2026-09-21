@@ -62,4 +62,8 @@ export const env = {
   get geminiImageModel() {
     return process.env.GEMINI_IMAGE_MODEL?.trim() || "gemini-3-pro-image"; // Nano Banana Pro
   },
+  /** Opcional: chave do Google Cloud para o Diagnóstico (PageSpeed Insights API + Places API). */
+  get googleApiKey() {
+    return process.env.GOOGLE_API_KEY?.trim() || null;
+  },
 };

@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-// Rotas abertas: Content API pública, script de embed, agendador e o retorno dos links de e-mail/Google.
-const PUBLIC_PREFIXES = ["/api/v1", "/embed.js", "/api/cron", "/api/health", "/auth/"];
+// Rotas abertas: Content API pública, script de embed, agendador, retorno dos links de e-mail/Google e relatórios de diagnóstico (por token).
+const PUBLIC_PREFIXES = ["/api/v1", "/embed.js", "/api/cron", "/api/health", "/auth/", "/relatorio"];
 // Telas de entrada: abrem sem login (o proxy só renova a sessão, nunca redireciona).
 // /redefinir-senha e /aguardando-aprovacao conferem a sessão na própria página.
 const AUTH_PAGES = ["/login", "/cadastro", "/esqueci-senha", "/redefinir-senha", "/aguardando-aprovacao"];

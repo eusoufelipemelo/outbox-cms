@@ -313,3 +313,40 @@ body {
     animation: none !important;
   }
 }
+
+/* Relatório de diagnóstico impresso / salvo em PDF: sempre claro, sem fundo cinza. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  html,
+  body,
+  .bg-paper {
+    background: #fff !important;
+  }
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+  /* no modo escuro, imprime com as cores do modo claro */
+  html.dark {
+    color-scheme: light;
+    --color-paper: #ffffff;
+    --color-surface: #ffffff;
+    --color-sunken: #f7f8f9;
+    --color-ink: #000000;
+    --color-text: #1d1e22;
+    --color-muted: #5c5f68;
+    --color-faint: #80838c;
+    --color-line: #e3e4e8;
+    --color-line-strong: #cdd0d6;
+    --color-brand-ink: #b3361a;
+    --color-ok: #157a45;
+    --color-ok-soft: #e4f3ea;
+    --color-warn: #8a5a00;
+    --color-warn-soft: #fff3d1;
+    --color-danger: #b42318;
+    --color-danger-soft: #fdecea;
+    --color-info: #1f5fbf;
+    --color-info-soft: #e8f0fc;
+  }
+}

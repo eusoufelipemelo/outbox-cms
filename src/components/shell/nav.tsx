@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { CalendarDays, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
+import { CalendarDays, Gauge, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -15,6 +15,7 @@ const items = [
   { href: "/pautas", label: "Pautas", icon: Lightbulb },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/midia", label: "Mídia", icon: Images },
+  { href: "/diagnosticos", label: "Diagnóstico", icon: Gauge },
   { href: "/integracoes", label: "Integrações", icon: Plug },
 ];
 
@@ -126,12 +127,12 @@ export function AppNav({ user, pendingCount = 0, signOut }: ShellProps) {
   return (
     <>
       {/* desktop */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[248px] border-r border-line bg-surface lg:block">
+      <aside className="print:hidden fixed inset-y-0 left-0 z-30 hidden w-[248px] border-r border-line bg-surface lg:block">
         <SidebarBody user={user} pendingCount={pendingCount} signOut={signOut} />
       </aside>
 
       {/* mobile */}
-      <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-surface/95 px-4 backdrop-blur lg:hidden">
+      <div className="print:hidden sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-surface/95 px-4 backdrop-blur lg:hidden">
         <Link href="/" aria-label="OutBox CMS">
           <Image src="/brand/logo-horizontal.svg" alt="OutBox" width={104} height={26} priority className="dark:hidden" />
           <Image src="/brand/logo-horizontal-branco.svg" alt="OutBox" width={104} height={26} priority className="hidden dark:block" />

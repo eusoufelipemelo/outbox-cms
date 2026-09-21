@@ -77,7 +77,7 @@ function supportsAdaptive(model: string): boolean {
 }
 
 type Effort = "low" | "medium" | "high";
-type CallConfig = { maxTokens: number; timeoutMs: number; effort: Effort };
+export type CallConfig = { maxTokens: number; timeoutMs: number; effort: Effort };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -91,7 +91,7 @@ function retryDelayMs(err: InstanceType<typeof Anthropic.APIError>): number {
   return 2000 + Math.round(Math.random() * 1000);
 }
 
-async function generate<S extends z.ZodType>(
+export async function generate<S extends z.ZodType>(
   schema: S,
   prompt: Prompt,
   cfg: CallConfig,

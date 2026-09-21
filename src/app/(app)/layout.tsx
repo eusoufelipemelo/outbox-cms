@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         signOut={signOut}
       />
       <ProfileGate complete={user.profileComplete} />
-      <main className="lg:pl-[248px]">
+      <main className="lg:pl-[248px] print:pl-0">
         <div className="mx-auto w-full max-w-[1240px] px-4 py-8 sm:px-6 lg:px-10 lg:py-10">{children}</div>
       </main>
     </div>

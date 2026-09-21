@@ -24,7 +24,7 @@ Idioma da interface: português do Brasil. Modo light apenas.
   (exceto domínios de `AUTO_APPROVE_DOMAINS`). O primeiro perfil criado vira admin.
 - Telas de entrada em `src/app/(entrada)/` (login, cadastro, esqueci-senha, redefinir-senha, aguardando-aprovacao);
   retorno dos links do Supabase em `src/app/auth/callback/route.ts`. Mensagens de erro em `src/lib/auth-errors.ts`.
-- Rotas públicas (sem login) ficam em `/api/v1/*`, `/embed.js`, `/api/cron/*`, `/api/health`, `/auth/*` — liberadas em `src/proxy.ts`
+- Rotas públicas (sem login) ficam em `/api/v1/*`, `/embed.js`, `/api/cron/*`, `/api/health`, `/auth/*`, `/relatorio/*` (diagnóstico por token) — liberadas em `src/proxy.ts`
   (`PUBLIC_PREFIXES`); as telas de entrada ficam em `AUTH_PAGES` (sessão renovada, sem redirecionar).
   Elas autenticam pelo `sites.public_key` (Content API) ou `CRON_SECRET`.
 - Nunca exponha `wp_app_password`, `webhook_secret` ou a service role ao cliente, exceto o
