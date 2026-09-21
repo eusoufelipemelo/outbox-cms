@@ -11,6 +11,7 @@ import { isUuid } from "@/lib/data/sites";
 import { Panel } from "@/components/ui/panel";
 import { AreaChart, BarList, ColumnChart, StatTile } from "@/components/dashboard/charts";
 import { DashboardFilters } from "@/components/dashboard/filters";
+import { LiveReaders } from "@/components/dashboard/live-readers";
 import { monthName, todayKey } from "@/components/agenda/dates";
 
 export const metadata: Metadata = { title: "Painel" };
@@ -110,11 +111,14 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
 
       {/* Gráficos */}
       <div className="mb-6 grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <Panel title="Leituras por dia" description={`Visitas aos artigos nos sites dos clientes, últimos ${period} dias.`}>
-          <AreaChart points={analytics.viewsSeries} unit={["leitura", "leituras"]} caption={`Leituras por dia nos últimos ${period} dias`} />
-        </Panel>
+        <LiveReaders />
         <Panel title="Artigos por cliente" description={`Publicados nos últimos ${period} dias.`}>
           <BarList items={analytics.byClient.slice(0, 8)} unit={["artigo", "artigos"]} empty="Nenhum artigo publicado no período." />
+        </Panel>
+      </div>
+      <div className="mb-6 grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <Panel title="Leituras por dia" description={`Visitas aos artigos nos sites dos clientes, últimos ${period} dias.`}>
+          <AreaChart points={analytics.viewsSeries} unit={["leitura", "leituras"]} caption={`Leituras por dia nos últimos ${period} dias`} />
         </Panel>
       </div>
       <div className="mb-8">
