@@ -1261,6 +1261,7 @@ export function ArticleEditor({
         open={picker !== null}
         onClose={() => setPicker(null)}
         clientId={primaryClientId}
+        suggest={draft.title.trim() || draft.focusKeyword.trim() || undefined}
         onSelect={(m) => {
           if (picker === "cover") update({ coverUrl: m.url, coverAlt: m.alt ?? "" });
           else if (picker === "inline" && editor) editor.chain().focus().setImage({ src: m.url, alt: m.alt ?? "" }).run();

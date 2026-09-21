@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { updateMediaAlt } from "@/lib/data/media-actions";
 import type { Media } from "@/lib/types";
+import { AiImagePanel } from "./ai-image";
 import { cn } from "@/lib/utils";
 import { MEDIA_ALT_MAX } from "./constants";
 import { UploadBox, UploadQueue } from "./dropzone";
@@ -14,7 +15,12 @@ import { fetchMediaPage, mergeMedia } from "./client-api";
 import { Thumb } from "./thumb";
 import { useUploader } from "./upload";
 
-type Tab = "biblioteca" | "enviar";
+type Tab = "biblioteca" | "enviar" | "ia";
+const TABS: [Tab, string][] = [
+  ["biblioteca", "Biblioteca"],
+  ["enviar", "Enviar"],
+  ["ia", "Gerar com IA"],
+];
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -32,14 +38,17 @@ export function MediaPicker({
   onClose,
   onSelect,
   clientId,
+  suggest,
 }: {
   open: boolean;
   onClose: () => void;
   onSelect: (m: { url: string; alt: string | null }) => void;
   clientId?: string;
+  /** Tema do artigo: prepara a descrição da imagem gerada por IA. */
+  suggest?: string;
 }) {
   if (!open || typeof document === "undefined") return null;
-  return createPortal(<PickerDialog onClose={onClose} onSelect={onSelect} clientId={clientId} />, document.body);
+  return createPortal(<PickerDialog onClose={onClose} onSelect={onSelect} clientId={clientId} suggest={suggest} />, document.body);
 }
 
 type Result = { key: string; items: Media[]; hasMore: boolean; page: number; error?: string };
@@ -48,16 +57,18 @@ function PickerDialog({
   onClose,
   onSelect,
   clientId,
+  suggest,
 }: {
   onClose: () => void;
   onSelect: (m: { url: string; alt: string | null }) => void;
   clientId?: string;
+  suggest?: string;
 }) {
   const uid = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const altRef = useRef<HTMLInputElement>(null);
-  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ biblioteca: null, enviar: null });
+  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ biblioteca: null, enviar: null, ia: null });
 
   const [tab, setTab] = useState<Tab>("biblioteca");
   const [search, setSearch] = useState("");
@@ -178,8 +189,10 @@ function PickerDialog({
   function onTabKey(e: React.KeyboardEvent<HTMLButtonElement>) {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft" && e.key !== "Home" && e.key !== "End") return;
     e.preventDefault();
-    const next: Tab = tab === "biblioteca" ? "enviar" : "biblioteca";
-    const target = e.key === "Home" ? "biblioteca" : e.key === "End" ? "enviar" : next;
+    const order = TABS.map(([id]) => id);
+    const i = order.indexOf(tab);
+    const next = order[(i + (e.key === "ArrowLeft" ? order.length - 1 : 1)) % order.length];
+    const target = e.key === "Home" ? order[0] : e.key === "End" ? order[order.length - 1] : next;
     setTab(target);
     tabRefs.current[target]?.focus();
   }
@@ -211,8 +224,7 @@ function PickerDialog({
             <div role="tablist" aria-label="Origem da imagem" className="mt-3 flex gap-1">
               {(
                 [
-                  ["biblioteca", "Biblioteca"],
-                  ["enviar", "Enviar"],
+                  ...TABS,
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -350,6 +362,25 @@ function PickerDialog({
           <UploadBox onFiles={(files) => void handleFiles(files)} compact />
           <UploadQueue items={uploader.items} onDismiss={uploader.dismiss} />
           <p className="text-[13px] text-muted">Depois do envio, a imagem fica selecionada para você escrever o texto alternativo.</p>
+        </div>
+
+        <div
+          role="tabpanel"
+          id={`${uid}-painel-ia`}
+          aria-labelledby={`${uid}-tab-ia`}
+          hidden={tab !== "ia"}
+          className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
+        >
+          <AiImagePanel
+            suggest={suggest}
+            clientId={clientId}
+            onGenerated={(media) => {
+              setSelected(media);
+              setAlt(media.alt ?? "");
+              setTab("biblioteca");
+              setResult((cur) => (cur ? { ...cur, items: [media, ...cur.items] } : cur));
+            }}
+          />
         </div>
 
         <footer className="border-t border-line bg-surface px-5 py-4">

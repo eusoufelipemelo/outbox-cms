@@ -55,4 +55,11 @@ export const env = {
     if (!accountId || !accessKeyId || !secretAccessKey || !bucket || !publicUrl) return null;
     return { accountId, accessKeyId, secretAccessKey, bucket, publicUrl };
   },
+  /** Opcional: geração de imagens com o Gemini (Nano Banana). */
+  get geminiApiKey() {
+    return process.env.GEMINI_API_KEY?.trim() || null;
+  },
+  get geminiImageModel() {
+    return process.env.GEMINI_IMAGE_MODEL?.trim() || "gemini-3.1-flash-image";
+  },
 };
