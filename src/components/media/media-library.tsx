@@ -12,6 +12,9 @@ import type { Media } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { MEDIA_ALT_MAX, formatBytes } from "./constants";
 import { DropArea, HiddenFileInput, UploadBox, UploadQueue, type FilePickerHandle } from "./dropzone";
+import { AiImagePanel } from "./ai-image";
+import { Panel } from "@/components/ui/panel";
+import { Sparkles } from "lucide-react";
 import { Thumb } from "./thumb";
 import { useUploader } from "./upload";
 import { fetchMediaPage, mergeMedia, type MediaPageResult as Page } from "./client-api";
@@ -215,6 +218,7 @@ export function MediaLibrary({
   const [search, setSearch] = useState(q);
   const [, startNav] = useTransition();
   const picker = useRef<FilePickerHandle>(null);
+  const [generating, setGenerating] = useState(false);
 
   // Novo filtro vindo do servidor: recomeça a lista.
   if (shownKey !== filterKey) {
@@ -268,6 +272,9 @@ export function MediaLibrary({
       <div className="space-y-4">
         <UploadBox onFiles={addFiles} title="Envie a primeira imagem" />
         <UploadQueue items={uploader.items} onDismiss={uploader.dismiss} />
+        <Panel title="Gerar com IA" description="Crie a imagem aqui mesmo, sem depender de banco de imagens.">
+          <AiImagePanel clientId={clientId ?? undefined} onGenerated={(m) => setItems((prev) => [m, ...prev])} />
+        </Panel>
       </div>
     );
   }
@@ -297,6 +304,10 @@ export function MediaLibrary({
           className="w-full sm:w-auto"
         />
         <div className="flex w-full items-center gap-3 sm:ml-auto sm:w-auto">
+          <Button variant="secondary" onClick={() => setGenerating((g) => !g)} aria-expanded={generating} className="w-full justify-center sm:w-auto">
+            <Sparkles className="size-4" aria-hidden />
+            Gerar com IA
+          </Button>
           <Button onClick={() => picker.current?.open()} className="w-full justify-center sm:w-auto">
             <ImageUp className="size-4" aria-hidden />
             Enviar imagens
@@ -309,6 +320,21 @@ export function MediaLibrary({
         Arraste imagens para esta área para enviar.{" "}
         {currentClient ? `Elas ficam associadas a ${currentClient}.` : "Filtre por cliente antes para associar as imagens a ele."}
       </p>
+
+      {generating ? (
+        <div className="mb-5">
+          <Panel title="Gerar imagem com IA" description="A imagem entra na biblioteca e pode ser usada em qualquer artigo.">
+            <AiImagePanel
+              clientId={clientId ?? undefined}
+              onGenerated={(m) => {
+                setItems((prev) => [m, ...prev.filter((p) => p.id !== m.id)]);
+                setGenerating(false);
+                toast.success("Imagem gerada e salva na biblioteca.");
+              }}
+            />
+          </Panel>
+        </div>
+      ) : null}
 
       <UploadQueue items={uploader.items} onDismiss={uploader.dismiss} className="mb-5" />
 
