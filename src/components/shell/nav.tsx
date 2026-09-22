@@ -4,13 +4,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { CalendarDays, Gauge, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
+import { CalendarDays, Gauge, Map as MapIcon, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 
 const items = [
   { href: "/", label: "Painel", icon: LayoutGrid, exact: true },
   { href: "/clientes", label: "Clientes e sites", icon: Users },
+  { href: "/mapa", label: "Mapa", icon: MapIcon },
   { href: "/artigos", label: "Artigos", icon: FileText },
   { href: "/pautas", label: "Pautas", icon: Lightbulb },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },

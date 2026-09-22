@@ -115,15 +115,19 @@ export function ClientsMap({ clients }: { clients: MapClient[] }) {
                 />
               );
             })}
-            {/* sigla sobre os estados com clientes */}
-            {ranking.map((s) => {
-              const shape = UF_SHAPES.find((u) => u.uf === s.uf);
+            {/* marcador com o número de clientes, no ponto do estado mais afastado das bordas */}
+            {ranking.map((st) => {
+              const shape = UF_SHAPES.find((u) => u.uf === st.uf);
               if (!shape) return null;
-              const c = centroid(shape.d);
+              const n = st.clients.length;
+              const r = n > 9 ? 17 : 15;
               return (
-                <text key={s.uf} x={c.x} y={c.y} textAnchor="middle" dominantBaseline="central" className="pointer-events-none fill-ink text-[15px] font-bold select-none" style={{ paintOrder: "stroke", stroke: "var(--color-surface)", strokeWidth: 3 }}>
-                  {s.clients.length}
-                </text>
+                <g key={st.uf} className="pointer-events-none select-none" aria-hidden>
+                  <circle cx={shape.lx} cy={shape.ly} r={r} fill="var(--color-ink)" stroke="var(--color-surface)" strokeWidth={3} />
+                  <text x={shape.lx} y={shape.ly} dy="0.35em" textAnchor="middle" fill="var(--color-on-ink)" fontSize={15} fontWeight={700} style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {n}
+                  </text>
+                </g>
               );
             })}
           </svg>
@@ -254,13 +258,4 @@ function ClientList({ clients }: { clients: MapClient[] }) {
         ))}
     </ul>
   );
-}
-
-/** Centro aproximado do contorno (média dos vértices do maior anel). */
-function centroid(d: string): { x: number; y: number } {
-  const ring = d.split("Z")[0];
-  const pts = [...ring.matchAll(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g)].map((m) => [Number(m[1]), Number(m[2])]);
-  const xs = pts.map((p) => p[0]);
-  const ys = pts.map((p) => p[1]);
-  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
 }
