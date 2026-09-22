@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { runAi, generate, aiStatus } from "@/lib/ai/server";
 import { sanitizeAiHtml, plainText } from "@/lib/ai/sanitize";
 import { generateImage, imagesEnabled, type ImageModel } from "@/lib/ai/image";
+import { visualDirection, type VisualClient } from "@/lib/ai/visual";
 import { putImage } from "@/lib/storage";
 import { publishPost } from "@/lib/delivery";
 import { countWords, readingMinutes, slugify } from "@/lib/utils";
@@ -81,9 +82,9 @@ Devolva a categoria e as etiquetas.`,
 }
 
 /** Descrição de cena para a capa: a IA escreve o prompt da imagem a partir do artigo. */
-async function coverPrompt(input: { title: string; summary: string; segment: string | null; city: string | null }): Promise<{ prompt: string; alt: string }> {
+async function coverPrompt(input: { title: string; summary: string; segment: string | null; city: string | null; identity: string }): Promise<{ prompt: string; alt: string }> {
   const fallback = {
-    prompt: `Fotografia editorial profissional relacionada a "${input.title}"${input.segment ? `, no contexto de ${input.segment}` : ""}${input.city ? `, no Brasil (${input.city})` : ", no Brasil"}. Luz natural, cena real de trabalho, profundidade de campo suave, sem texto e sem logotipos.`,
+    prompt: `Editorial photograph about "${input.title}"${input.segment ? `, in the context of ${input.segment}` : ""}${input.city ? `, in Brazil (${input.city})` : ", in Brazil"}. Real working scene, natural light, shallow depth of field, no text and no logos.${input.identity}`,
     alt: input.title,
   };
   if (!env.anthropicApiKey) return fallback;
@@ -96,18 +97,19 @@ async function coverPrompt(input: { title: string; summary: string; segment: str
       {
         system:
           "Você dirige a fotografia de capa de artigos de blog da agência OutBox. Cria cenas reais, brasileiras quando fizer sentido, sem texto na imagem, sem colagens e sem clichê de banco de imagens genérico.",
-        user: `Artigo: "${input.title}"\nResumo: ${input.summary}\nSegmento do cliente: ${input.segment ?? "não informado"}\nCidade: ${input.city ?? "não informada"}\n\nEscreva o prompt da imagem de capa (16:9).`,
+        user: `Artigo: "${input.title}"\nResumo: ${input.summary}\nSegmento do cliente: ${input.segment ?? "não informado"}\nCidade: ${input.city ?? "não informada"}${input.identity ? `\nIdentidade visual da marca (respeite): ${input.identity}` : ""}\n\nEscreva o prompt da imagem de capa (16:9).`,
       },
       { maxTokens: 1200, timeoutMs: 60_000, effort: "low" },
     );
-    return { prompt: `${out.prompt} Editorial photography, natural light, no text, no logos, no watermark.`, alt: out.alt.slice(0, 160) };
+    return { prompt: `${out.prompt} Editorial photography, no text, no logos, no watermark.${input.identity}`, alt: out.alt.slice(0, 160) };
   } catch {
     return fallback;
   }
 }
 
-async function makeCover(a: AutomationRow, article: { title: string; summary: string }, client: { segment: string | null; city: string | null }) {
-  const { prompt, alt } = await coverPrompt({ title: article.title, summary: article.summary, segment: client.segment, city: client.city });
+async function makeCover(a: AutomationRow, article: { title: string; summary: string }, client: { segment: string | null; city: string | null } & VisualClient) {
+  const identity = visualDirection(client);
+  const { prompt, alt } = await coverPrompt({ title: article.title, summary: article.summary, segment: client.segment, city: client.city, identity });
   const { bytes, mime } = await generateImage({ prompt, aspect: "16:9", size: "2K", model: a.cover_model as ImageModel });
   const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
   const [year, month] = dayKey(new Date()).split("-");
@@ -130,14 +132,14 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
   try {
     if (!aiStatus().enabled) throw new Error("Assistente de IA desligado: falta ANTHROPIC_API_KEY.");
 
-    const { data: clientRow } = await db().from("clients").select("name, segment, city, expert_name, contract_end").eq("id", a.client_id).maybeSingle();
+    const { data: clientRow } = await db().from("clients").select("name, segment, city, expert_name, contract_end, brand_color, image_style, image_mood").eq("id", a.client_id).maybeSingle();
     const client = (clientRow ?? { name: "cliente", segment: null, city: null, expert_name: null, contract_end: null }) as {
       name: string;
       segment: string | null;
       city: string | null;
       expert_name: string | null;
       contract_end: string | null;
-    };
+    } & VisualClient;
     if (client.contract_end && client.contract_end < new Date().toISOString().slice(0, 10)) {
       throw new Error(`Contrato de ${client.name} venceu em ${client.contract_end.split("-").reverse().join("/")}. Renove a data no cadastro do cliente.`);
     }

@@ -426,3 +426,6 @@ create trigger automations_touch before update on public.automations
 alter table public.automations add column if not exists author_name text;
 alter table public.clients add column if not exists contract_start date;
 alter table public.clients add column if not exists contract_end date;
+alter table public.clients add column if not exists image_style text;
+alter table public.clients add column if not exists image_mood text not null default 'auto'
+  check (image_mood in ('auto', 'escuro', 'claro', 'colorido', 'monocromatico'));

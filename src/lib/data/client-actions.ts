@@ -50,6 +50,8 @@ const clientSchema = z.object({
   brand_color: text(7).refine((v) => v === null || /^#[0-9a-f]{6}$/i.test(v), {
     error: "Use o formato #RRGGBB, por exemplo #1F5FBF.",
   }),
+  image_style: text(600),
+  image_mood: z.enum(["auto", "escuro", "claro", "colorido", "monocromatico"]).catch("auto"),
   tone_of_voice: text(2000),
   audience: text(1000),
   keywords: z.array(z.string().max(60, "Cada palavra-chave pode ter no máximo 60 caracteres.")).max(40, "Use no máximo 40 palavras-chave."),
@@ -134,6 +136,8 @@ export async function saveClient(_prev: ActionResult<{ id: string }> | null, for
     state: str("state"),
     logo_url: str("logo_url"),
     brand_color: str("brand_color"),
+    image_style: str("image_style"),
+    image_mood: str("image_mood") || "auto",
     tone_of_voice: str("tone_of_voice"),
     audience: str("audience"),
     keywords: readTags(formData, "keywords"),

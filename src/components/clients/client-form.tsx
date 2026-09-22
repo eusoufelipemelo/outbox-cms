@@ -12,6 +12,7 @@ import { MediaPicker } from "@/components/media/media-picker";
 import { saveClient } from "@/lib/data/client-actions";
 import type { ActionResult, Client } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { IMAGE_MOODS } from "@/lib/ai/visual";
 import { CLIENT_STATUS, CLIENT_STATUSES, UFS } from "./options";
 
 type State = ActionResult<{ id: string }> | null;
@@ -274,6 +275,35 @@ export function ClientForm({ client }: { client?: Client }) {
                   </option>
                 ))}
               </Select>
+            </Field>
+            <Field
+              label="Tom das imagens"
+              htmlFor="image_mood"
+              error={err("image_mood")}
+              hint="Aplicado a toda imagem gerada por IA para este cliente."
+            >
+              <Select id="image_mood" name="image_mood" defaultValue={client?.image_mood ?? "auto"}>
+                {IMAGE_MOODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field
+              label="Estilo das imagens"
+              htmlFor="image_style"
+              error={err("image_style")}
+              hint="Ex.: fundo escuro quase preto, detalhes em laranja, fotografia editorial de marcenaria."
+            >
+              <Textarea
+                id="image_style"
+                name="image_style"
+                rows={2}
+                maxLength={600}
+                defaultValue={client?.image_style ?? ""}
+                aria-invalid={invalid("image_style")}
+              />
             </Field>
             <Field label="Início do contrato" htmlFor="contract_start" error={err("contract_start")} hint="Quando o cliente entrou.">
               <Input id="contract_start" name="contract_start" type="date" defaultValue={client?.contract_start ?? ""} aria-invalid={invalid("contract_start")} />

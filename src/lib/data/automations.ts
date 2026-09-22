@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase/admin";
 import { aiStatus } from "@/lib/ai/server";
 import { imagesEnabled } from "@/lib/ai/image";
 import { telegramEnabled, connectLink, botUsername, getWebhookInfo } from "@/lib/automation/telegram";
+import { visualSummary, type VisualClient } from "@/lib/ai/visual";
 import type { ContentType } from "@/lib/types";
 
 export type Automation = {
@@ -33,6 +34,8 @@ export type AutomationClient = {
   city: string | null;
   expertName: string | null;
   contractEnd: string | null;
+  /** Resumo da identidade visual usada nas capas ("escuro, cor #F15532, estilo próprio"). */
+  visual: string | null;
   sites: { id: string; name: string; status: string }[];
   automation: Automation | null;
   connectUrl: string | null;
@@ -57,12 +60,12 @@ const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
 /** Clientes ativos com a automação de cada um (se houver). */
 export async function listAutomationClients(): Promise<AutomationClient[]> {
   const [{ data: clients }, { data: autos }, bot] = await Promise.all([
-    db().from("clients").select("id, name, segment, city, status, expert_name, contract_end, sites(id, name, status)").neq("status", "archived"),
+    db().from("clients").select("id, name, segment, city, status, expert_name, contract_end, brand_color, image_style, image_mood, sites(id, name, status)").neq("status", "archived"),
     db().from("automations").select("*"),
     botUsername(),
   ]);
   const byClient = new Map(((autos ?? []) as Automation[]).map((a) => [a.client_id, a]));
-  type Row = AutomationClient & { status: string; expert_name: string | null; contract_end: string | null };
+  type Row = AutomationClient & { status: string; expert_name: string | null; contract_end: string | null } & VisualClient;
   return ((clients ?? []) as unknown as Row[])
     .map((c) => {
       const automation = byClient.get(c.id) ?? null;
@@ -73,6 +76,7 @@ export async function listAutomationClients(): Promise<AutomationClient[]> {
         city: c.city,
         expertName: c.expert_name,
         contractEnd: c.contract_end,
+        visual: visualSummary(c),
         sites: [...(c.sites ?? [])].sort((a, b) => collator.compare(a.name, b.name)),
         automation,
         connectUrl: automation ? connectLink(automation.telegram_link_code, bot) : null,

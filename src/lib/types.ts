@@ -23,6 +23,9 @@ export interface Client {
   state: string | null;
   logo_url: string | null;
   brand_color: string | null;
+  /** Identidade visual das imagens geradas por IA. */
+  image_style: string | null;
+  image_mood: "auto" | "escuro" | "claro" | "colorido" | "monocromatico";
   tone_of_voice: string | null;
   audience: string | null;
   keywords: string[];

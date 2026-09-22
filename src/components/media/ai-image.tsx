@@ -66,6 +66,7 @@ export function AiImagePanel({
   const [model, setModel] = useState<string>(MODELS[0].value);
   const [size, setSize] = useState<string>("2K");
   const current = MODELS.find((m) => m.value === model) ?? MODELS[0];
+  const [useClientStyle, setUseClientStyle] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -102,7 +103,7 @@ export function AiImagePanel({
       const res = await fetch("/api/ai/imagem", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: `${prompt.trim()} Estilo: ${style}.`, aspect, size, model, clientId }),
+        body: JSON.stringify({ prompt: `${prompt.trim()} Estilo: ${style}.`, aspect, size, model, clientId, useClientStyle }),
         signal: abort.current.signal,
       });
       const data = (await res.json().catch(() => ({}))) as Media & { error?: string };
@@ -141,6 +142,21 @@ export function AiImagePanel({
           placeholder="Ex.: bancada de marcenaria com ferramentas e um armário planejado ao fundo, luz de fim de tarde"
         />
       </Field>
+      {clientId ? (
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={useClientStyle}
+            disabled={busy}
+            onChange={(e) => setUseClientStyle(e.target.checked)}
+            className="mt-1 accent-[var(--color-ink)]"
+          />
+          <span>
+            <span className="block text-sm font-medium text-ink">Seguir a identidade visual do cliente</span>
+            <span className="block text-[13px] text-muted">Usa a cor da marca, o tom e o estilo definidos no cadastro do cliente.</span>
+          </span>
+        </label>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Estilo" htmlFor="ia-estilo">
           <Select id="ia-estilo" value={style} disabled={busy} onChange={(e) => setStyle(e.target.value)}>

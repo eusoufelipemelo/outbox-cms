@@ -5,6 +5,7 @@ import { putImage } from "@/lib/storage";
 import { generateImage, imagesEnabled, IMAGE_ASPECTS, IMAGE_MODELS, IMAGE_SIZES, ImageError } from "@/lib/ai/image";
 import { MEDIA_COLUMNS, isUuid } from "@/lib/data/media";
 import { slugify } from "@/lib/utils";
+import { visualDirection, type VisualClient } from "@/lib/ai/visual";
 import { dayKey } from "@/components/agenda/dates";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,8 @@ const schema = z.object({
   model: z.enum(IMAGE_MODELS).optional(),
   alt: z.string().trim().max(300).optional(),
   clientId: z.string().optional(),
+  /** Aplica a identidade visual do cliente (cor da marca, tom e estilo do cadastro). Padrão: sim. */
+  useClientStyle: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -30,10 +33,17 @@ export async function POST(request: Request) {
   const body: unknown = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Pedido inválido." }, { status: 400 });
-  const { prompt, aspect, size, model, alt, clientId } = parsed.data;
+  const { prompt, aspect, size, model, alt, clientId, useClientStyle } = parsed.data;
+
+  // identidade visual do cliente, quando a imagem é para um cliente
+  let finalPrompt = prompt;
+  if (clientId && isUuid(clientId) && useClientStyle !== false) {
+    const { data: client } = await db().from("clients").select("name, segment, brand_color, image_style, image_mood").eq("id", clientId).maybeSingle();
+    finalPrompt = `${prompt}${visualDirection(client as VisualClient | null)}`;
+  }
 
   try {
-    const { bytes, mime } = await generateImage({ prompt, aspect, size, model, signal: request.signal });
+    const { bytes, mime } = await generateImage({ prompt: finalPrompt, aspect, size, model, signal: request.signal });
     const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
     const [year, month] = dayKey(new Date()).split("-");
     const base = slugify(prompt).slice(0, 50) || "imagem-ia";

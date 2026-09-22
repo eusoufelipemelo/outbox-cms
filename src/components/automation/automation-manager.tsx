@@ -349,6 +349,14 @@ function AutomationEditor({ client, telegramReady, onBack }: { client: Automatio
               </span>
             </label>
             {cover ? (
+              <p className="mt-2 text-[12.5px] text-muted">
+                {client.visual ? `Identidade visual do cliente: ${client.visual}.` : "Este cliente ainda não tem identidade visual definida: as capas seguem só o tema do artigo."}{" "}
+                <Link href={`/clientes/${client.id}`} className="underline underline-offset-2 hover:text-ink">
+                  Editar no cadastro
+                </Link>
+              </p>
+            ) : null}
+            {cover ? (
               <Select className="mt-3" value={coverModel} onChange={(e) => setCoverModel(e.target.value)} aria-label="Modelo da imagem">
                 {MODELS.map((m) => (
                   <option key={m.value} value={m.value}>
