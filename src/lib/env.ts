@@ -66,4 +66,16 @@ export const env = {
   get googleApiKey() {
     return process.env.GOOGLE_API_KEY?.trim() || null;
   },
+  /** Opcional: bot do Telegram que manda o rascunho para o cliente aprovar. */
+  get telegramBotToken() {
+    return process.env.TELEGRAM_BOT_TOKEN?.trim() || null;
+  },
+  /** Nome do bot (sem @), usado no link de conexão t.me/<bot>?start=codigo. */
+  get telegramBotUsername() {
+    return process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, "") || null;
+  },
+  /** Segredo conferido no webhook do Telegram (cabeçalho x-telegram-bot-api-secret-token). */
+  get telegramWebhookSecret() {
+    return process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || null;
+  },
 };

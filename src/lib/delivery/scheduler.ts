@@ -88,7 +88,8 @@ export async function processScheduledPosts(): Promise<ScheduledRun[]> {
 }
 
 type SchedulerState = { timer: ReturnType<typeof setInterval> | null; running: boolean };
-const g = globalThis as typeof globalThis & { __outboxScheduler?: SchedulerState };
+type AutomationState = { timer: ReturnType<typeof setInterval> | null; running: boolean };
+const g = globalThis as typeof globalThis & { __outboxScheduler?: SchedulerState; __outboxAutomations?: AutomationState };
 
 async function tick() {
   const state = g.__outboxScheduler;
@@ -106,6 +107,26 @@ async function tick() {
   }
 }
 
+/**
+ * Automações (a cada 5 min, em ciclo próprio): escrever um artigo leva minutos, e isso não pode
+ * atrasar a publicação dos agendamentos.
+ */
+async function automationTick() {
+  const state = g.__outboxAutomations;
+  if (!state || state.running) return;
+  state.running = true;
+  try {
+    const { processAutomations } = await import("@/lib/automation/run");
+    for (const r of await processAutomations()) {
+      console.log(`[automação] ${r.automationId}: ${r.ok ? "ok" : "falhou"} — ${r.message}`);
+    }
+  } catch (err) {
+    console.error("[automação]", err instanceof Error ? err.message : err);
+  } finally {
+    state.running = false;
+  }
+}
+
 /** Inicia o agendador interno (a cada 60 s). Idempotente por processo. */
 export function startScheduler(intervalMs = 60_000): void {
   if (g.__outboxScheduler) return;
@@ -116,4 +137,12 @@ export function startScheduler(intervalMs = 60_000): void {
   const first = setTimeout(() => void tick(), 15_000);
   first.unref?.();
   console.log(`[scheduler] agendador interno ativo (a cada ${Math.round(intervalMs / 1000)} s)`);
+
+  const auto: AutomationState = { timer: null, running: false };
+  g.__outboxAutomations = auto;
+  auto.timer = setInterval(() => void automationTick(), 5 * 60_000);
+  auto.timer.unref?.();
+  const firstAuto = setTimeout(() => void automationTick(), 45_000);
+  firstAuto.unref?.();
+  console.log("[automação] ciclo interno ativo (a cada 5 min)");
 }
