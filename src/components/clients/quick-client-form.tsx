@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { quickCreateClient } from "@/lib/data/quick-client-actions";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/field";
+import { Field, Input, Select } from "@/components/ui/field";
+import { UFS } from "@/components/clients/options";
 import type { ActionResult } from "@/lib/types";
 
 export function QuickClientForm() {
@@ -48,9 +49,21 @@ export function QuickClientForm() {
         <Field label="Segmento (opcional)" htmlFor="segment" hint="Ajuda a IA a escrever para o nicho certo.">
           <Input id="segment" name="segment" placeholder="Odontologia" />
         </Field>
-        <Field label="Cidade (opcional)" htmlFor="city" hint="Para artigos com SEO local.">
-          <Input id="city" name="city" placeholder="Curitiba" />
-        </Field>
+        <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-3">
+          <Field label="Cidade (opcional)" htmlFor="city" hint="SEO local e mapa de clientes.">
+            <Input id="city" name="city" placeholder="Curitiba" />
+          </Field>
+          <Field label="UF" htmlFor="state">
+            <Select id="state" name="state" defaultValue="">
+              <option value="">—</option>
+              {UFS.map((uf) => (
+                <option key={uf} value={uf}>
+                  {uf}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
       </div>
       {state && !state.ok && !state.fieldErrors ? (
         <p role="alert" className="rounded-[var(--radius-control)] bg-danger-soft px-3 py-2 text-sm text-danger">

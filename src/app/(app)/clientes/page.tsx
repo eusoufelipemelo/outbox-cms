@@ -8,6 +8,7 @@ import { Badge, StatusDot } from "@/components/ui/badge";
 import { EmptyState, PageHeader } from "@/components/ui/panel";
 import { BrandDot, ConnectionDot } from "@/components/clients/bits";
 import { ClientFilters } from "@/components/clients/client-filters";
+import { ClientViewTabs } from "@/components/clients/view-tabs";
 import { CLIENT_STATUS, CLIENT_STATUSES } from "@/components/clients/options";
 import type { ClientStatus } from "@/lib/types";
 import { hostname } from "@/lib/utils";
@@ -76,8 +77,11 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         actions={newButton}
       />
 
-      <div className="mb-5">
-        <ClientFilters q={q} status={status} />
+      <div className="mb-5 flex flex-wrap items-start gap-3">
+        <ClientViewTabs current="lista" />
+        <div className="min-w-0 flex-1">
+          <ClientFilters q={q} status={status} />
+        </div>
       </div>
 
       {clients.length === 0 ? (

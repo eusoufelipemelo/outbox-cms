@@ -7,6 +7,7 @@ import { db } from "@/lib/supabase/admin";
 import { normalizeDomain } from "@/lib/content";
 import { normalizeUrl } from "@/lib/utils";
 import type { ActionResult } from "@/lib/types";
+import { UFS } from "@/components/clients/options";
 
 const schema = z.object({
   name: z.string().trim().min(2, "Informe o nome do cliente.").max(120),
@@ -18,6 +19,10 @@ const schema = z.object({
     .refine((v) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v), "Use só o domínio, por exemplo: clinicaexemplo.com.br"),
   segment: z.string().trim().max(80).optional(),
   city: z.string().trim().max(80).optional(),
+  state: z
+    .string()
+    .optional()
+    .refine((v) => !v || (UFS as readonly string[]).includes(v), "UF inválida."),
 });
 
 /** Cadastro rápido: cria o cliente e o site dele de uma vez. Só nome e domínio são obrigatórios. */
@@ -28,13 +33,14 @@ export async function quickCreateClient(_prev: ActionResult<{ id: string }> | nu
     domain: formData.get("domain") ?? "",
     segment: formData.get("segment") || undefined,
     city: formData.get("city") || undefined,
+    state: formData.get("state") || undefined,
   });
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
     for (const issue of parsed.error.issues) fieldErrors[String(issue.path[0])] ??= issue.message;
     return { ok: false, error: "Confira os campos destacados.", fieldErrors };
   }
-  const { name, domain, segment, city } = parsed.data;
+  const { name, domain, segment, city, state } = parsed.data;
 
   // Mesmo domínio já cadastrado?
   const { data: existing, error: listErr } = await db().from("sites").select("id, url, client_id");
@@ -44,7 +50,7 @@ export async function quickCreateClient(_prev: ActionResult<{ id: string }> | nu
 
   const { data: client, error: cErr } = await db()
     .from("clients")
-    .insert({ name, segment: segment || null, city: city || null })
+    .insert({ name, segment: segment || null, city: city || null, state: state || null })
     .select("id")
     .single();
   if (cErr || !client) return { ok: false, error: "Não foi possível cadastrar o cliente. Tente de novo." };
