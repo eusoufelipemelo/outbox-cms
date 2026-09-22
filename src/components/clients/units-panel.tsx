@@ -108,7 +108,7 @@ export function UnitsPanel({
             <Field label="Endereço" htmlFor="u-address" className="sm:col-span-2">
               <Input id="u-address" value={editing.address ?? ""} onChange={(e) => set("address", e.target.value)} placeholder="Rua, número, bairro" />
             </Field>
-            <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-3">
+            <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-3 sm:col-span-2">
               <Field label="Cidade" htmlFor="u-city">
                 <Input id="u-city" value={editing.city} onChange={(e) => set("city", e.target.value)} />
               </Field>
