@@ -156,18 +156,28 @@ async function importFromEnv(existing: Record<string, string>): Promise<Record<s
 }
 
 async function fetchAll(): Promise<void> {
-  const { data, error } = await db().from("app_settings").select("key, value");
-  if (error) {
-    console.error("[settings] não foi possível ler as configurações:", error.message);
+  let data: { key: string; value: string | null }[] | null = null;
+  try {
+    const res = await db().from("app_settings").select("key, value");
+    if (res.error) throw new Error(res.error.message);
+    data = res.data as { key: string; value: string | null }[];
+  } catch (err) {
+    // sem banco (build, ambiente sem variáveis): segue só com as variáveis do servidor
+    console.error("[settings] não foi possível ler as configurações:", err instanceof Error ? err.message : err);
+    state.at = Date.now();
     return;
   }
   const values: Record<string, string> = {};
-  for (const row of (data ?? []) as { key: string; value: string | null }[]) {
+  for (const row of data ?? []) {
     if (!row.value) continue;
     const plain = decrypt(row.value);
     if (plain) values[row.key] = plain;
   }
-  state.values = await importFromEnv(values);
+  try {
+    state.values = await importFromEnv(values);
+  } catch {
+    state.values = values;
+  }
   state.at = Date.now();
   setSnapshot(state.values);
 }

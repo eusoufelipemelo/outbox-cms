@@ -128,9 +128,10 @@ export const getUser = cache(async (): Promise<CurrentUser | null> => {
  * Conta aguardando aprovação vai para /aguardando-aprovacao; bloqueada volta ao login.
  */
 export async function requireUser(): Promise<CurrentUser> {
-  // chaves e modelos do Painel administrativo (cache de 30 s)
-  await loadSettings();
   const user = await getUser();
+  // chaves e modelos do Painel administrativo (cache de 30 s); getUser() já leu os cookies,
+  // então a página é dinâmica e o banco só é tocado em tempo de execução.
+  await loadSettings();
   if (!user) redirect("/login");
   if (user.status === "pending") redirect("/aguardando-aprovacao");
   if (user.status === "blocked") redirect("/login?erro=bloqueado");
