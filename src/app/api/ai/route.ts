@@ -1,6 +1,5 @@
 import { getUser, type CurrentUser } from "@/lib/auth";
-import { env } from "@/lib/env";
-import { AI_DISABLED_MESSAGE, aiStatus, runAi, toAiError } from "@/lib/ai/server";
+import { aiEnabled, AI_DISABLED_MESSAGE, aiStatus, runAi, toAiError } from "@/lib/ai/server";
 import type { AiAction, AiInput, AiResponse, AiStatus } from "@/lib/ai/types";
 import { firstIssue, inputSchemas, requestSchema } from "@/lib/ai/validation";
 
@@ -31,7 +30,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const user = await currentUser();
   if (!user) return fail(UNAUTHORIZED, 401);
-  if (!env.anthropicApiKey) return fail(AI_DISABLED_MESSAGE, 503);
+  if (!aiEnabled()) return fail(AI_DISABLED_MESSAGE, 503);
 
   const body: unknown = await request.json().catch(() => null);
   const req = requestSchema.safeParse(body);

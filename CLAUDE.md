@@ -36,7 +36,8 @@ Idioma da interface: português do Brasil. Modo light apenas.
 - `src/lib/data/*.ts` — consultas e server actions por domínio (`"use server"` nos arquivos de actions).
 - `src/lib/delivery/` — motor de publicação (API, WordPress, webhook) e agendador.
 - `src/app/api/v1/` — Content API pública para os sites dos clientes.
-- `src/lib/ai/` + `src/app/api/ai/` — assistente de escrita (Claude), opcional via `ANTHROPIC_API_KEY`.
+- `src/lib/ai/` + `src/app/api/ai/` — assistente de escrita. Provedor: OpenRouter (`OPENROUTER_API_KEY` + `OPENROUTER_MODEL`)
+  ou Anthropic direto (`ANTHROPIC_API_KEY`); `AI_PROVIDER` força um dos dois. Tudo passa por `generate()` e `researchSources()`.
 - `src/components/ui/` — primitivas compartilhadas. Reutilize antes de criar outra.
 
 ## Contratos entre módulos (não mude assinaturas sem atualizar os consumidores)

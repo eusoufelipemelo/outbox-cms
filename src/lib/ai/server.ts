@@ -29,6 +29,7 @@ import {
 } from "./prompts";
 import { htmlForPrompt, plainText, sanitizeAiHtml } from "./sanitize";
 import { DEFAULT_FULL_ARTICLE_WORDS, DEFAULT_IDEAS, DEFAULT_WORDS, MAX_HTML_CHARS } from "./validation";
+import { openrouterJson, openrouterSearch, OpenRouterError } from "./openrouter";
 
 // Assistente de escrita (Claude). Só roda no servidor, chamado por /api/ai.
 
@@ -36,14 +37,24 @@ import { DEFAULT_FULL_ARTICLE_WORDS, DEFAULT_IDEAS, DEFAULT_WORDS, MAX_HTML_CHAR
 export const DEFAULT_MODEL = "claude-sonnet-5";
 
 export const AI_DISABLED_MESSAGE =
-  "Assistente desligado: configure ANTHROPIC_API_KEY nas variáveis do Easypanel.";
+  "Assistente desligado: configure OPENROUTER_API_KEY (ou ANTHROPIC_API_KEY) nas variáveis do Easypanel.";
+
+/** Provedor do texto: OpenRouter (uma chave para vários modelos) ou Anthropic direto. */
+export function aiProvider(): "openrouter" | "anthropic" {
+  if (env.aiProvider) return env.aiProvider;
+  return env.openrouterApiKey ? "openrouter" : "anthropic";
+}
+
+export function aiEnabled(): boolean {
+  return aiProvider() === "openrouter" ? Boolean(env.openrouterApiKey) : Boolean(env.anthropicApiKey);
+}
 
 export function aiModel(): string {
-  return process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
+  return aiProvider() === "openrouter" ? env.openrouterModel : process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
 }
 
 export function aiStatus(): AiStatus {
-  return env.anthropicApiKey ? { enabled: true, model: aiModel() } : { enabled: false };
+  return aiEnabled() ? { enabled: true, model: aiModel(), provider: aiProvider() } : { enabled: false };
 }
 
 /** Erro já pronto para o usuário: mensagem pt-BR + status HTTP. */
@@ -97,6 +108,8 @@ export async function generate<S extends z.ZodType>(
   cfg: CallConfig,
   signal?: AbortSignal,
 ): Promise<z.infer<S>> {
+  if (aiProvider() === "openrouter") return openrouterJson(schema, prompt, cfg, signal);
+
   const model = aiModel();
   const adaptive = supportsAdaptive(model);
   const params: Anthropic.MessageCreateParamsNonStreaming = {
@@ -459,8 +472,9 @@ async function researchSources(
   broad = false,
 ): Promise<ResearchNote[]> {
   const model = aiModel();
-  if (!supportsAdaptive(model)) return [];
   const prompt = researchPrompt(input, client, broad);
+  if (aiProvider() === "openrouter") return researchViaOpenRouter(prompt, signal);
+  if (!supportsAdaptive(model)) return [];
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt.user }];
   const seen = new Map<string, string>();
   let text = "";
@@ -509,6 +523,34 @@ async function researchSources(
     const [title, url, publisher, fact] = m[1].split("||").map((x) => x.trim());
     const original = url ? seen.get(normUrl(url)) : undefined;
     if (!title || !original || !fact) continue; // endereço que não veio da busca é descartado
+    if (notes.some((n) => normUrl(n.url) === normUrl(original))) continue;
+    notes.push({ title: clampText(title, 160), url: original, publisher: publisher ? clampText(publisher, 80) : null, fact: clampText(fact, 300) });
+    if (notes.length >= 4) break;
+  }
+  return notes;
+}
+
+/** Pesquisa de fontes pelo plugin de busca do OpenRouter (só entram endereços trazidos pela busca). */
+async function researchViaOpenRouter(prompt: Prompt, signal?: AbortSignal): Promise<ResearchNote[]> {
+  let text = "";
+  const seen = new Map<string, string>();
+  try {
+    const out = await openrouterSearch(prompt, { maxTokens: 8_000, timeoutMs: 120_000, maxResults: 5 }, signal);
+    text = out.text;
+    for (const s of out.sources) seen.set(normUrl(s.url), s.url);
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    console.error("[ai] pesquisa de fontes (openrouter) falhou:", err instanceof Error ? err.message.slice(0, 160) : err);
+    return [];
+  }
+
+  const notes: ResearchNote[] = [];
+  for (const line of text.split("\n")) {
+    const m = line.match(/FONTE:\s*(.+)$/i);
+    if (!m) continue;
+    const [title, url, publisher, fact] = m[1].split("||").map((x) => x.trim());
+    const original = url ? seen.get(normUrl(url)) : undefined;
+    if (!title || !original || !fact) continue;
     if (notes.some((n) => normUrl(n.url) === normUrl(original))) continue;
     notes.push({ title: clampText(title, 160), url: original, publisher: publisher ? clampText(publisher, 80) : null, fact: clampText(fact, 300) });
     if (notes.length >= 4) break;
@@ -862,6 +904,11 @@ export function runAi<A extends AiAction>(action: A, input: AiInput[A], signal?:
 export function toAiError(err: unknown, action: string): AiError {
   if (err instanceof AiError) return err;
   const model = aiModel();
+
+  if (err instanceof OpenRouterError) {
+    console.error(`[ai] ${action}: OpenRouter status=${err.status}`);
+    return new AiError(err.message, err.status);
+  }
 
   if (err instanceof Anthropic.APIError) {
     console.error(

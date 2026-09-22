@@ -24,6 +24,19 @@ export const env = {
   get anthropicApiKey() {
     return process.env.ANTHROPIC_API_KEY || null;
   },
+  /** Opcional: usa o OpenRouter (um só painel de créditos para vários modelos) em vez da Anthropic. */
+  get openrouterApiKey() {
+    return process.env.OPENROUTER_API_KEY?.trim() || null;
+  },
+  /** Modelo do OpenRouter (ex.: "anthropic/claude-sonnet-5", "openai/gpt-5.1", "google/gemini-3-pro"). */
+  get openrouterModel() {
+    return process.env.OPENROUTER_MODEL?.trim() || process.env.AI_MODEL?.trim() || "anthropic/claude-sonnet-5";
+  },
+  /** Força um provedor de texto: "openrouter" ou "anthropic". Vazio = o que tiver chave. */
+  get aiProvider() {
+    const v = process.env.AI_PROVIDER?.trim().toLowerCase();
+    return v === "openrouter" || v === "anthropic" ? v : null;
+  },
   /** Opcional: protege o endpoint de agendamento chamado por cron externo. */
   get cronSecret() {
     return process.env.CRON_SECRET || null;

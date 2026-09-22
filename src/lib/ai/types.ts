@@ -78,6 +78,8 @@ export interface AiStatus {
   enabled: boolean;
   /** Modelo em uso (só quando `enabled`). */
   model?: string;
+  /** Provedor do texto: OpenRouter ou Anthropic. */
+  provider?: "openrouter" | "anthropic";
 }
 
 /** Corpo de resposta de POST /api/ai. */

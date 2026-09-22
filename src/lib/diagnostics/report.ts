@@ -1,7 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { generate } from "@/lib/ai/server";
-import { env } from "@/lib/env";
+import { aiEnabled, generate } from "@/lib/ai/server";
 import type { BusinessResult } from "./business";
 import type { PageSpeedResult } from "./pagespeed";
 import type { Scores } from "./scoring";
@@ -58,7 +57,7 @@ export async function writeReport(input: {
   site: SiteChecks;
   business: BusinessResult;
 }): Promise<Report | null> {
-  if (!env.anthropicApiKey) return null;
+  if (!aiEnabled()) return null;
   const data = {
     site: input.url,
     notas: input.scores,

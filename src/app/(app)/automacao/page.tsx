@@ -19,7 +19,13 @@ export default async function AutomacaoPage() {
   const perMonth = clients.reduce((n, c) => n + (c.automation?.active ? c.automation.per_month : 0), 0);
 
   const chips = [
-    { on: status.ai, label: status.ai ? "IA de texto ligada" : "Falta ANTHROPIC_API_KEY", icon: Sparkles },
+    {
+      on: status.ai,
+      label: status.ai
+        ? `Texto: ${status.aiModel}${status.aiProvider === "openrouter" ? " (OpenRouter)" : " (Anthropic)"}`
+        : "Falta OPENROUTER_API_KEY",
+      icon: Sparkles,
+    },
     { on: status.images, label: status.images ? "Imagens ligadas" : "Falta GEMINI_API_KEY", icon: ImageIcon },
     {
       on: status.telegram && status.webhook.connected,

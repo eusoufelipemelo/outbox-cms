@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
-import { runAi, generate, aiStatus } from "@/lib/ai/server";
+import { runAi, generate, aiStatus, aiEnabled } from "@/lib/ai/server";
 import { sanitizeAiHtml, plainText } from "@/lib/ai/sanitize";
 import { generateImage, imagesEnabled, type ImageModel } from "@/lib/ai/image";
 import { visualDirection, type VisualClient } from "@/lib/ai/visual";
@@ -55,7 +55,7 @@ async function destinations(a: AutomationRow): Promise<string[]> {
 /** Categoria e etiquetas do artigo, para os campos de Detalhes do CMS. */
 async function articleMeta(input: { title: string; summary: string; keyword: string; segment: string | null; existing: string[] }): Promise<{ category: string | null; tags: string[] }> {
   const base = [input.keyword].filter(Boolean);
-  if (!env.anthropicApiKey) return { category: null, tags: base };
+  if (!aiEnabled()) return { category: null, tags: base };
   try {
     const out = await generate(
       z.object({
@@ -87,7 +87,7 @@ async function coverPrompt(input: { title: string; summary: string; segment: str
     prompt: `Editorial photograph about "${input.title}"${input.segment ? `, in the context of ${input.segment}` : ""}${input.city ? `, in Brazil (${input.city})` : ", in Brazil"}. Real working scene, natural light, shallow depth of field, no text and no logos.${input.identity}`,
     alt: input.title,
   };
-  if (!env.anthropicApiKey) return fallback;
+  if (!aiEnabled()) return fallback;
   try {
     const out = await generate(
       z.object({

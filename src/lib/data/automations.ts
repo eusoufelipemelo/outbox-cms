@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
-import { aiStatus } from "@/lib/ai/server";
+import { aiStatus, aiProvider } from "@/lib/ai/server";
 import { imagesEnabled } from "@/lib/ai/image";
 import { telegramEnabled, connectLink, botUsername, getWebhookInfo } from "@/lib/automation/telegram";
 import { visualSummary, type VisualClient } from "@/lib/ai/visual";
@@ -113,7 +113,8 @@ export async function automationStatus() {
       ...(info?.last_error_message ? { error: info.last_error_message } : {}),
     };
   }
-  return { ai: aiStatus().enabled, images: imagesEnabled(), telegram, webhook };
+  const ai = aiStatus();
+  return { ai: ai.enabled, aiModel: ai.model ?? null, aiProvider: aiProvider(), images: imagesEnabled(), telegram, webhook };
 }
 
 export async function getRunByToken(token: string) {
