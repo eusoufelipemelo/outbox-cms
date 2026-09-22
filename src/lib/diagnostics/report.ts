@@ -66,7 +66,14 @@ export async function writeReport(input: {
     blogFrequencia: input.site.blogActivity ?? null,
     checagensDoSite: input.site.ok ? input.site.checks.map((c) => ({ item: c.label, ok: c.ok, detalhe: c.detail })) : { erro: input.site.error },
     googleEmpresas: input.business.found
-      ? { nome: input.business.name, categoria: input.business.category, nota: input.business.rating, avaliacoes: input.business.reviews, checagens: input.business.checks }
+      ? {
+          nome: input.business.name,
+          categoria: input.business.category,
+          nota: input.business.rating,
+          avaliacoes: input.business.reviews,
+          checagens: input.business.checks,
+          unidades: input.business.units ?? [],
+        }
       : { encontrado: false, motivo: input.business.error ?? "Perfil não encontrado na busca pelo nome/cidade." },
   };
   return generate(

@@ -15,6 +15,7 @@ export default async function ClientsMapPage() {
   await requireUser();
   const clients = await listClientMap();
   const located = clients.filter((c) => c.uf);
+  const clientCount = new Set(clients.map((c) => c.id)).size;
   const states = new Set(located.map((c) => c.uf)).size;
   const cities = new Set(located.map((c) => `${c.uf}:${(c.city ?? "").toLowerCase()}`)).size;
 
@@ -22,7 +23,7 @@ export default async function ClientsMapPage() {
     <>
       <PageHeader
         title="Mapa de clientes"
-        description={`${plural(clients.length, "cliente ativo", "clientes ativos")} em ${plural(states, "estado", "estados")} e ${plural(cities, "cidade", "cidades")}.`}
+        description={`${plural(clientCount, "cliente ativo", "clientes ativos")} em ${plural(states, "estado", "estados")} e ${plural(cities, "cidade", "cidades")}.`}
         actions={
           <Link href="/clientes/novo" className={buttonClass("primary")}>
             <Plus className="size-4" aria-hidden />

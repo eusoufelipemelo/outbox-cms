@@ -5,6 +5,7 @@ import { siteArticleUrl } from "@/lib/delivery/urls";
 import { sanitizeArticleHtml } from "@/lib/sanitize";
 import type { Client, ContentType, FaqItem, Post, PostSite, SitePlatform, SourceItem } from "@/lib/types";
 import { joinUrl, slugify, stripHtml } from "@/lib/utils";
+import { parseUnits } from "@/lib/units";
 
 // Formato público dos artigos: usado pela Content API (/api/v1), pelo embed e pelo payload do webhook.
 
@@ -61,11 +62,12 @@ export type ContentClient = Pick<
   | "expert_name"
   | "expert_credentials"
   | "expert_bio"
+  | "units"
 >;
 
 /** Colunas de `clients` para o embed `client:clients(...)`. Nada de dados internos (documento, notas...). */
 export const CONTENT_CLIENT_COLUMNS =
-  "name, logo_url, brand_color, about, services, service_area, address, city, state, phone, opening_hours, social_links, expert_name, expert_credentials, expert_bio";
+  "name, logo_url, brand_color, about, services, service_area, address, city, state, phone, opening_hours, social_links, expert_name, expert_credentials, expert_bio, units";
 
 /** Dados do site necessários para montar URLs e metadados (sem segredos). */
 export interface ContentSite {
@@ -266,6 +268,7 @@ export function toContentClient(raw: unknown): ContentClient | null {
     expert_name: s(c.expert_name),
     expert_credentials: s(c.expert_credentials),
     expert_bio: s(c.expert_bio),
+    units: parseUnits(c.units),
   };
 }
 
@@ -324,6 +327,8 @@ export function siteOrganization(site: ContentSite) {
     phone: c?.phone ?? null,
     opening_hours: c?.opening_hours ?? null,
     social_links: c?.social_links ?? [],
+    // filiais: nome, cidade, endereço e telefone (o responsável é dado interno)
+    units: (c?.units ?? []).map((u) => ({ name: u.label, address: u.address, city: u.city, state: u.state, phone: u.phone })),
     expert,
   };
 }
@@ -412,11 +417,31 @@ function organizationNode(site: ContentSite): Json {
             addressCountry: "BR",
           }
         : undefined,
-    areaServed: c?.service_area ?? c?.city,
+    areaServed: c?.units?.length
+      ? [c.city, ...c.units.map((u) => u.city)].filter(Boolean)
+      : (c?.service_area ?? c?.city),
     telephone: c?.phone,
     openingHours: local ? c?.opening_hours : undefined,
     sameAs: c?.social_links,
     knowsAbout: c?.services,
+    // cada filial é um LocalBusiness ligado à empresa (Google e IAs entendem as outras cidades)
+    department: c?.units?.length
+      ? c.units.map((u) => ({
+          "@type": "LocalBusiness",
+          "@id": `${id.root}/#unidade-${slugify(u.label)}`,
+          name: `${organizationName(site)} (${u.label})`,
+          parentOrganization: { "@id": id.organization },
+          address: {
+            "@type": "PostalAddress",
+            streetAddress: u.address ?? undefined,
+            addressLocality: u.city,
+            addressRegion: u.state ?? undefined,
+            addressCountry: "BR",
+          },
+          telephone: u.phone ?? undefined,
+          image: c.logo_url ?? undefined,
+        }))
+      : undefined,
   };
 }
 

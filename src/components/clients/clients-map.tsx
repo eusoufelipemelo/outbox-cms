@@ -243,10 +243,13 @@ function ClientList({ clients }: { clients: MapClient[] }) {
       {[...clients]
         .sort((a, b) => collator.compare(a.name, b.name))
         .map((c) => (
-          <li key={c.id}>
+          <li key={c.key}>
             <Link href={`/clientes/${c.id}`} className="group flex items-center gap-3 py-2.5 hover:text-ink">
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14px] font-medium text-ink group-hover:underline">{c.name}</span>
+                <span className="block truncate text-[14px] font-medium text-ink group-hover:underline">
+                  {c.name}
+                  {c.unit ? <span className="font-normal text-muted"> ({c.unit})</span> : null}
+                </span>
                 <span className="block truncate text-[12.5px] text-muted">
                   {[c.segment, c.site].filter(Boolean).join(", ") || "Sem segmento"}
                   {c.status === "paused" ? ", pausado" : ""}

@@ -302,6 +302,34 @@ export function DiagnosticReport({ d }: { d: Diagnostic }) {
               </p>
             )}
           </div>
+          {biz?.units?.length ? (
+            <div>
+              <h3 className="font-semibold text-ink">Unidades no Google Empresas</h3>
+              <ul className="mt-2 divide-y divide-line">
+                {biz.units.map((u) => (
+                  <li key={`${u.label}-${u.city}`} className="flex items-start justify-between gap-3 py-2.5 break-inside-avoid">
+                    <div className="min-w-0">
+                      <p className="text-[14.5px] font-medium text-ink">
+                        {u.label} <span className="font-normal text-muted">({u.city})</span>
+                      </p>
+                      <p className="text-[13.5px] text-muted">
+                        {u.found
+                          ? `${u.reviews ?? 0} avaliações${u.rating ? `, nota ${u.rating.toFixed(1).replace(".", ",")}` : ""}`
+                          : "Perfil não encontrado nesta cidade: sem ele, a unidade não aparece no Google Maps."}
+                      </p>
+                    </div>
+                    {u.found && u.mapsUrl ? (
+                      <a href={u.mapsUrl} target="_blank" rel="noreferrer" className="shrink-0 text-[13px] text-brand-ink underline underline-offset-4 print:hidden">
+                        Ver
+                      </a>
+                    ) : (
+                      <span className={cn("shrink-0 text-[13px] font-semibold", u.found ? "text-ok" : "text-danger")}>{u.found ? "Ok" : "Falta"}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {site ? (
             <div>
               <h3 className="font-semibold text-ink">Estrutura do site</h3>

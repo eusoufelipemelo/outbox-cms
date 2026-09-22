@@ -10,6 +10,21 @@ export type PublicationStatus = "pending" | "published" | "failed" | "unpublishe
 export type DeliveryChannel = "api" | "wordpress" | "webhook";
 export type DeliveryEvent = "publish" | "update" | "unpublish" | "test";
 
+/** Unidade além da matriz (a matriz é o endereço principal do cliente). */
+export interface ClientUnit {
+  id: string;
+  /** Como a unidade é chamada: "Filial Brasília", "Loja Centro". */
+  label: string;
+  address: string | null;
+  city: string;
+  state: string | null;
+  phone: string | null;
+  /** Responsável pela unidade (representante, gerente). */
+  manager: string | null;
+  /** Nome do perfil no Google Maps, quando diferente do nome da empresa. */
+  maps_name: string | null;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -40,6 +55,8 @@ export interface Client {
   expert_credentials: string | null;
   expert_bio: string | null;
   status: ClientStatus;
+  /** Filiais e outras unidades (a matriz fica nos campos de endereço acima). */
+  units: ClientUnit[];
   /** Vigência do contrato (controle de renovação). */
   contract_start: string | null;
   contract_end: string | null;

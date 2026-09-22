@@ -25,6 +25,18 @@ export type BusinessResult = {
   /** Data da avaliação mais recente, para saber se o perfil recebe atenção. */
   lastReview?: string | null;
   checks: { label: string; ok: boolean; detail: string }[];
+  /** Perfis das filiais (quando o site pertence a um cliente com unidades cadastradas). */
+  units?: UnitProfile[];
+};
+
+export type UnitProfile = {
+  label: string;
+  city: string;
+  found: boolean;
+  name?: string;
+  rating?: number | null;
+  reviews?: number;
+  mapsUrl?: string;
 };
 
 type Place = {

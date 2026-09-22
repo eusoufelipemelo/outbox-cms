@@ -29,6 +29,7 @@ import {
 } from "./prompts";
 import { htmlForPrompt, plainText, sanitizeAiHtml } from "./sanitize";
 import { DEFAULT_FULL_ARTICLE_WORDS, DEFAULT_IDEAS, DEFAULT_WORDS, MAX_HTML_CHARS } from "./validation";
+import { parseUnits } from "@/lib/units";
 import { openrouterJson, openrouterSearch, OpenRouterError, type Task } from "./openrouter";
 
 // Assistente de escrita (Claude). Só roda no servidor, chamado por /api/ai.
@@ -329,7 +330,7 @@ function currentMonthBr(): string {
 // ---------------------------------------------------------------- dados do banco
 
 const CLIENT_FIELDS =
-  "name, segment, city, state, tone_of_voice, audience, keywords, about, services, service_area, expert_name, expert_credentials";
+  "name, segment, city, state, tone_of_voice, audience, keywords, about, services, service_area, expert_name, expert_credentials, units";
 
 async function loadClient(clientId?: string): Promise<ClientContext | null> {
   if (!clientId) return null;
@@ -340,7 +341,7 @@ async function loadClient(clientId?: string): Promise<ClientContext | null> {
   }
   if (!data) throw new AiError("Cliente não encontrado. Ele pode ter sido removido; selecione outro.", 404);
   const client = data as ClientContext;
-  return { ...client, keywords: client.keywords ?? [], services: client.services ?? [] };
+  return { ...client, keywords: client.keywords ?? [], services: client.services ?? [], units: parseUnits(client.units) };
 }
 
 function normalizeFaq(value: unknown): FaqItem[] {

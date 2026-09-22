@@ -436,3 +436,5 @@ create table if not exists public.app_settings (
   updated_at timestamptz not null default now()
 );
 alter table public.app_settings enable row level security;
+-- Lista em JSON: [{ id, label, address, city, state, phone, manager, maps_name }]
+alter table public.clients add column if not exists units jsonb not null default '[]'::jsonb;

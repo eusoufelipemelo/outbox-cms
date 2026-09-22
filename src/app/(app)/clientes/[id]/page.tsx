@@ -10,6 +10,7 @@ import { buttonClass } from "@/components/ui/button";
 import { PageHeader, Panel } from "@/components/ui/panel";
 import { BackLink, BrandDot, ConnectionDot } from "@/components/clients/bits";
 import { ClientForm } from "@/components/clients/client-form";
+import { UnitsPanel } from "@/components/clients/units-panel";
 import { DeleteClientPanel } from "@/components/clients/delete-client";
 import { CLIENT_STATUS, PLATFORM } from "@/components/clients/options";
 import type { Client } from "@/lib/types";
@@ -118,6 +119,12 @@ export default async function ClientPage({ params }: Props) {
               </ul>
             )}
           </Panel>
+
+          <UnitsPanel
+            clientId={client.id}
+            units={client.units}
+            headquarters={client.city ? [client.address, client.state ? `${client.city}/${client.state}` : client.city].filter(Boolean).join(", ") : null}
+          />
 
           <Panel
             title="Publicações recentes"

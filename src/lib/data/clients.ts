@@ -1,4 +1,5 @@
 import "server-only";
+import { parseUnits } from "@/lib/units";
 import { cache } from "react";
 import { db } from "@/lib/supabase/admin";
 import { isUuid } from "@/lib/data/sites";
@@ -42,6 +43,7 @@ export async function listClients(filters: { q?: string; status?: ClientStatus }
     keywords: c.keywords ?? [],
     services: c.services ?? [],
     social_links: c.social_links ?? [],
+    units: parseUnits(c.units),
     sites: [...(c.sites ?? [])].sort((a, b) => collator.compare(a.name, b.name)),
   }));
 
@@ -60,7 +62,13 @@ export const getClient = cache(async function getClient(id: string): Promise<Cli
   if (error) throw new Error(`Não foi possível carregar o cliente: ${error.message}`);
   if (!data) return null;
   const client = data as Client;
-  return { ...client, keywords: client.keywords ?? [], services: client.services ?? [], social_links: client.social_links ?? [] };
+  return {
+    ...client,
+    keywords: client.keywords ?? [],
+    services: client.services ?? [],
+    social_links: client.social_links ?? [],
+    units: parseUnits(client.units),
+  };
 });
 
 /** Opção de cliente para seletores (ex.: Pautas). */

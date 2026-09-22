@@ -19,6 +19,7 @@ export type ClientContext = Pick<
   | "service_area"
   | "expert_name"
   | "expert_credentials"
+  | "units"
 >;
 
 export type VariationSource = Pick<
@@ -111,6 +112,10 @@ function clientBlock(client: ClientContext | null): string {
     client.services?.length && `Serviços e produtos: ${client.services.join("; ")}`,
     (client.city || client.state) && `Cidade/UF: ${[client.city, client.state].filter(Boolean).join("/")}`,
     client.service_area && `Área de atendimento: ${client.service_area}`,
+    client.units?.length &&
+      `Outras unidades (além da matriz): ${client.units
+        .map((u) => `${u.label} em ${u.state ? `${u.city}/${u.state}` : u.city}${u.manager ? ` (responsável: ${u.manager})` : ""}`)
+        .join("; ")}`,
     expert && `Especialista responsável: ${expert}`,
     client.tone_of_voice && `Tom de voz: ${client.tone_of_voice}`,
     client.audience && `Público: ${client.audience}`,
@@ -125,6 +130,9 @@ function clientRules(client: ClientContext | null): string {
   const local = place
     ? `- SEO local: cite ${place}${client.service_area ? ` (ou a área de atendimento)` : ""} de forma natural (na introdução, em um H2 ou pergunta do FAQ e na conclusão), com exemplos que façam sentido para quem mora lá. Não repita o nome da cidade em toda seção nem invente bairros ou fatos sobre a cidade.`
     : "";
+  const units = client.units?.length
+    ? `- A empresa tem matriz${place ? ` em ${place}` : ""} e unidades em ${client.units.map((u) => (u.state ? `${u.city}/${u.state}` : u.city)).join(", ")}. Em artigo local, escolha UMA cidade coerente com o tema e cite a unidade dela; não misture cidades no mesmo texto nem invente endereços.`
+    : "";
   return [
     "Escreva para o cliente acima:",
     `- Siga o tom de voz e fale com o público descritos${client.tone_of_voice ? "" : " (sem tom definido: profissional, próximo e direto)"}.`,
@@ -136,6 +144,7 @@ function clientRules(client: ClientContext | null): string {
       ? "- Mencione um serviço do cliente só quando ele tiver relação direta com o tema, pelo nome usado em <cliente>."
       : "",
     local,
+    units,
     client.expert_name
       ? "- O especialista responsável é contexto de autoria: não atribua frases, opiniões ou revisão a ele e não invente citações."
       : "",
@@ -480,7 +489,7 @@ export function ideasPrompt(
 
 Sugira exatamente ${input.count} pautas (ideias de artigo) que tragam visitas qualificadas do Google e respostas de IAs para este cliente.
 - Cada pauta responde a uma dúvida real do público do cliente, ligada aos serviços e ao segmento dele${input.focus ? ", priorizando o que está em <foco>" : ""}.
-- Misture as intenções de busca: informacional (tirar uma dúvida), comercial (escolher, contratar, quanto investir), comparativa (X ou Y, prós e contras)${place ? `, e local (com ${client.city} ou a área de atendimento, só quando a busca local for natural)` : ""}. Nenhuma intenção deve passar de metade da lista${place ? "" : "; sem cidade cadastrada, não use a intenção local"}.
+- Misture as intenções de busca: informacional (tirar uma dúvida), comercial (escolher, contratar, quanto investir), comparativa (X ou Y, prós e contras)${place ? `, e local (com ${client.city}${client.units?.length ? `, ${client.units.map((u) => u.city).join(", ")}` : ""} ou a área de atendimento, só quando a busca local for natural${client.units?.length ? "; reparta as pautas locais entre as cidades da matriz e das unidades, uma cidade por pauta" : ""})` : ""}. Nenhuma intenção deve passar de metade da lista${place ? "" : "; sem cidade cadastrada, não use a intenção local"}.
 - Sazonalidade: se houver datas, estações ou períodos do Brasil nos próximos 1 a 3 meses que mudam a procura por esses serviços (ex.: volta às aulas, Dia das Mães, férias, Black Friday, fim de ano, verão, inverno, declaração do imposto de renda), inclua de 1 a 3 pautas aproveitando isso. Se nada for relevante para o segmento, não force.
 - Não repita nem parafraseie os títulos já publicados em <publicados>; traga ângulos novos ou aprofundamentos.
 - Títulos diferentes entre si, sem duas pautas para a mesma busca.

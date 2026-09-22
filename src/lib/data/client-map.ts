@@ -12,6 +12,10 @@ export type MapClient = {
   inferred: boolean;
   status: "active" | "paused" | "archived";
   site: string | null;
+  /** Nome da unidade quando o ponto é uma filial ("Filial Brasília"); nulo para a matriz. */
+  unit: string | null;
+  /** Chave única no mapa (cliente + unidade). */
+  key: string;
 };
 
 const fold = (v: string) =>
@@ -36,7 +40,7 @@ export async function listClientMap(): Promise<MapClient[]> {
   const clients = await listClients();
   return clients
     .filter((c) => c.status !== "archived")
-    .map((c) => {
+    .flatMap((c) => {
       const parsed = splitCity(c.city);
       const state = c.state?.trim().toUpperCase() ?? "";
       let uf = UF_NOME[state] ? state : parsed.uf;
@@ -45,16 +49,21 @@ export async function listClientMap(): Promise<MapClient[]> {
         uf = CAPITAL_UF.get(fold(parsed.city)) ?? null;
         inferred = Boolean(uf);
       }
-      const site = c.sites[0]?.url ?? null;
-      return {
+      const url = c.sites[0]?.url ?? null;
+      const site = url ? url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "") : null;
+      const main: MapClient = { id: c.id, key: c.id, name: c.name, segment: c.segment, city: parsed.city, uf, inferred, status: c.status, site, unit: null };
+      const units: MapClient[] = c.units.map((u) => ({
         id: c.id,
+        key: `${c.id}:${u.id}`,
         name: c.name,
         segment: c.segment,
-        city: parsed.city,
-        uf,
-        inferred,
+        city: u.city,
+        uf: u.state && UF_NOME[u.state] ? u.state : (CAPITAL_UF.get(fold(u.city)) ?? null),
+        inferred: !u.state,
         status: c.status,
-        site: site ? site.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "") : null,
-      };
+        site,
+        unit: u.label,
+      }));
+      return [main, ...units];
     });
 }
