@@ -11,6 +11,7 @@ import { publishPost } from "@/lib/delivery";
 import { countWords, readingMinutes, slugify } from "@/lib/utils";
 import { dayKey } from "@/components/agenda/dates";
 import type { ContentType } from "@/lib/types";
+import { loadSettings } from "@/lib/settings";
 import { nextRunAt } from "./schedule";
 import { connectLink, sendMessage, telegramEnabled } from "./telegram";
 
@@ -121,6 +122,7 @@ async function makeCover(a: AutomationRow, article: { title: string; summary: st
 
 /** Roda uma automação: escolhe a pauta, escreve o artigo, gera a capa e encaminha para aprovação. */
 export async function runAutomation(a: AutomationRow): Promise<{ runId: string; ok: boolean; message: string }> {
+  await loadSettings();
   const { data: runRow, error: runErr } = await db()
     .from("automation_runs")
     .insert({ automation_id: a.id, client_id: a.client_id, status: "running", step: "Escolhendo a pauta" })
@@ -295,6 +297,7 @@ const COLUMNS =
  * (next_run_at antigo → próxima data), então o agendador interno e o cron externo não repetem.
  */
 export async function processAutomations(): Promise<{ automationId: string; ok: boolean; message: string }[]> {
+  await loadSettings();
   const now = new Date();
   const { data, error } = await db()
     .from("automations")

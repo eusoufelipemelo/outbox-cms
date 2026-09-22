@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Bot, CalendarDays, Gauge, Map as MapIcon, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
+import { Bot, CalendarDays, SlidersHorizontal, Gauge, Map as MapIcon, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -22,7 +22,10 @@ const items = [
 ];
 
 // Só administradores veem (e acessam) a gestão da equipe.
-const adminItems = [{ href: "/equipe", label: "Equipe", icon: UserCog, exact: false }];
+const adminItems = [
+  { href: "/equipe", label: "Equipe", icon: UserCog, exact: false },
+  { href: "/painel", label: "Painel admin", icon: SlidersHorizontal, exact: false },
+];
 
 export type NavUser = { name: string; email: string; role: "admin" | "editor" | "writer"; avatarUrl: string | null; jobTitle: string | null };
 

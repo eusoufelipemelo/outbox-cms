@@ -6,6 +6,7 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
 import type { Profile, ProfileRole, ProfileStatus } from "@/lib/types";
+import { loadSettings } from "@/lib/settings";
 
 export type CurrentUser = {
   id: string;
@@ -127,6 +128,8 @@ export const getUser = cache(async (): Promise<CurrentUser | null> => {
  * Conta aguardando aprovação vai para /aguardando-aprovacao; bloqueada volta ao login.
  */
 export async function requireUser(): Promise<CurrentUser> {
+  // chaves e modelos do Painel administrativo (cache de 30 s)
+  await loadSettings();
   const user = await getUser();
   if (!user) redirect("/login");
   if (user.status === "pending") redirect("/aguardando-aprovacao");

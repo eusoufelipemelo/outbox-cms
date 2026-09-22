@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
 import { answerCallback, editMessageText, sendMessage } from "@/lib/automation/telegram";
 import { approveRun, attachFeedback, requestChanges } from "@/lib/automation/approval";
+import { loadSettings } from "@/lib/settings";
 
 // Webhook do bot do Telegram: conecta a conversa do cliente e recebe aprovação/ajustes.
 // Autenticação: cabeçalho x-telegram-bot-api-secret-token = TELEGRAM_WEBHOOK_SECRET.
@@ -33,6 +34,7 @@ async function link(chatId: string, code: string): Promise<string> {
 }
 
 export async function POST(req: Request) {
+  await loadSettings();
   if (!authorized(req)) return Response.json({ error: "não autorizado" }, { status: 401 });
   const update = (await req.json().catch(() => null)) as Update | null;
   if (!update) return Response.json({ ok: true });

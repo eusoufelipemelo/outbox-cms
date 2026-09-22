@@ -429,3 +429,10 @@ alter table public.clients add column if not exists contract_end date;
 alter table public.clients add column if not exists image_style text;
 alter table public.clients add column if not exists image_mood text not null default 'auto'
   check (image_mood in ('auto', 'escuro', 'claro', 'colorido', 'monocromatico'));
+create table if not exists public.app_settings (
+  key text primary key,
+  value text,
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+alter table public.app_settings enable row level security;

@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
+import { loadSettings } from "@/lib/settings";
 import { findBusiness, type BusinessResult } from "./business";
 import { runPageSpeed } from "./pagespeed";
 import { writeReport } from "./report";
@@ -19,6 +20,7 @@ function nameFromTitle(title?: string | null): string | null {
 
 /** Executa o diagnóstico completo (1 a 2 minutos) e grava cada etapa na linha. */
 export async function runDiagnostic(id: string): Promise<void> {
+  await loadSettings();
   const { data: row } = await db().from("diagnostics").select("url, business_name, city, ai").eq("id", id).maybeSingle();
   if (!row) return;
   const url = row.url as string;
