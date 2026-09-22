@@ -275,6 +275,12 @@ export function ClientForm({ client }: { client?: Client }) {
                 ))}
               </Select>
             </Field>
+            <Field label="Início do contrato" htmlFor="contract_start" error={err("contract_start")} hint="Quando o cliente entrou.">
+              <Input id="contract_start" name="contract_start" type="date" defaultValue={client?.contract_start ?? ""} aria-invalid={invalid("contract_start")} />
+            </Field>
+            <Field label="Término do contrato" htmlFor="contract_end" error={err("contract_end")} hint="Deixe vazio se não tiver prazo. A automação para nesta data.">
+              <Input id="contract_end" name="contract_end" type="date" defaultValue={client?.contract_end ?? ""} aria-invalid={invalid("contract_end")} />
+            </Field>
             <Field label="Cidade" htmlFor="city" error={err("city")}>
               <Input id="city" name="city" defaultValue={client?.city ?? ""} autoComplete="off" aria-invalid={invalid("city")} />
             </Field>

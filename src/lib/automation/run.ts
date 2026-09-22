@@ -26,6 +26,7 @@ export type AutomationRow = {
   cover_model: string;
   site_ids: string[];
   approval: "telegram" | "auto" | "manual";
+  author_name: string | null;
   telegram_chat_id: string | null;
   telegram_link_code: string;
   next_run_at: string | null;
@@ -48,6 +49,35 @@ async function destinations(a: AutomationRow): Promise<string[]> {
   const active = ((data ?? []) as { id: string; status: string }[]).filter((s) => s.status === "active").map((s) => s.id);
   const chosen = a.site_ids.filter((id) => active.includes(id));
   return chosen.length ? chosen : active;
+}
+
+/** Categoria e etiquetas do artigo, para os campos de Detalhes do CMS. */
+async function articleMeta(input: { title: string; summary: string; keyword: string; segment: string | null; existing: string[] }): Promise<{ category: string | null; tags: string[] }> {
+  const base = [input.keyword].filter(Boolean);
+  if (!env.anthropicApiKey) return { category: null, tags: base };
+  try {
+    const out = await generate(
+      z.object({
+        category: z.string().describe("Uma categoria curta do blog, em português, 1 a 3 palavras. Reaproveite uma das existentes quando fizer sentido."),
+        tags: z.array(z.string()).describe("3 a 5 etiquetas curtas em português, minúsculas, sem #."),
+      }),
+      {
+        system: "Você organiza o blog de clientes da agência OutBox. Usa categorias e etiquetas simples, que o leitor entende, sem jargão de SEO.",
+        user: `Artigo: "${input.title}"
+Resumo: ${input.summary}
+Palavra-chave: ${input.keyword}
+Segmento do cliente: ${input.segment ?? "não informado"}
+Categorias já usadas neste blog: ${input.existing.join(", ") || "nenhuma ainda"}
+
+Devolva a categoria e as etiquetas.`,
+      },
+      { maxTokens: 1000, timeoutMs: 60_000, effort: "low" },
+    );
+    const tags = [...new Set([...out.tags, ...base].map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 6);
+    return { category: out.category.trim().slice(0, 60) || null, tags };
+  } catch {
+    return { category: null, tags: base };
+  }
 }
 
 /** Descrição de cena para a capa: a IA escreve o prompt da imagem a partir do artigo. */
@@ -100,13 +130,17 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
   try {
     if (!aiStatus().enabled) throw new Error("Assistente de IA desligado: falta ANTHROPIC_API_KEY.");
 
-    const { data: clientRow } = await db().from("clients").select("name, segment, city, expert_name").eq("id", a.client_id).maybeSingle();
-    const client = (clientRow ?? { name: "cliente", segment: null, city: null, expert_name: null }) as {
+    const { data: clientRow } = await db().from("clients").select("name, segment, city, expert_name, contract_end").eq("id", a.client_id).maybeSingle();
+    const client = (clientRow ?? { name: "cliente", segment: null, city: null, expert_name: null, contract_end: null }) as {
       name: string;
       segment: string | null;
       city: string | null;
       expert_name: string | null;
+      contract_end: string | null;
     };
+    if (client.contract_end && client.contract_end < new Date().toISOString().slice(0, 10)) {
+      throw new Error(`Contrato de ${client.name} venceu em ${client.contract_end.split("-").reverse().join("/")}. Renove a data no cadastro do cliente.`);
+    }
 
     // 1) pauta
     const { ideas } = await runAi("ideas", { clientId: a.client_id, count: 3 });
@@ -122,7 +156,24 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
       words: a.words,
     });
 
-    // 3) capa
+    // 3) categoria e etiquetas (campos de Detalhes)
+    await step(runId, "Organizando categoria e etiquetas");
+    const { data: usedCats } = await db()
+      .from("posts")
+      .select("category")
+      .not("category", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(60);
+    const existing = [...new Set(((usedCats ?? []) as { category: string }[]).map((c) => c.category))].slice(0, 12);
+    const meta = await articleMeta({
+      title: article.title,
+      summary: article.answer_summary,
+      keyword: article.focus_keyword,
+      segment: client.segment,
+      existing,
+    });
+
+    // 4) capa
     let cover: { url: string; alt: string } | null = null;
     if (a.cover && imagesEnabled()) {
       await step(runId, "Gerando a imagem de capa");
@@ -133,7 +184,7 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
       }
     }
 
-    // 4) artigo no CMS, como rascunho
+    // 5) artigo no CMS, como rascunho
     await step(runId, "Salvando no CMS");
     const html = sanitizeAiHtml(article.content_html);
     const words = countWords(html);
@@ -146,8 +197,9 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
         content_html: html,
         cover_image_url: cover?.url ?? null,
         cover_image_alt: cover?.alt ?? null,
-        tags: [article.focus_keyword].filter(Boolean),
-        author_name: article.author_name ?? client.expert_name ?? null,
+        category: meta.category,
+        tags: meta.tags,
+        author_name: a.author_name?.trim() || client.expert_name?.trim() || article.author_name || null,
         seo_title: article.seo_title,
         seo_description: article.seo_description,
         focus_keyword: article.focus_keyword,
@@ -178,7 +230,7 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
     }
     await db().from("automation_runs").update({ post_id: postId }).eq("id", runId);
 
-    // 5) aprovação
+    // 6) aprovação
     if (a.approval === "auto") {
       if (!siteIds.length) {
         await finish(runId, { status: "manual", error: "Nenhum site ativo neste cliente: o artigo ficou em rascunho." });
@@ -234,7 +286,7 @@ export function escapeHtml(value: string): string {
 }
 
 const COLUMNS =
-  "id, client_id, active, per_month, weekdays, hour, words, content_type, cover, cover_model, site_ids, approval, telegram_chat_id, telegram_link_code, next_run_at, created_by";
+  "id, client_id, active, per_month, weekdays, hour, words, content_type, cover, cover_model, site_ids, approval, author_name, telegram_chat_id, telegram_link_code, next_run_at, created_by";
 
 /**
  * Executa as automações vencidas. Cada uma é "reivindicada" com um update condicional

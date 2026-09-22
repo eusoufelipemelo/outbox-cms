@@ -423,3 +423,6 @@ alter table public.automation_runs enable row level security;
 drop trigger if exists automations_touch on public.automations;
 create trigger automations_touch before update on public.automations
   for each row execute function public.touch_updated_at();
+alter table public.automations add column if not exists author_name text;
+alter table public.clients add column if not exists contract_start date;
+alter table public.clients add column if not exists contract_end date;

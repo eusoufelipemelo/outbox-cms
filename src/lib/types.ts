@@ -37,6 +37,9 @@ export interface Client {
   expert_credentials: string | null;
   expert_bio: string | null;
   status: ClientStatus;
+  /** Vigência do contrato (controle de renovação). */
+  contract_start: string | null;
+  contract_end: string | null;
   created_at: string;
   updated_at: string;
 }

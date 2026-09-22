@@ -26,6 +26,7 @@ const schema = z.object({
   coverModel: z.string().refine((v) => (IMAGE_MODELS as readonly string[]).includes(v), "Modelo de imagem inválido."),
   siteIds: z.array(z.string().uuid()),
   approval: z.enum(["telegram", "auto", "manual"]),
+  authorName: z.string().trim().max(120).nullable(),
 });
 
 export type AutomationInput = z.input<typeof schema>;
@@ -50,6 +51,7 @@ export async function saveAutomation(input: AutomationInput): Promise<ActionResu
     cover_model: v.coverModel,
     site_ids: v.siteIds,
     approval: v.approval,
+    author_name: v.authorName || null,
     next_run_at: next ? next.toISOString() : null,
     created_by: user.id,
   };

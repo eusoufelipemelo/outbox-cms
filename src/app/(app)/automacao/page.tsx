@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { automationStatus, listAutomationClients, listRuns } from "@/lib/data/automations";
 import { PageHeader } from "@/components/ui/panel";
-import { AutomationCard } from "@/components/automation/automation-card";
+import { AutomationManager } from "@/components/automation/automation-manager";
 import { RunsList } from "@/components/automation/runs-list";
 import { TelegramConnect } from "@/components/automation/telegram-connect";
 import { cn } from "@/lib/utils";
@@ -63,11 +63,7 @@ export default async function AutomacaoPage() {
         <p className="mb-6 rounded-[var(--radius-control)] bg-warn-soft px-4 py-3 text-sm text-warn">Último erro do Telegram: {status.webhook.error}</p>
       ) : null}
 
-      <ul className="space-y-3">
-        {clients.map((client) => (
-          <AutomationCard key={client.id} client={client} telegramReady={status.telegram} />
-        ))}
-      </ul>
+      <AutomationManager clients={clients} telegramReady={status.telegram} />
 
       <section className="mt-10">
         <h2 className="mb-3 text-[17px] font-semibold text-ink">Últimas execuções</h2>

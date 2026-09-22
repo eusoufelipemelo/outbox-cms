@@ -24,6 +24,14 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+/** Campo de data (aaaa-mm-dd) opcional. */
+const date = (message: string) =>
+  z
+    .string()
+    .trim()
+    .transform((v) => v || null)
+    .refine((v) => v === null || (/^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v))), { error: message });
+
 const clientSchema = z.object({
   name: z.string().trim().min(1, "Informe o nome do cliente.").max(120, "Use no máximo 120 caracteres."),
   legal_name: text(200),
@@ -62,6 +70,8 @@ const clientSchema = z.object({
   expert_credentials: text(200),
   expert_bio: text(1500),
   status: z.enum(CLIENT_STATUSES, { error: "Escolha um status válido." }),
+  contract_start: date("Confira a data de início do contrato."),
+  contract_end: date("Confira a data de término do contrato."),
 });
 
 /** Etiquetas de um campo de tags: cada valor de `name` mais o texto ainda não confirmado em `${name}_draft`. */
@@ -138,11 +148,16 @@ export async function saveClient(_prev: ActionResult<{ id: string }> | null, for
     expert_credentials: str("expert_credentials"),
     expert_bio: str("expert_bio"),
     status: str("status") || "active",
+    contract_start: str("contract_start"),
+    contract_end: str("contract_end"),
   });
   if (!parsed.success) {
     return { ok: false, error: "Revise os campos destacados.", fieldErrors: fieldErrorsFrom(parsed.error) };
   }
   const values = { ...parsed.data, brand_color: parsed.data.brand_color?.toLowerCase() ?? null };
+  if (values.contract_start && values.contract_end && values.contract_end < values.contract_start) {
+    return { ok: false, error: "Revise as datas do contrato.", fieldErrors: { contract_end: "O término não pode ser antes do início." } };
+  }
 
   if (id) {
     const { data, error } = await db().from("clients").update(values).eq("id", id).select("id").maybeSingle();

@@ -31,6 +31,15 @@ function describe(client: Client): string | undefined {
   return undefined;
 }
 
+/** Vigência do contrato, para renovação e corte do serviço. */
+function contractBadge(client: Client): { label: string; tone: "ok" | "warn" | "danger" } | null {
+  if (!client.contract_end) return client.contract_start ? { label: `Cliente desde ${formatDate(client.contract_start)}`, tone: "ok" } : null;
+  const days = Math.round((Date.parse(client.contract_end) - Date.now()) / 86_400_000);
+  if (days < 0) return { label: `Contrato vencido em ${formatDate(client.contract_end)}`, tone: "danger" };
+  if (days <= 30) return { label: `Contrato vence em ${days} dia(s)`, tone: "warn" };
+  return { label: `Contrato até ${formatDate(client.contract_end)}`, tone: "ok" };
+}
+
 export default async function ClientPage({ params }: Props) {
   await requireUser();
   const { id } = await params;
@@ -43,6 +52,7 @@ export default async function ClientPage({ params }: Props) {
     10,
   );
   const status = CLIENT_STATUS[client.status];
+  const contract = contractBadge(client);
 
   return (
     <>
@@ -56,10 +66,13 @@ export default async function ClientPage({ params }: Props) {
         }
         description={describe(client)}
         actions={
-          <Badge tone={status.tone}>
-            <StatusDot tone={status.tone} />
-            {status.label}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            {contract ? <Badge tone={contract.tone}>{contract.label}</Badge> : null}
+            <Badge tone={status.tone}>
+              <StatusDot tone={status.tone} />
+              {status.label}
+            </Badge>
+          </div>
         }
       />
 
