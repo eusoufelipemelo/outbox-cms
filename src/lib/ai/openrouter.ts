@@ -68,6 +68,42 @@ export function jsonSchemaOf(schema: z.ZodType): Record<string, unknown> {
   return strictSchema(raw) as Record<string, unknown>;
 }
 
+/**
+ * Catálogo público do OpenRouter (sem chave): diz quais parâmetros cada modelo aceita.
+ * Cache de 1 hora; se a lista não vier, o CMS segue tentando o formato completo.
+ */
+type ModelInfo = { id: string; name: string; jsonSchema: boolean; jsonObject: boolean };
+const catalog = globalThis as typeof globalThis & { __orCatalog?: { at: number; models: Map<string, ModelInfo> } };
+
+export async function modelCatalog(): Promise<Map<string, ModelInfo>> {
+  const cached = catalog.__orCatalog;
+  if (cached && Date.now() - cached.at < 3_600_000) return cached.models;
+  const models = new Map<string, ModelInfo>();
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/models", { signal: AbortSignal.timeout(15_000) });
+    const json = (await res.json()) as { data?: { id: string; name?: string; supported_parameters?: string[] }[] };
+    for (const m of json.data ?? []) {
+      const params = m.supported_parameters ?? [];
+      models.set(m.id, {
+        id: m.id,
+        name: m.name ?? m.id,
+        jsonSchema: params.includes("structured_outputs"),
+        jsonObject: params.includes("response_format"),
+      });
+    }
+  } catch {
+    // sem catálogo: segue com o comportamento padrão
+  }
+  if (models.size) catalog.__orCatalog = { at: Date.now(), models };
+  return models;
+}
+
+/** O que o modelo aceita de resposta estruturada. */
+export async function modelSupport(id: string): Promise<{ known: boolean; name: string; jsonSchema: boolean; jsonObject: boolean }> {
+  const info = (await modelCatalog()).get(id);
+  return info ? { known: true, ...info } : { known: false, name: id, jsonSchema: true, jsonObject: true };
+}
+
 function headers(): HeadersInit {
   const key = env.openrouterApiKey;
   if (!key) throw new OpenRouterError("OpenRouter desligado: configure OPENROUTER_API_KEY nas variáveis do Easypanel.", 503);
@@ -155,17 +191,24 @@ export async function openrouterJson<S extends z.ZodType>(
   signal?: AbortSignal,
 ): Promise<z.infer<S>> {
   const model = modelFor(cfg.task);
+  const support = await modelSupport(model);
+  const schemaJson = jsonSchemaOf(schema);
+  // modelo sem JSON Schema (ex.: alguns "flash"): pede JSON livre e manda o formato no texto
+  const format: Record<string, unknown> = support.jsonSchema
+    ? { type: "json_schema", json_schema: { name: "resposta", strict: true, schema: schemaJson } }
+    : { type: "json_object" };
+  const shape = support.jsonSchema ? "" : `\n\nO JSON precisa seguir exatamente este formato:\n${JSON.stringify(schemaJson)}`;
   const body = {
     model,
     max_tokens: cfg.maxTokens,
     messages: [
-      { role: "system", content: `${prompt.system}\n\nResponda somente com o JSON pedido, sem texto antes ou depois e sem blocos de código.` },
+      { role: "system", content: `${prompt.system}\n\nResponda somente com o JSON pedido, sem texto antes ou depois e sem blocos de código.${shape}` },
       { role: "user", content: prompt.user },
     ],
     reasoning: { effort: cfg.effort },
-    // só roteia para provedores que aceitam resposta estruturada
+    // só roteia para provedores que aceitam o formato pedido
     provider: { require_parameters: true },
-    response_format: { type: "json_schema", json_schema: { name: "resposta", strict: true, schema: jsonSchemaOf(schema) } },
+    response_format: format,
   };
 
   let json: ChatResponse;
@@ -174,7 +217,16 @@ export async function openrouterJson<S extends z.ZodType>(
   } catch (err) {
     // modelo sem suporte a JSON Schema: tenta o modo JSON simples antes de desistir
     if (err instanceof OpenRouterError && (err.status === 400 || err.status === 404 || err.status === 422)) {
-      json = await post({ ...body, provider: undefined, response_format: { type: "json_object" } }, cfg.timeoutMs, signal);
+      json = await post(
+        {
+          ...body,
+          provider: undefined,
+          response_format: { type: "json_object" },
+          messages: [{ ...body.messages[0], content: `${body.messages[0].content}${shape || `\n\nFormato do JSON:\n${JSON.stringify(schemaJson)}`}` }, body.messages[1]],
+        },
+        cfg.timeoutMs,
+        signal,
+      );
     } else throw err;
   }
 
