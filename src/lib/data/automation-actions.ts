@@ -10,6 +10,8 @@ import { IMAGE_MODELS } from "@/lib/ai/image";
 import { nextRunAt } from "@/lib/automation/schedule";
 import { loadAutomation, runAutomation } from "@/lib/automation/run";
 import { approveRun } from "@/lib/automation/approval";
+import { env } from "@/lib/env";
+import { getMe, setWebhook } from "@/lib/automation/telegram";
 import type { ActionResult } from "@/lib/types";
 
 const schema = z.object({
@@ -96,4 +98,19 @@ export async function unlinkTelegram(clientId: string): Promise<ActionResult> {
   if (error) return { ok: false, error: "Não foi possível desconectar o Telegram." };
   revalidatePath("/automacao");
   return { ok: true, message: "Telegram desconectado" };
+}
+
+/** Liga o bot do Telegram a este CMS (registra o webhook na API do Telegram). */
+export async function connectTelegramBot(): Promise<ActionResult<{ bot: string }>> {
+  await requireUser();
+  if (!env.telegramBotToken) return { ok: false, error: "Falta TELEGRAM_BOT_TOKEN nas variáveis do Easypanel." };
+  if (!env.telegramWebhookSecret) return { ok: false, error: "Falta TELEGRAM_WEBHOOK_SECRET nas variáveis do Easypanel." };
+  try {
+    const me = await getMe();
+    await setWebhook(`${env.appUrl}/api/telegram/webhook`, env.telegramWebhookSecret);
+    revalidatePath("/automacao");
+    return { ok: true, data: { bot: me.username }, message: `Bot @${me.username} conectado` };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Não foi possível conectar o bot." };
+  }
 }

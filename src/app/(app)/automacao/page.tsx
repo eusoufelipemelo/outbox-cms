@@ -6,6 +6,7 @@ import { automationStatus, listAutomationClients, listRuns } from "@/lib/data/au
 import { PageHeader } from "@/components/ui/panel";
 import { AutomationCard } from "@/components/automation/automation-card";
 import { RunsList } from "@/components/automation/runs-list";
+import { TelegramConnect } from "@/components/automation/telegram-connect";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Automação" };
@@ -13,14 +14,22 @@ export const metadata: Metadata = { title: "Automação" };
 export default async function AutomacaoPage() {
   await requireUser();
   const [clients, runs] = await Promise.all([listAutomationClients(), listRuns()]);
-  const status = automationStatus();
+  const status = await automationStatus();
   const active = clients.filter((c) => c.automation?.active).length;
   const perMonth = clients.reduce((n, c) => n + (c.automation?.active ? c.automation.per_month : 0), 0);
 
   const chips = [
     { on: status.ai, label: status.ai ? "IA de texto ligada" : "Falta ANTHROPIC_API_KEY", icon: Sparkles },
     { on: status.images, label: status.images ? "Imagens ligadas" : "Falta GEMINI_API_KEY", icon: ImageIcon },
-    { on: status.telegram, label: status.telegram ? "Telegram ligado" : "Falta TELEGRAM_BOT_TOKEN", icon: Bot },
+    {
+      on: status.telegram && status.webhook.connected,
+      label: !status.telegram
+        ? "Falta TELEGRAM_BOT_TOKEN"
+        : status.webhook.connected
+          ? `Telegram ligado${status.webhook.bot ? ` (@${status.webhook.bot})` : ""}`
+          : "Bot do Telegram ainda não conectado",
+      icon: Bot,
+    },
   ];
 
   return (
@@ -48,6 +57,11 @@ export default async function AutomacaoPage() {
           </li>
         ))}
       </ul>
+
+      {status.telegram && !status.webhook.connected ? <TelegramConnect /> : null}
+      {status.webhook.error ? (
+        <p className="mb-6 rounded-[var(--radius-control)] bg-warn-soft px-4 py-3 text-sm text-warn">Último erro do Telegram: {status.webhook.error}</p>
+      ) : null}
 
       <ul className="space-y-3">
         {clients.map((client) => (

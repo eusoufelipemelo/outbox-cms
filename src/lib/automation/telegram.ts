@@ -49,8 +49,28 @@ export function getMe(): Promise<{ username: string; first_name: string }> {
   return call("getMe", {});
 }
 
+export function getWebhookInfo(): Promise<{ url: string; last_error_message?: string; pending_update_count?: number }> {
+  return call("getWebhookInfo", {});
+}
+
+/** Nome do bot: vem do env ou é perguntado ao Telegram uma vez por processo. */
+let cachedBot: { token: string; username: string } | null = null;
+export async function botUsername(): Promise<string | null> {
+  const fromEnv = env.telegramBotUsername;
+  if (fromEnv) return fromEnv;
+  const token = env.telegramBotToken;
+  if (!token) return null;
+  if (cachedBot?.token === token) return cachedBot.username;
+  try {
+    const me = await getMe();
+    cachedBot = { token, username: me.username };
+    return me.username;
+  } catch {
+    return null;
+  }
+}
+
 /** Link que o cliente abre para conectar a conversa dele à automação. */
-export function connectLink(code: string): string | null {
-  const bot = env.telegramBotUsername;
+export function connectLink(code: string, bot: string | null): string | null {
   return bot ? `https://t.me/${bot}?start=${code}` : null;
 }

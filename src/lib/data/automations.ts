@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { aiStatus } from "@/lib/ai/server";
 import { imagesEnabled } from "@/lib/ai/image";
-import { telegramEnabled, connectLink } from "@/lib/automation/telegram";
+import { telegramEnabled, connectLink, botUsername, getWebhookInfo } from "@/lib/automation/telegram";
 import type { ContentType } from "@/lib/types";
 
 export type Automation = {
@@ -53,9 +53,10 @@ const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
 
 /** Clientes ativos com a automação de cada um (se houver). */
 export async function listAutomationClients(): Promise<AutomationClient[]> {
-  const [{ data: clients }, { data: autos }] = await Promise.all([
+  const [{ data: clients }, { data: autos }, bot] = await Promise.all([
     db().from("clients").select("id, name, segment, city, status, sites(id, name, status)").neq("status", "archived"),
     db().from("automations").select("*"),
+    botUsername(),
   ]);
   const byClient = new Map(((autos ?? []) as Automation[]).map((a) => [a.client_id, a]));
   return ((clients ?? []) as (AutomationClient & { status: string })[])
@@ -68,7 +69,7 @@ export async function listAutomationClients(): Promise<AutomationClient[]> {
         city: c.city,
         sites: [...(c.sites ?? [])].sort((a, b) => collator.compare(a.name, b.name)),
         automation,
-        connectUrl: automation ? connectLink(automation.telegram_link_code) : null,
+        connectUrl: automation ? connectLink(automation.telegram_link_code, bot) : null,
       };
     })
     .sort((a, b) => Number(Boolean(b.automation?.active)) - Number(Boolean(a.automation?.active)) || collator.compare(a.name, b.name));
@@ -91,8 +92,18 @@ export async function listRuns(limit = 30): Promise<RunItem[]> {
 }
 
 /** O que já está configurado no servidor para a automação funcionar. */
-export function automationStatus() {
-  return { ai: aiStatus().enabled, images: imagesEnabled(), telegram: telegramEnabled() };
+export async function automationStatus() {
+  const telegram = telegramEnabled();
+  let webhook: { connected: boolean; bot: string | null; error?: string } = { connected: false, bot: null };
+  if (telegram) {
+    const [bot, info] = await Promise.all([botUsername(), getWebhookInfo().catch(() => null)]);
+    webhook = {
+      bot,
+      connected: Boolean(info?.url),
+      ...(info?.last_error_message ? { error: info.last_error_message } : {}),
+    };
+  }
+  return { ai: aiStatus().enabled, images: imagesEnabled(), telegram, webhook };
 }
 
 export async function getRunByToken(token: string) {
