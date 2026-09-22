@@ -29,7 +29,7 @@ import {
 } from "./prompts";
 import { htmlForPrompt, plainText, sanitizeAiHtml } from "./sanitize";
 import { DEFAULT_FULL_ARTICLE_WORDS, DEFAULT_IDEAS, DEFAULT_WORDS, MAX_HTML_CHARS } from "./validation";
-import { openrouterJson, openrouterSearch, OpenRouterError } from "./openrouter";
+import { openrouterJson, openrouterSearch, OpenRouterError, type Task } from "./openrouter";
 
 // Assistente de escrita (Claude). Só roda no servidor, chamado por /api/ai.
 
@@ -88,7 +88,7 @@ function supportsAdaptive(model: string): boolean {
 }
 
 type Effort = "low" | "medium" | "high";
-export type CallConfig = { maxTokens: number; timeoutMs: number; effort: Effort };
+export type CallConfig = { maxTokens: number; timeoutMs: number; effort: Effort; /** Função do CMS: permite um modelo por finalidade no OpenRouter. */ task?: Task };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -633,7 +633,7 @@ const handlers: Handlers = {
     const out = await generate(
       z.object({ titles: z.array(z.string()) }),
       titlesPrompt(input, client),
-      { maxTokens: 4000, timeoutMs: 60_000, effort: "low" },
+      { maxTokens: 4000, timeoutMs: 60_000, effort: "low", task: "apoio" },
       signal,
     );
     const seen = new Set<string>();
@@ -654,7 +654,7 @@ const handlers: Handlers = {
     const out = await generate(
       htmlSchema,
       outlinePrompt(input, client),
-      { maxTokens: 8000, timeoutMs: 90_000, effort: "medium" },
+      { maxTokens: 8000, timeoutMs: 90_000, effort: "medium", task: "apoio" },
       signal,
     );
     return { html: safeHtml(out.html) };
@@ -667,7 +667,7 @@ const handlers: Handlers = {
     const out = await generate(
       htmlSchema,
       draftPrompt({ ...input, outlineHtml, words }, client),
-      { maxTokens: clampInt(10_000 + words * 6, 12_000, 32_000), timeoutMs: 280_000, effort: "medium" },
+      { maxTokens: clampInt(10_000 + words * 6, 12_000, 32_000), timeoutMs: 280_000, effort: "medium", task: "apoio" },
       signal,
     );
     return { html: keepSourceLinks(safeHtml(out.html), outlineHtml) };
@@ -679,7 +679,7 @@ const handlers: Handlers = {
     const out = await generate(
       htmlSchema,
       improvePrompt({ html, instruction: input.instruction }),
-      { maxTokens: clampInt(6_000 + html.length / 2, 6_000, 32_000), timeoutMs: 180_000, effort: "medium" },
+      { maxTokens: clampInt(6_000 + html.length / 2, 6_000, 32_000), timeoutMs: 180_000, effort: "medium", task: "apoio" },
       signal,
     );
     // Links do trecho original continuam; um link novo só fica se o endereço veio na instrução.
@@ -690,7 +690,7 @@ const handlers: Handlers = {
     const out = await generate(
       z.object({ seo_title: z.string(), seo_description: z.string(), excerpt: z.string(), slug: z.string() }),
       seoPrompt({ title: plainText(input.title), html: htmlForPrompt(input.html), keyword: input.keyword }),
-      { maxTokens: 4000, timeoutMs: 60_000, effort: "low" },
+      { maxTokens: 4000, timeoutMs: 60_000, effort: "low", task: "apoio" },
       signal,
     );
     return {
@@ -747,7 +747,7 @@ const handlers: Handlers = {
         content_type: contentTypeSchema,
       }),
       geoPrompt({ title: plainText(input.title), html, keyword: input.keyword }, client),
-      { maxTokens: clampInt(8_000 + html.length / 8, 8_000, 16_000), timeoutMs: 120_000, effort: "medium" },
+      { maxTokens: clampInt(8_000 + html.length / 8, 8_000, 16_000), timeoutMs: 120_000, effort: "medium", task: "apoio" },
       signal,
     );
     const faq = cleanFaq(out.faq, 5);
@@ -786,7 +786,7 @@ const handlers: Handlers = {
       seo_description: z.string(),
       source_suggestions: z.array(z.string()),
     });
-    const callCfg = { maxTokens: clampInt(14_000 + words * 7, 18_000, 32_000), timeoutMs: 280_000, effort: "medium" as const };
+    const callCfg = { maxTokens: clampInt(14_000 + words * 7, 18_000, 32_000), timeoutMs: 280_000, effort: "medium" as const, task: "artigo" as const };
 
     const sources: SourceItem[] = research.map((r) => ({ title: r.title, url: r.url, publisher: r.publisher }));
     const author_name = client?.expert_name?.trim() || ctx?.userName?.trim() || null;
@@ -863,7 +863,7 @@ const handlers: Handlers = {
         ),
       }),
       ideasPrompt({ count, focus: input.focus, monthLabel: currentMonthBr(), publishedTitles }, client),
-      { maxTokens: clampInt(6_000 + count * 400, 8_000, 16_000), timeoutMs: 120_000, effort: "medium" },
+      { maxTokens: clampInt(6_000 + count * 400, 8_000, 16_000), timeoutMs: 120_000, effort: "medium", task: "pautas" },
       signal,
     );
 

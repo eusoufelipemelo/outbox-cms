@@ -73,7 +73,7 @@ Categorias já usadas neste blog: ${input.existing.join(", ") || "nenhuma ainda"
 
 Devolva a categoria e as etiquetas.`,
       },
-      { maxTokens: 1000, timeoutMs: 60_000, effort: "low" },
+      { maxTokens: 1000, timeoutMs: 60_000, effort: "low", task: "apoio" },
     );
     const tags = [...new Set([...out.tags, ...base].map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 6);
     return { category: out.category.trim().slice(0, 60) || null, tags };
@@ -100,7 +100,7 @@ async function coverPrompt(input: { title: string; summary: string; segment: str
           "Você dirige a fotografia de capa de artigos de blog da agência OutBox. Cria cenas reais, brasileiras quando fizer sentido, sem texto na imagem, sem colagens e sem clichê de banco de imagens genérico.",
         user: `Artigo: "${input.title}"\nResumo: ${input.summary}\nSegmento do cliente: ${input.segment ?? "não informado"}\nCidade: ${input.city ?? "não informada"}${input.identity ? `\nIdentidade visual da marca (respeite): ${input.identity}` : ""}\n\nEscreva o prompt da imagem de capa (16:9).`,
       },
-      { maxTokens: 1200, timeoutMs: 60_000, effort: "low" },
+      { maxTokens: 1200, timeoutMs: 60_000, effort: "low", task: "apoio" },
     );
     return { prompt: `${out.prompt} Editorial photography, no text, no logos, no watermark.${input.identity}`, alt: out.alt.slice(0, 160) };
   } catch {

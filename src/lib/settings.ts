@@ -19,9 +19,27 @@ export type Field = {
   /** Variável de ambiente equivalente (usada na importação automática). */
   envVar?: string;
   options?: { value: string; label: string }[];
+  /** Sugestões que aparecem ao digitar (o campo continua livre). */
+  suggestions?: string[];
 };
 
 export type Group = { id: string; title: string; description: string; fields: Field[]; note?: string };
+
+/** Modelos do OpenRouter que costumam ir bem em cada tipo de trabalho (o campo aceita qualquer id). */
+export const MODEL_SUGGESTIONS = [
+  "anthropic/claude-sonnet-5",
+  "anthropic/claude-opus-5",
+  "anthropic/claude-haiku-4.5",
+  "openai/gpt-5.1",
+  "openai/gpt-5.1-mini",
+  "google/gemini-3-pro",
+  "google/gemini-3-flash",
+  "deepseek/deepseek-v3.2",
+  "x-ai/grok-4.1",
+  "meta-llama/llama-4-maverick",
+  "qwen/qwen3-max",
+  "mistralai/mistral-large-2512",
+];
 
 export const GROUPS: Group[] = [
   {
@@ -42,10 +60,34 @@ export const GROUPS: Group[] = [
       { key: "openrouter_api_key", label: "Chave do OpenRouter", secret: true, placeholder: "sk-or-...", envVar: "OPENROUTER_API_KEY" },
       {
         key: "openrouter_model",
-        label: "Modelo do OpenRouter",
-        hint: "No formato fornecedor/modelo, como anthropic/claude-sonnet-5.",
+        label: "Modelo padrão do OpenRouter",
+        hint: "Formato fornecedor/modelo. Vale para tudo que não tiver modelo próprio abaixo.",
         placeholder: "anthropic/claude-sonnet-5",
         envVar: "OPENROUTER_MODEL",
+        suggestions: MODEL_SUGGESTIONS,
+      },
+      {
+        key: "model_artigo",
+        label: "Modelo dos artigos",
+        hint: "Texto longo com pesquisa e checklist. Use um modelo forte.",
+        placeholder: "usa o padrão",
+        suggestions: MODEL_SUGGESTIONS,
+      },
+      { key: "model_pautas", label: "Modelo das pautas", placeholder: "usa o padrão", suggestions: MODEL_SUGGESTIONS },
+      { key: "model_diagnostico", label: "Modelo do diagnóstico", placeholder: "usa o padrão", suggestions: MODEL_SUGGESTIONS },
+      {
+        key: "model_pesquisa",
+        label: "Modelo da pesquisa na web",
+        hint: "Busca as fontes dos artigos. O plugin de busca do OpenRouter é cobrado à parte.",
+        placeholder: "usa o padrão",
+        suggestions: MODEL_SUGGESTIONS,
+      },
+      {
+        key: "model_apoio",
+        label: "Modelo de apoio",
+        hint: "Tarefas curtas: títulos, categorias, etiquetas, blocos de GEO e o prompt das capas. Um modelo barato resolve.",
+        placeholder: "usa o padrão",
+        suggestions: MODEL_SUGGESTIONS,
       },
       { key: "anthropic_api_key", label: "Chave da Anthropic", secret: true, placeholder: "sk-ant-...", hint: "Usada só quando o provedor é Anthropic." },
       { key: "anthropic_model", label: "Modelo da Anthropic", placeholder: "claude-sonnet-5" },

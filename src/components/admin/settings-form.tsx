@@ -95,14 +95,24 @@ export function SettingsForm({ groups, current }: { groups: Group[]; current: Cu
                       </Button>
                     </div>
                   ) : (
-                    <Input
-                      id={id}
-                      value={typed ?? saved.value}
-                      placeholder={f.placeholder}
-                      autoComplete="off"
-                      spellCheck={false}
-                      onChange={(e) => set(f.key, e.target.value)}
-                    />
+                    <>
+                      <Input
+                        id={id}
+                        value={typed ?? saved.value}
+                        placeholder={f.placeholder}
+                        autoComplete="off"
+                        spellCheck={false}
+                        list={f.suggestions ? `${id}-lista` : undefined}
+                        onChange={(e) => set(f.key, e.target.value)}
+                      />
+                      {f.suggestions ? (
+                        <datalist id={`${id}-lista`}>
+                          {f.suggestions.map((m) => (
+                            <option key={m} value={m} />
+                          ))}
+                        </datalist>
+                      ) : null}
+                    </>
                   )}
                 </Field>
               );

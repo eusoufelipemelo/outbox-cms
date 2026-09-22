@@ -72,6 +72,6 @@ export async function writeReport(input: {
   return generate(
     reportSchema,
     { system: SYSTEM, user: `Dados medidos agora:\n${JSON.stringify(data, null, 1)}\n\nEscreva o diagnóstico.` },
-    { maxTokens: 8000, timeoutMs: 150_000, effort: "medium" },
+    { maxTokens: 8000, timeoutMs: 150_000, effort: "medium", task: "diagnostico" },
   );
 }

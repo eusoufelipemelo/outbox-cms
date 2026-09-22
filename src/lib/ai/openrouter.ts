@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { env } from "@/lib/env";
+import { pick } from "@/lib/settings-store";
 
 /**
  * OpenRouter: uma só chave e um só saldo para vários modelos (Claude, GPT, Gemini, Llama…).
@@ -9,6 +10,15 @@ import { env } from "@/lib/env";
  */
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+
+/** Funções do CMS que podem usar modelos diferentes. */
+export const TASKS = ["artigo", "pautas", "diagnostico", "apoio", "pesquisa"] as const;
+export type Task = (typeof TASKS)[number];
+
+/** Modelo da função, com o modelo padrão do OpenRouter como reserva. */
+export function modelFor(task?: Task): string {
+  return (task ? pick(`model_${task}`) : null) || env.openrouterModel;
+}
 
 export class OpenRouterError extends Error {
   constructor(
@@ -95,27 +105,78 @@ async function post(body: Record<string, unknown>, timeoutMs: number, signal?: A
   return json;
 }
 
+/**
+ * Acha o JSON na resposta: inteiro, dentro de ```json … ``` ou o primeiro objeto equilibrado
+ * do texto (alguns modelos escrevem uma frase antes ou deixam blocos de raciocínio).
+ */
+export function extractJson(raw: string): unknown {
+  const text = raw.replace(/<(think|thinking|reasoning)>[\s\S]*?<\/\1>/gi, "").trim();
+  const tries = [text];
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced?.[1]) tries.push(fenced[1]);
+  const start = text.search(/[{[]/);
+  if (start >= 0) {
+    const open = text[start];
+    const close = open === "{" ? "}" : "]";
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = start; i < text.length; i++) {
+      const c = text[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (c === "\\") escaped = true;
+        else if (c === '"') inString = false;
+        continue;
+      }
+      if (c === '"') inString = true;
+      else if (c === open) depth++;
+      else if (c === close && --depth === 0) {
+        tries.push(text.slice(start, i + 1));
+        break;
+      }
+    }
+  }
+  for (const candidate of tries) {
+    try {
+      return JSON.parse(candidate.trim());
+    } catch {
+      // tenta o próximo formato
+    }
+  }
+  return undefined;
+}
+
 /** Resposta em JSON, validada pelo schema do zod. */
 export async function openrouterJson<S extends z.ZodType>(
   schema: S,
   prompt: { system: string; user: string },
-  cfg: { maxTokens: number; timeoutMs: number; effort: "low" | "medium" | "high" },
+  cfg: { maxTokens: number; timeoutMs: number; effort: "low" | "medium" | "high"; task?: Task },
   signal?: AbortSignal,
 ): Promise<z.infer<S>> {
-  const json = await post(
-    {
-      model: env.openrouterModel,
-      max_tokens: cfg.maxTokens,
-      messages: [
-        { role: "system", content: prompt.system },
-        { role: "user", content: prompt.user },
-      ],
-      reasoning: { effort: cfg.effort },
-      response_format: { type: "json_schema", json_schema: { name: "resposta", strict: true, schema: jsonSchemaOf(schema) } },
-    },
-    cfg.timeoutMs,
-    signal,
-  );
+  const model = modelFor(cfg.task);
+  const body = {
+    model,
+    max_tokens: cfg.maxTokens,
+    messages: [
+      { role: "system", content: `${prompt.system}\n\nResponda somente com o JSON pedido, sem texto antes ou depois e sem blocos de código.` },
+      { role: "user", content: prompt.user },
+    ],
+    reasoning: { effort: cfg.effort },
+    // só roteia para provedores que aceitam resposta estruturada
+    provider: { require_parameters: true },
+    response_format: { type: "json_schema", json_schema: { name: "resposta", strict: true, schema: jsonSchemaOf(schema) } },
+  };
+
+  let json: ChatResponse;
+  try {
+    json = await post(body, cfg.timeoutMs, signal);
+  } catch (err) {
+    // modelo sem suporte a JSON Schema: tenta o modo JSON simples antes de desistir
+    if (err instanceof OpenRouterError && (err.status === 400 || err.status === 404 || err.status === 422)) {
+      json = await post({ ...body, provider: undefined, response_format: { type: "json_object" } }, cfg.timeoutMs, signal);
+    } else throw err;
+  }
 
   const choice = json.choices?.[0];
   const text = choice?.message?.content ?? "";
@@ -124,20 +185,17 @@ export async function openrouterJson<S extends z.ZodType>(
   }
   if (!text.trim()) throw new OpenRouterError("O modelo devolveu uma resposta vazia. Tente de novo.", 502);
 
-  let data: unknown;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    // alguns modelos embrulham o JSON em ```json … ```
-    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    try {
-      data = JSON.parse(fenced?.[1] ?? "");
-    } catch {
-      throw new OpenRouterError("O modelo devolveu uma resposta em formato inesperado. Tente de novo.", 502);
-    }
+  const data = extractJson(text);
+  if (data === undefined) {
+    throw new OpenRouterError(
+      `O modelo ${model} respondeu fora do formato JSON que o CMS pede. Escolha outro modelo no Painel administrativo (os da OpenAI, Anthropic e Google costumam aceitar).`,
+      502,
+    );
   }
   const parsed = schema.safeParse(data);
-  if (!parsed.success) throw new OpenRouterError("O modelo devolveu uma resposta incompleta. Tente de novo.", 502);
+  if (!parsed.success) {
+    throw new OpenRouterError(`O modelo ${model} devolveu uma resposta incompleta. Tente de novo ou escolha outro modelo.`, 502);
+  }
   return parsed.data;
 }
 
@@ -149,7 +207,7 @@ export async function openrouterSearch(
 ): Promise<{ text: string; sources: Annotation[] }> {
   const json = await post(
     {
-      model: env.openrouterModel,
+      model: modelFor("pesquisa"),
       max_tokens: cfg.maxTokens,
       messages: [
         { role: "system", content: prompt.system },
