@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { publishPost } from "@/lib/delivery";
+import { publishArticleToGbp } from "@/lib/google/publish";
 
 /** Aprovação do rascunho pelo cliente (Telegram) ou pela equipe (CMS). */
 
@@ -32,11 +33,28 @@ export async function approveRun(runId: string): Promise<{ ok: boolean; message:
     await db().from("automation_runs").update({ status: "failed", error: "A publicação falhou em todos os destinos." }).eq("id", runId);
     return { ok: false, message: "A publicação falhou. A equipe da OutBox já vai olhar." };
   }
+  const gbpNote = await alsoOnGoogle(run.automation_id, run.post_id);
   await db()
     .from("automation_runs")
-    .update({ status: "published", error: failed ? `${failed} destino(s) falharam.` : null, finished_at: new Date().toISOString() })
+    .update({
+      status: "published",
+      error: [failed ? `${failed} destino(s) falharam.` : null, gbpNote].filter(Boolean).join(" ") || null,
+      finished_at: new Date().toISOString(),
+    })
     .eq("id", runId);
   return { ok: true, message: "Artigo publicado", title: (post as { title: string }).title };
+}
+
+/** Se a automação pede, publica o artigo também no Google Empresas. Devolve um aviso só quando falha. */
+export async function alsoOnGoogle(automationId: string, postId: string): Promise<string | null> {
+  const { data } = await db().from("automations").select("gbp_post").eq("id", automationId).maybeSingle();
+  if (!(data as { gbp_post?: boolean } | null)?.gbp_post) return null;
+  try {
+    const r = await publishArticleToGbp(postId);
+    return r.sent && !r.failed ? null : `Google Empresas: ${r.message}`;
+  } catch (err) {
+    return `Google Empresas: ${err instanceof Error ? err.message : "falha ao publicar"}`;
+  }
 }
 
 /** Cliente pediu ajustes: o artigo fica em rascunho e a equipe recebe o recado. */

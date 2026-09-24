@@ -120,6 +120,16 @@ export const GROUPS: Group[] = [
     fields: [{ key: "google_api_key", label: "Chave do Google Cloud", secret: true, placeholder: "AIza...", envVar: "GOOGLE_API_KEY" }],
   },
   {
+    id: "google",
+    title: "Google Empresas",
+    description: "Login com o Google (OAuth) para gerir os perfis dos clientes: publicações, avaliações e desempenho.",
+    note: "O Google precisa aprovar o acesso da OutBox à Business Profile API. Até lá, a conexão funciona mas as chamadas voltam com cota zero.",
+    fields: [
+      { key: "google_oauth_client_id", label: "Client ID do OAuth", placeholder: "123...apps.googleusercontent.com" },
+      { key: "google_oauth_client_secret", label: "Client secret do OAuth", secret: true, placeholder: "GOCSPX-..." },
+    ],
+  },
+  {
     id: "telegram",
     title: "Telegram",
     description: "Bot que leva o rascunho para o cliente aprovar.",
@@ -246,6 +256,15 @@ export async function settingsForPanel(): Promise<Record<string, { value: string
       : { value: v, masked: false, fromEnv };
   }
   return out;
+}
+
+/** Grava um valor interno (fora do formulário), como o token de acesso do Google. */
+export async function writeInternal(key: string, value: string | null, secret = true): Promise<void> {
+  const { error } = await db()
+    .from("app_settings")
+    .upsert({ key, value: value === null ? null : secret ? encrypt(value) : value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+  if (error) throw new Error(`Não foi possível salvar: ${error.message}`);
+  await loadSettings(true);
 }
 
 /** Salva o que mudou. Campo secreto com string vazia fica como está; "apagar" remove. */

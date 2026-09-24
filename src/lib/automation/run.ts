@@ -14,6 +14,7 @@ import type { ContentType } from "@/lib/types";
 import { loadSettings } from "@/lib/settings";
 import { nextRunAt } from "./schedule";
 import { connectLink, sendMessage, telegramEnabled } from "./telegram";
+import { alsoOnGoogle } from "./approval";
 
 export type AutomationRow = {
   id: string;
@@ -243,7 +244,11 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
       await db().from("posts").update({ status: "published", published_at: new Date().toISOString() }).eq("id", postId);
       const results = await publishPost(postId, { siteIds });
       const failed = results.filter((r) => !r.ok).length;
-      await finish(runId, { status: failed === results.length ? "failed" : "published", error: failed ? `${failed} destino(s) falharam.` : null });
+      const gbpNote = failed < results.length ? await alsoOnGoogle(a.id, postId) : null;
+      await finish(runId, {
+        status: failed === results.length ? "failed" : "published",
+        error: [failed ? `${failed} destino(s) falharam.` : null, gbpNote].filter(Boolean).join(" ") || null,
+      });
       return { runId, ok: failed < results.length, message: `publicado em ${results.length - failed}/${results.length} destinos` };
     }
 

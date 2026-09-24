@@ -211,6 +211,7 @@ function AutomationEditor({ client, telegramReady, onBack }: { client: Automatio
   const [coverModel, setCoverModel] = useState(a?.cover_model ?? "gemini-3.1-flash-image");
   const [approval, setApproval] = useState<string>(a?.approval ?? "telegram");
   const [siteIds, setSiteIds] = useState<string[]>(a?.site_ids ?? []);
+  const [gbpPost, setGbpPost] = useState(a?.gbp_post ?? false);
 
   const activeSites = client.sites.filter((s) => s.status === "active");
   const connected = Boolean(a?.telegram_chat_id);
@@ -236,6 +237,7 @@ function AutomationEditor({ client, telegramReady, onBack }: { client: Automatio
         words,
         contentType: (contentType || null) as ContentType | null,
         authorName: authorName.trim() || null,
+        gbpPost,
         cover,
         coverModel,
         siteIds,
@@ -416,6 +418,16 @@ function AutomationEditor({ client, telegramReady, onBack }: { client: Automatio
             ))}
           </div>
         </fieldset>
+
+        <label className="mt-5 flex cursor-pointer items-start gap-3">
+          <input type="checkbox" checked={gbpPost} onChange={(e) => setGbpPost(e.target.checked)} className="mt-1 accent-[var(--color-ink)]" />
+          <span>
+            <span className="block text-sm font-medium text-ink">Publicar também no Google Empresas</span>
+            <span className="block text-[13px] text-muted">
+              Quando o artigo for ao ar, vira uma novidade nos perfis do Google ligados a este cliente. Precisa do Google Empresas conectado.
+            </span>
+          </span>
+        </label>
 
         {approval === "telegram" ? (
           <div className="mt-5 rounded-[var(--radius-control)] border border-line bg-sunken p-4">

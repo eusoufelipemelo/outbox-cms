@@ -27,6 +27,7 @@ const schema = z.object({
   siteIds: z.array(z.string().uuid()),
   approval: z.enum(["telegram", "auto", "manual"]),
   authorName: z.string().trim().max(120).nullable(),
+  gbpPost: z.boolean().optional(),
 });
 
 export type AutomationInput = z.input<typeof schema>;
@@ -52,6 +53,7 @@ export async function saveAutomation(input: AutomationInput): Promise<ActionResu
     site_ids: v.siteIds,
     approval: v.approval,
     author_name: v.authorName || null,
+    gbp_post: Boolean(v.gbpPost),
     next_run_at: next ? next.toISOString() : null,
     created_by: user.id,
   };
