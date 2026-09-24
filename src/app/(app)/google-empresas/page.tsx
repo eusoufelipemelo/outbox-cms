@@ -57,7 +57,7 @@ export default async function GoogleEmpresasPage({ searchParams }: PageProps<"/g
       <PageHeader
         title="Google Empresas"
         description="Os perfis dos clientes no Google em um lugar só: publicar artigos como novidades, responder avaliações com ajuda da IA e acompanhar visualizações, ligações e rotas."
-        actions={<GbpConnect connected={status.connected} email={status.email} isAdmin={user.role === "admin"} />}
+        actions={status.configured ? <GbpConnect connected={status.connected} email={status.email} isAdmin={user.role === "admin"} /> : null}
       />
 
       {error ? <p className="mb-6 rounded-[var(--radius-control)] bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}
