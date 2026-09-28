@@ -80,7 +80,8 @@ export async function disconnect(): Promise<void> {
   cache.token = null;
 }
 
-const cache: { token: { value: string; exp: number } | null } = { token: null };
+const g = globalThis as typeof globalThis & { __gbpToken?: { token: { value: string; exp: number } | null } };
+const cache = (g.__gbpToken ??= { token: null });
 
 /** Access token válido (renova com o refresh token quando faltar menos de 1 minuto). */
 export async function accessToken(): Promise<string> {
