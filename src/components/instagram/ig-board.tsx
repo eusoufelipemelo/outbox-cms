@@ -18,7 +18,8 @@ export type IgItem = {
   kind: "carousel" | "image" | "story";
   slides: { url: string }[];
   caption: string | null;
-  status: "draft" | "publishing" | "published" | "failed";
+  status: "draft" | "awaiting" | "changes" | "publishing" | "published" | "failed";
+  feedback: string | null;
   permalink: string | null;
   error: string | null;
   created_at: string;
@@ -80,10 +81,19 @@ export function IgBoard({ clients, articles, items }: { clients: IgClient[]; art
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-ink">{it.clientName}</span>
                   <Badge tone="neutral">{it.kind === "story" ? "Story" : "Carrossel"}</Badge>
-                  {it.status === "failed" ? <Badge tone="danger">Falhou</Badge> : it.status === "publishing" ? <Badge tone="info">Publicando</Badge> : null}
+                  {it.status === "failed" ? (
+                    <Badge tone="danger">Falhou</Badge>
+                  ) : it.status === "publishing" ? (
+                    <Badge tone="info">Publicando</Badge>
+                  ) : it.status === "awaiting" ? (
+                    <Badge tone="warn">Com o cliente</Badge>
+                  ) : it.status === "changes" ? (
+                    <Badge tone="danger">Ajustes pedidos</Badge>
+                  ) : null}
                   <span className="text-[12.5px] text-faint">{formatDateTime(it.created_at)}</span>
                 </div>
                 {it.error ? <p className="mt-2 text-[13px] text-danger">{it.error}</p> : null}
+                {it.feedback ? <p className="mt-2 text-[13.5px] text-danger">Cliente pediu: {it.feedback}</p> : null}
                 <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                   {it.slides.map((s, i) => (
                     // eslint-disable-next-line @next/next/no-img-element

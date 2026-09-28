@@ -136,14 +136,20 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
   try {
     if (!aiStatus().enabled) throw new Error("Assistente de IA desligado: falta ANTHROPIC_API_KEY.");
 
-    const { data: clientRow } = await db().from("clients").select("name, segment, city, expert_name, contract_end, brand_color, image_style, image_mood").eq("id", a.client_id).maybeSingle();
+    const { data: clientRow } = await db().from("clients").select("name, segment, city, expert_name, contract_end, brand_color, image_style, image_mood, telegram_chat_id, svc_blog_gbp").eq("id", a.client_id).maybeSingle();
     const client = (clientRow ?? { name: "cliente", segment: null, city: null, expert_name: null, contract_end: null }) as {
       name: string;
       segment: string | null;
       city: string | null;
       expert_name: string | null;
       contract_end: string | null;
+      telegram_chat_id?: string | null;
+      svc_blog_gbp?: boolean;
     } & VisualClient;
+    if (clientRow && !client.svc_blog_gbp) {
+      throw new Error(`${client.name} não tem o serviço Blog + Google Empresas ativo. Marque em Serviços para a automação voltar a escrever.`);
+    }
+    const chatId = client.telegram_chat_id ?? a.telegram_chat_id;
     if (client.contract_end && client.contract_end < new Date().toISOString().slice(0, 10)) {
       throw new Error(`Contrato de ${client.name} venceu em ${client.contract_end.split("-").reverse().join("/")}. Renove a data no cadastro do cliente.`);
     }
@@ -254,7 +260,7 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
       return { runId, ok: failed < results.length, message: `publicado em ${results.length - failed}/${results.length} destinos` };
     }
 
-    if (a.approval === "telegram" && a.telegram_chat_id && telegramEnabled()) {
+    if (a.approval === "telegram" && chatId && telegramEnabled()) {
       await step(runId, "Enviando para o cliente no Telegram");
       const link = `${env.appUrl}/previa/${runRow.approval_token}`;
       const text = [
@@ -266,7 +272,7 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
         "",
         "Se estiver bom, toque em Aprovar e publicar. Se quiser mudar algo, toque em Pedir ajustes e escreva aqui mesmo.",
       ].join("\n");
-      const msg = await sendMessage(a.telegram_chat_id, text, [
+      const msg = await sendMessage(chatId, text, [
         [
           { text: "✅ Aprovar e publicar", callback_data: `ok:${runId}` },
           { text: "✏️ Pedir ajustes", callback_data: `no:${runId}` },
@@ -278,7 +284,7 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
 
     const reason =
       a.approval === "telegram"
-        ? a.telegram_chat_id
+        ? chatId
           ? "Telegram desligado no servidor: o artigo ficou em rascunho."
           : "O cliente ainda não conectou o Telegram: o artigo ficou em rascunho."
         : null;

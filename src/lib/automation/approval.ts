@@ -46,10 +46,18 @@ export async function approveRun(runId: string): Promise<{ ok: boolean; message:
   return { ok: true, message: "Artigo publicado", title: (post as { title: string }).title };
 }
 
-/** Se a automação pede, publica o artigo também no Google Empresas. Devolve um aviso só quando falha. */
+/**
+ * Blog e Google Empresas andam juntos: todo artigo de cliente com esse serviço vira novidade
+ * nos perfis do Google ligados a ele. Devolve um aviso só quando algo falha.
+ */
 export async function alsoOnGoogle(automationId: string, postId: string): Promise<string | null> {
-  const { data } = await db().from("automations").select("gbp_post").eq("id", automationId).maybeSingle();
-  if (!(data as { gbp_post?: boolean } | null)?.gbp_post) return null;
+  const { data } = await db().from("automations").select("client_id").eq("id", automationId).maybeSingle();
+  const clientId = (data as { client_id: string } | null)?.client_id;
+  if (!clientId) return null;
+  const { data: client } = await db().from("clients").select("svc_blog_gbp").eq("id", clientId).maybeSingle();
+  if (!(client as { svc_blog_gbp?: boolean } | null)?.svc_blog_gbp) return null;
+  const { count } = await db().from("gbp_locations").select("id", { count: "exact", head: true }).eq("client_id", clientId);
+  if (!count) return null; // perfil ainda não ligado: nada a fazer, sem alarme
   try {
     const r = await publishArticleToGbp(postId);
     return r.sent && !r.failed ? null : `Google Empresas: ${r.message}`;
@@ -68,7 +76,26 @@ export async function requestChanges(runId: string): Promise<{ ok: boolean }> {
 
 /** Anexa o texto do cliente à última execução que está esperando ajustes. */
 export async function attachFeedback(chatId: string, text: string): Promise<{ ok: boolean; title?: string }> {
-  const { data: autos } = await db().from("automations").select("id").eq("telegram_chat_id", chatId);
+  const { data: clients } = await db().from("clients").select("id").eq("telegram_chat_id", chatId);
+  const clientIds = ((clients ?? []) as { id: string }[]).map((c) => c.id);
+  // post do Instagram esperando ajuste tem prioridade (é o pedido mais recente, quando houver)
+  if (clientIds.length) {
+    const { data: ig } = await db()
+      .from("ig_posts")
+      .select("id, slides")
+      .in("client_id", clientIds)
+      .eq("status", "changes")
+      .is("feedback", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (ig) {
+      await db().from("ig_posts").update({ feedback: text.slice(0, 2000) }).eq("id", (ig as { id: string }).id);
+      const first = ((ig as { slides: { title?: string }[] }).slides ?? [])[0];
+      return { ok: true, title: first?.title ? `post do Instagram "${first.title}"` : "post do Instagram" };
+    }
+  }
+  const { data: autos } = clientIds.length ? await db().from("automations").select("id").in("client_id", clientIds) : { data: [] };
   const ids = ((autos ?? []) as { id: string }[]).map((a) => a.id);
   if (!ids.length) return { ok: false };
   const { data: run } = await db()

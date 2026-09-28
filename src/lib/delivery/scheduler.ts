@@ -127,6 +127,8 @@ async function automationTick() {
     for (const r of await processAutomations()) {
       console.log(`[automação] ${r.automationId}: ${r.ok ? "ok" : "falhou"} — ${r.message}`);
     }
+    const { processIgAutomations } = await import("@/lib/instagram/independent");
+    await processIgAutomations().catch((err) => console.error("[instagram] calendário:", err instanceof Error ? err.message : err));
   } catch (err) {
     console.error("[automação]", err instanceof Error ? err.message : err);
   } finally {

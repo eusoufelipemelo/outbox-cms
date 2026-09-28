@@ -33,6 +33,13 @@ export function sendMessage(chatId: string, text: string, buttons?: TgButton[][]
   });
 }
 
+/** Álbum de fotos (2 a 10) — usado para mostrar o carrossel do Instagram antes da aprovação. */
+export function sendMediaGroup(chatId: string, urls: string[]): Promise<unknown> {
+  const media = urls.slice(0, 10).map((url) => ({ type: "photo", media: url }));
+  if (media.length === 1) return call("sendPhoto", { chat_id: chatId, photo: urls[0] });
+  return call("sendMediaGroup", { chat_id: chatId, media });
+}
+
 export function editMessageText(chatId: string, messageId: number, text: string): Promise<unknown> {
   return call("editMessageText", { chat_id: chatId, message_id: messageId, text, parse_mode: "HTML" });
 }

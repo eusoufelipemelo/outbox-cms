@@ -36,6 +36,8 @@ export type AutomationClient = {
   city: string | null;
   expertName: string | null;
   contractEnd: string | null;
+  telegramConnected: boolean;
+  services: { blogGbp: boolean; instagram: boolean };
   /** Resumo da identidade visual usada nas capas ("escuro, cor #F15532, estilo próprio"). */
   visual: string | null;
   sites: { id: string; name: string; status: string }[];
@@ -62,12 +64,22 @@ const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
 /** Clientes ativos com a automação de cada um (se houver). */
 export async function listAutomationClients(): Promise<AutomationClient[]> {
   const [{ data: clients }, { data: autos }, bot] = await Promise.all([
-    db().from("clients").select("id, name, segment, city, status, expert_name, contract_end, brand_color, image_style, image_mood, sites(id, name, status)").neq("status", "archived"),
+    db().from("clients").select(
+      "id, name, segment, city, status, expert_name, contract_end, brand_color, image_style, image_mood, telegram_chat_id, telegram_link_code, svc_blog_gbp, svc_instagram, sites(id, name, status)",
+    ).neq("status", "archived"),
     db().from("automations").select("*"),
     botUsername(),
   ]);
   const byClient = new Map(((autos ?? []) as Automation[]).map((a) => [a.client_id, a]));
-  type Row = AutomationClient & { status: string; expert_name: string | null; contract_end: string | null } & VisualClient;
+  type Row = AutomationClient & {
+    status: string;
+    expert_name: string | null;
+    contract_end: string | null;
+    telegram_chat_id: string | null;
+    telegram_link_code: string | null;
+    svc_blog_gbp: boolean;
+    svc_instagram: boolean;
+  } & VisualClient;
   return ((clients ?? []) as unknown as Row[])
     .map((c) => {
       const automation = byClient.get(c.id) ?? null;
@@ -81,7 +93,9 @@ export async function listAutomationClients(): Promise<AutomationClient[]> {
         visual: visualSummary(c),
         sites: [...(c.sites ?? [])].sort((a, b) => collator.compare(a.name, b.name)),
         automation,
-        connectUrl: automation ? connectLink(automation.telegram_link_code, bot) : null,
+        connectUrl: c.telegram_link_code ? connectLink(c.telegram_link_code, bot) : null,
+        telegramConnected: Boolean(c.telegram_chat_id),
+        services: { blogGbp: Boolean(c.svc_blog_gbp), instagram: Boolean(c.svc_instagram) },
       };
     })
     .sort((a, b) => Number(Boolean(b.automation?.active)) - Number(Boolean(a.automation?.active)) || collator.compare(a.name, b.name));

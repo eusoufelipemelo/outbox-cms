@@ -21,7 +21,7 @@ const draftSchema = z.object({
   story_title: z.string().describe("Título do story, até 60 caracteres."),
 });
 
-const host = (url: string | null | undefined) => {
+export const host = (url: string | null | undefined) => {
   try {
     return url ? new URL(url).hostname.replace(/^www\./, "") : null;
   } catch {
@@ -29,13 +29,17 @@ const host = (url: string | null | undefined) => {
   }
 };
 
-async function upload(clientId: string, buf: Buffer, name: string): Promise<string> {
+export async function upload(clientId: string, buf: Buffer, name: string): Promise<string> {
   const { url } = await putImage(`instagram/${clientId}/${crypto.randomUUID()}-${name}.jpg`, new Uint8Array(buf), "image/jpeg");
   return url;
 }
 
 /** Cria os rascunhos (carrossel e story) de um artigo já no ar. Devolve os ids em ig_posts. */
-export async function draftFromArticle(postId: string, clientId: string): Promise<{ carouselId: string; storyId: string }> {
+export async function draftFromArticle(
+  postId: string,
+  clientId: string,
+  formats: string[] = ["carousel", "story"],
+): Promise<{ carouselId: string | null; storyId: string | null }> {
   const [{ data: post }, { data: client }, { data: site }, account] = await Promise.all([
     db().from("posts").select("title, excerpt, answer_summary, key_takeaways, content_html, cover_image_url").eq("id", postId).maybeSingle(),
     db().from("clients").select("name, segment, city, tone_of_voice, brand_color, image_mood").eq("id", clientId).maybeSingle(),
@@ -74,34 +78,47 @@ Monte o carrossel, a legenda, as hashtags e o story.`,
   const slides = out.slides.slice(0, 5);
   const total = slides.length;
 
-  const images = await Promise.all([
-    coverSlide(brand, out.cover_title || p.title, photo),
-    ...slides.map((s, i) => contentSlide(brand, s, i + 1, total)),
-    ctaSlide(brand, out.closing || "Quer saber mais?"),
-  ]);
+  const wantCarousel = formats.includes("carousel");
+  const wantStory = formats.includes("story");
+  const images = wantCarousel
+    ? await Promise.all([
+        coverSlide(brand, out.cover_title || p.title, photo),
+        ...slides.map((s, i) => contentSlide(brand, s, i + 1, total)),
+        ctaSlide(brand, out.closing || "Quer saber mais?"),
+      ])
+    : [];
   const urls = await Promise.all(images.map((buf, i) => upload(clientId, buf, `slide-${i + 1}`)));
-  const storyUrl = await upload(clientId, await storyFrame(brand, out.story_title || p.title, photo), "story");
+  const storyUrl = wantStory ? await upload(clientId, await storyFrame(brand, out.story_title || p.title, photo), "story") : null;
 
   const tags = [...new Set(out.hashtags.map((h) => h.replace(/^#/, "").replace(/\s+/g, "").toLowerCase()).filter(Boolean))].slice(0, 15);
   const caption = `${out.caption.trim()}\n\n${tags.map((t) => `#${t}`).join(" ")}`.slice(0, 2200);
 
-  const slideMeta = [
-    { url: urls[0], title: out.cover_title || p.title, text: "" },
-    ...slides.map((s, i) => ({ url: urls[i + 1], title: s.title, text: s.text })),
-    { url: urls[urls.length - 1], title: out.closing, text: "" },
-  ];
-  const { data: carousel, error: e1 } = await db()
-    .from("ig_posts")
-    .insert({ client_id: clientId, post_id: postId, kind: "carousel", slides: slideMeta, caption, status: "draft" })
-    .select("id")
-    .single();
-  const { data: story, error: e2 } = await db()
-    .from("ig_posts")
-    .insert({ client_id: clientId, post_id: postId, kind: "story", slides: [{ url: storyUrl, title: out.story_title, text: "" }], status: "draft" })
-    .select("id")
-    .single();
-  if (e1 || e2 || !carousel || !story) throw new Error("Não foi possível salvar os rascunhos do Instagram.");
-  return { carouselId: carousel.id as string, storyId: story.id as string };
+  let carouselId: string | null = null;
+  let storyId: string | null = null;
+  if (wantCarousel) {
+    const slideMeta = [
+      { url: urls[0], title: out.cover_title || p.title, text: "" },
+      ...slides.map((s, i) => ({ url: urls[i + 1], title: s.title, text: s.text })),
+      { url: urls[urls.length - 1], title: out.closing, text: "" },
+    ];
+    const { data, error } = await db()
+      .from("ig_posts")
+      .insert({ client_id: clientId, post_id: postId, kind: "carousel", slides: slideMeta, caption, status: "draft", source: "article" })
+      .select("id")
+      .single();
+    if (error || !data) throw new Error("Não foi possível salvar o carrossel.");
+    carouselId = data.id as string;
+  }
+  if (storyUrl) {
+    const { data, error } = await db()
+      .from("ig_posts")
+      .insert({ client_id: clientId, post_id: postId, kind: "story", slides: [{ url: storyUrl, title: out.story_title, text: "" }], status: "draft", source: "article" })
+      .select("id")
+      .single();
+    if (error || !data) throw new Error("Não foi possível salvar o story.");
+    storyId = data.id as string;
+  }
+  return { carouselId, storyId };
 }
 
 /** Publica um rascunho (carrossel ou story) na conta do cliente. */

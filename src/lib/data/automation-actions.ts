@@ -100,9 +100,10 @@ export async function approveFromCms(runId: string): Promise<ActionResult> {
 
 export async function unlinkTelegram(clientId: string): Promise<ActionResult> {
   await requireUser();
-  const { error } = await db().from("automations").update({ telegram_chat_id: null }).eq("client_id", clientId);
+  const { error } = await db().from("clients").update({ telegram_chat_id: null }).eq("id", clientId);
   if (error) return { ok: false, error: "Não foi possível desconectar o Telegram." };
   revalidatePath("/automacao");
+  revalidatePath("/servicos");
   return { ok: true, message: "Telegram desconectado" };
 }
 

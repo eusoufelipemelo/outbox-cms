@@ -63,7 +63,8 @@ function needsAttention(c: AutomationClient): string | null {
     const days = Math.round((Date.parse(c.contractEnd) - Date.now()) / 86_400_000);
     if (days <= 30) return `Contrato vence em ${days} dia(s)`;
   }
-  if (a?.active && a.approval === "telegram" && !a.telegram_chat_id) return "Falta conectar o Telegram";
+  if (a?.active && a.approval === "telegram" && !c.telegramConnected) return "Falta conectar o Telegram";
+  if (a?.active && !c.services.blogGbp) return "Sem o serviço Blog + Google";
   if (a?.active && !c.sites.some((s) => s.status === "active")) return "Sem site ativo";
   return null;
 }
@@ -211,11 +212,9 @@ function AutomationEditor({ client, telegramReady, onBack }: { client: Automatio
   const [coverModel, setCoverModel] = useState(a?.cover_model ?? "gemini-3.1-flash-image");
   const [approval, setApproval] = useState<string>(a?.approval ?? "telegram");
   const [siteIds, setSiteIds] = useState<string[]>(a?.site_ids ?? []);
-  const [gbpPost, setGbpPost] = useState(a?.gbp_post ?? false);
-  const [igPost, setIgPost] = useState(a?.ig_post ?? false);
 
   const activeSites = client.sites.filter((s) => s.status === "active");
-  const connected = Boolean(a?.telegram_chat_id);
+  const connected = client.telegramConnected;
   const attention = needsAttention(client);
 
   const act = (fn: () => Promise<{ ok: boolean; message?: string; error?: string }>) =>
@@ -238,8 +237,6 @@ function AutomationEditor({ client, telegramReady, onBack }: { client: Automatio
         words,
         contentType: (contentType || null) as ContentType | null,
         authorName: authorName.trim() || null,
-        gbpPost,
-        igPost,
         cover,
         coverModel,
         siteIds,
@@ -421,33 +418,23 @@ function AutomationEditor({ client, telegramReady, onBack }: { client: Automatio
           </div>
         </fieldset>
 
-        <label className="mt-5 flex cursor-pointer items-start gap-3">
-          <input type="checkbox" checked={gbpPost} onChange={(e) => setGbpPost(e.target.checked)} className="mt-1 accent-[var(--color-ink)]" />
-          <span>
-            <span className="block text-sm font-medium text-ink">Publicar também no Google Empresas</span>
-            <span className="block text-[13px] text-muted">
-              Quando o artigo for ao ar, vira uma novidade nos perfis do Google ligados a este cliente. Precisa do Google Empresas conectado.
-            </span>
-          </span>
-        </label>
-
-        <label className="mt-3 flex cursor-pointer items-start gap-3">
-          <input type="checkbox" checked={igPost} onChange={(e) => setIgPost(e.target.checked)} className="mt-1 accent-[var(--color-ink)]" />
-          <span>
-            <span className="block text-sm font-medium text-ink">Publicar também no Instagram</span>
-            <span className="block text-[13px] text-muted">
-              Quando o artigo for ao ar, o CMS cria um carrossel com as cores do cliente, a legenda com hashtags e um story, e publica. Precisa do Instagram do cliente conectado.
-            </span>
-          </span>
-        </label>
+        <div className="mt-5 rounded-[var(--radius-control)] border border-line p-4 text-[13.5px] text-muted">
+          <span className="font-semibold text-ink">Depois de aprovado: </span>
+          {client.services.blogGbp
+            ? client.services.instagram
+              ? "pacote completo. O artigo vai para o blog, vira novidade no Google Empresas e vira post no Instagram (formatos definidos em Serviços)."
+              : "o artigo vai para o blog e vira novidade no Google Empresas."
+            : "este cliente não tem o serviço Blog + Google Empresas. Ative em Serviços."}{" "}
+          <Link href="/servicos" className="underline underline-offset-2 hover:text-ink">
+            Ver Serviços
+          </Link>
+        </div>
 
         {approval === "telegram" ? (
           <div className="mt-5 rounded-[var(--radius-control)] border border-line bg-sunken p-4">
             <p className="text-sm font-semibold text-ink">Telegram do cliente</p>
             {!telegramReady ? (
               <p className="mt-1 text-[13.5px] text-warn">Falta configurar o bot no servidor (TELEGRAM_BOT_TOKEN).</p>
-            ) : !a ? (
-              <p className="mt-1 text-[13.5px] text-muted">Salve a automação para gerar o link de conexão do cliente.</p>
             ) : connected ? (
               <div className="mt-1 flex flex-wrap items-center gap-3">
                 <span className="inline-flex items-center gap-1.5 text-[13.5px] text-ok">

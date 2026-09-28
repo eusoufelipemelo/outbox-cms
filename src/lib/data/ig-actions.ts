@@ -16,7 +16,8 @@ export async function createIgDraft(postId: string): Promise<ActionResult> {
   const clientId = Array.isArray(site) ? site[0]?.client_id : site?.client_id;
   if (!clientId) return { ok: false, error: "Este artigo não está no ar em nenhum site." };
   try {
-    await draftFromArticle(postId, clientId);
+    const { data: c } = await db().from("clients").select("ig_formats").eq("id", clientId).maybeSingle();
+    await draftFromArticle(postId, clientId, (c as { ig_formats?: string[] } | null)?.ig_formats ?? ["carousel", "story"]);
     done();
     return { ok: true, message: "Carrossel e story criados. Revise e publique." };
   } catch (err) {

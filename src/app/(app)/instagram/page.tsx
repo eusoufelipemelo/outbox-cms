@@ -22,7 +22,7 @@ export default async function InstagramPage() {
       .eq("status", "published")
       .order("published_at", { ascending: false })
       .limit(200),
-    db().from("ig_posts").select("id, kind, slides, caption, status, permalink, error, created_at, clients(name)").order("created_at", { ascending: false }).limit(60),
+    db().from("ig_posts").select("id, kind, slides, caption, status, permalink, error, feedback, created_at, clients(name)").order("created_at", { ascending: false }).limit(60),
   ]);
 
   const accounts = new Map(((accountsRes.data ?? []) as { client_id: string; username: string | null }[]).map((a) => [a.client_id, a.username]));

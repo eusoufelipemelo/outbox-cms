@@ -4,6 +4,7 @@ import { db } from "@/lib/supabase/admin";
 import { answerCallback, editMessageText, sendMessage } from "@/lib/automation/telegram";
 import { approveRun, attachFeedback, requestChanges } from "@/lib/automation/approval";
 import { loadSettings } from "@/lib/settings";
+import { publishIgPost } from "@/lib/instagram/compose";
 
 // Webhook do bot do Telegram: conecta a conversa do cliente e recebe aprovação/ajustes.
 // Autenticação: cabeçalho x-telegram-bot-api-secret-token = TELEGRAM_WEBHOOK_SECRET.
@@ -26,11 +27,11 @@ function authorized(req: Request): boolean {
 }
 
 async function link(chatId: string, code: string): Promise<string> {
-  const { data } = await db().from("automations").select("id, client_id").eq("telegram_link_code", code).maybeSingle();
+  const { data } = await db().from("clients").select("id, name").eq("telegram_link_code", code).maybeSingle();
   if (!data) return "Não encontrei esse código. Peça um novo link para a equipe da OutBox.";
-  const { data: client } = await db().from("clients").select("name").eq("id", data.client_id).maybeSingle();
-  await db().from("automations").update({ telegram_chat_id: chatId }).eq("id", data.id);
-  return `Pronto! Esta conversa agora recebe os artigos de <b>${(client as { name: string } | null)?.name ?? "sua empresa"}</b> para aprovação.\n\nA cada novo artigo, você recebe aqui o rascunho com um link para ler. É só tocar em Aprovar e publicar ou em Pedir ajustes.`;
+  const client = data as { id: string; name: string };
+  await db().from("clients").update({ telegram_chat_id: chatId }).eq("id", client.id);
+  return `Pronto! Esta conversa agora recebe os conteúdos de <b>${client.name}</b> para aprovação.\n\nA cada novo artigo ou post, você recebe aqui o rascunho. É só tocar em Aprovar e publicar ou em Pedir ajustes.`;
 }
 
 export async function POST(req: Request) {
@@ -56,6 +57,16 @@ export async function POST(req: Request) {
               : `⚠️ ${result.message}`,
           );
         }
+      } else if (action === "igok" && runId) {
+        const result = await publishIgPost(runId);
+        await answerCallback(q.id, result.ok ? "Publicando…" : result.message);
+        if (chatId && q.message) {
+          await editMessageText(chatId, q.message.message_id, result.ok ? "✅ <b>Aprovado.</b> O post já está no Instagram." : `⚠️ ${result.message}`);
+        }
+      } else if (action === "igno" && runId) {
+        await db().from("ig_posts").update({ status: "changes" }).eq("id", runId).neq("status", "published");
+        await answerCallback(q.id, "Certo!");
+        if (chatId) await sendMessage(chatId, "Escreva aqui o que você quer mudar neste post. A equipe da OutBox recebe o recado e ajusta.");
       } else if (action === "no" && runId) {
         await requestChanges(runId);
         await answerCallback(q.id, "Certo!");
