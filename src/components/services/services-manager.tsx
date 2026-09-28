@@ -26,7 +26,7 @@ const MODE: Record<Mode, { label: string; tone: "ok" | "info" | "warn" | "neutra
   completo: {
     label: "Pacote completo",
     tone: "ok",
-    text: "O artigo do blog é a base de tudo: ao ir ao ar, vira novidade no Google Empresas e post no Instagram, nos formatos escolhidos.",
+    text: "O artigo do blog é a base de tudo: ao ir ao ar, vira novidade no Google Empresas e post no Instagram. Os posts extras do plano saem do calendário do Instagram abaixo.",
   },
   blog: { label: "Blog + Google Empresas", tone: "info", text: "Cada artigo do blog vai ao ar e vira novidade no Google Empresas." },
   instagram: {
@@ -307,10 +307,11 @@ function ServiceEditor({ client, onBack }: { client: ServiceClient; onBack: () =
             .
           </p>
         </section>
-      ) : client.instagram ? (
+      ) : null}
+      {client.instagram ? (
         <section className="rounded-[var(--radius-panel)] border border-line bg-surface p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-[15px] font-semibold text-ink">Calendário do Instagram</h3>
+            <h3 className="text-[15px] font-semibold text-ink">{client.blogGbp ? "Posts extras do Instagram" : "Calendário do Instagram"}</h3>
             {ia ? (
               <Button variant="secondary" size="sm" disabled={pending} onClick={() => act(() => runIgNow(client.id))}>
                 <Play className="size-3.5" aria-hidden />
@@ -318,6 +319,11 @@ function ServiceEditor({ client, onBack }: { client: ServiceClient; onBack: () =
               </Button>
             ) : null}
           </div>
+          {client.blogGbp ? (
+            <p className="mt-1 text-[13px] text-muted">
+              Cada artigo já vira um post. Aqui entram só os extras para completar o plano: Essencial 4, Crescimento 6, Autoridade 6 por mês.
+            </p>
+          ) : null}
           {ia?.next_run_at && ia.active ? <p className="mt-1 text-[13px] text-muted">Próximo post em {formatDateTime(ia.next_run_at)}.</p> : null}
           {ia?.last_error ? <p className="mt-1 text-[13px] text-danger">{ia.last_error}</p> : null}
           <div className="mt-4 grid gap-4 md:grid-cols-2">

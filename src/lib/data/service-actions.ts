@@ -25,8 +25,8 @@ export async function setServices(clientId: string, input: { blogGbp: boolean; i
     .update({ svc_blog_gbp: input.blogGbp, svc_instagram: input.instagram, ig_formats: formats.length ? formats : ["carousel", "story"] })
     .eq("id", clientId);
   if (error) return { ok: false, error: "Não foi possível salvar os serviços." };
-  // pacote completo: o calendário próprio do Instagram fica pausado (o conteúdo vem do blog)
-  if (input.blogGbp || !input.instagram) await db().from("ig_automations").update({ active: false, next_run_at: null }).eq("client_id", clientId);
+  // sem Instagram, o calendário próprio dele para
+  if (!input.instagram) await db().from("ig_automations").update({ active: false, next_run_at: null }).eq("client_id", clientId);
   refresh();
   return { ok: true, message: "Serviços salvos" };
 }

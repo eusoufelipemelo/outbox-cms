@@ -12,8 +12,8 @@ import { host, publishIgPost, upload } from "./compose";
 import { igAccount } from "./oauth";
 
 /**
- * Instagram independente (cliente sem blog): o CMS cria a pauta, o carrossel, a legenda e o story
- * sem artigo por trás, no calendário do cliente, e manda para aprovação.
+ * Calendário próprio do Instagram: no plano só de Instagram é todo o conteúdo; no pacote completo são os
+ * posts extras que completam o volume do plano (os demais saem dos artigos do blog).
  */
 
 const schema = z.object({
@@ -158,7 +158,6 @@ export async function runIgAutomation(a: IgAutomation): Promise<string> {
   const { data: c } = await db().from("clients").select("svc_instagram, svc_blog_gbp, telegram_chat_id").eq("id", a.client_id).maybeSingle();
   const client = c as { svc_instagram?: boolean; svc_blog_gbp?: boolean; telegram_chat_id?: string | null } | null;
   if (!client?.svc_instagram) throw new Error("Serviço Instagram desativado para este cliente.");
-  if (client.svc_blog_gbp) throw new Error("Cliente no pacote completo: o Instagram sai dos artigos do blog, não deste calendário.");
   if (!(await igAccount(a.client_id))) throw new Error("O cliente ainda não conectou o Instagram.");
 
   const { ids, title } = await createIndependentPost(a.client_id, a.focus);
