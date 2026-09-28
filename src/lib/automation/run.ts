@@ -15,6 +15,7 @@ import { loadSettings } from "@/lib/settings";
 import { nextRunAt } from "./schedule";
 import { connectLink, sendMessage, telegramEnabled } from "./telegram";
 import { alsoOnGoogle } from "./approval";
+import { alsoOnInstagram } from "@/lib/instagram/auto";
 
 export type AutomationRow = {
   id: string;
@@ -244,7 +245,8 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
       await db().from("posts").update({ status: "published", published_at: new Date().toISOString() }).eq("id", postId);
       const results = await publishPost(postId, { siteIds });
       const failed = results.filter((r) => !r.ok).length;
-      const gbpNote = failed < results.length ? await alsoOnGoogle(a.id, postId) : null;
+      const gbpNote =
+        failed < results.length ? [await alsoOnGoogle(a.id, postId), await alsoOnInstagram(a.id, postId)].filter(Boolean).join(" ") || null : null;
       await finish(runId, {
         status: failed === results.length ? "failed" : "published",
         error: [failed ? `${failed} destino(s) falharam.` : null, gbpNote].filter(Boolean).join(" ") || null,

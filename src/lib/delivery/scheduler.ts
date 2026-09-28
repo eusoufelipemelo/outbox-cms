@@ -117,6 +117,13 @@ async function automationTick() {
   state.running = true;
   try {
     const { processAutomations } = await import("@/lib/automation/run");
+    const flag = globalThis as typeof globalThis & { __igRefreshAt?: number };
+    if (!flag.__igRefreshAt || Date.now() - flag.__igRefreshAt > 12 * 3_600_000) {
+      flag.__igRefreshAt = Date.now();
+      const { refreshIgTokens } = await import("@/lib/instagram/oauth");
+      const renewed = await refreshIgTokens().catch(() => 0);
+      if (renewed) console.log(`[instagram] ${renewed} token(s) renovado(s)`);
+    }
     for (const r of await processAutomations()) {
       console.log(`[automação] ${r.automationId}: ${r.ok ? "ok" : "falhou"} — ${r.message}`);
     }

@@ -212,6 +212,7 @@ function AutomationEditor({ client, telegramReady, onBack }: { client: Automatio
   const [approval, setApproval] = useState<string>(a?.approval ?? "telegram");
   const [siteIds, setSiteIds] = useState<string[]>(a?.site_ids ?? []);
   const [gbpPost, setGbpPost] = useState(a?.gbp_post ?? false);
+  const [igPost, setIgPost] = useState(a?.ig_post ?? false);
 
   const activeSites = client.sites.filter((s) => s.status === "active");
   const connected = Boolean(a?.telegram_chat_id);
@@ -238,6 +239,7 @@ function AutomationEditor({ client, telegramReady, onBack }: { client: Automatio
         contentType: (contentType || null) as ContentType | null,
         authorName: authorName.trim() || null,
         gbpPost,
+        igPost,
         cover,
         coverModel,
         siteIds,
@@ -425,6 +427,16 @@ function AutomationEditor({ client, telegramReady, onBack }: { client: Automatio
             <span className="block text-sm font-medium text-ink">Publicar também no Google Empresas</span>
             <span className="block text-[13px] text-muted">
               Quando o artigo for ao ar, vira uma novidade nos perfis do Google ligados a este cliente. Precisa do Google Empresas conectado.
+            </span>
+          </span>
+        </label>
+
+        <label className="mt-3 flex cursor-pointer items-start gap-3">
+          <input type="checkbox" checked={igPost} onChange={(e) => setIgPost(e.target.checked)} className="mt-1 accent-[var(--color-ink)]" />
+          <span>
+            <span className="block text-sm font-medium text-ink">Publicar também no Instagram</span>
+            <span className="block text-[13px] text-muted">
+              Quando o artigo for ao ar, o CMS cria um carrossel com as cores do cliente, a legenda com hashtags e um story, e publica. Precisa do Instagram do cliente conectado.
             </span>
           </span>
         </label>

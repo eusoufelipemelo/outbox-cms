@@ -21,6 +21,7 @@ export type Automation = {
   approval: "telegram" | "auto" | "manual";
   author_name: string | null;
   gbp_post: boolean;
+  ig_post: boolean;
   telegram_chat_id: string | null;
   telegram_link_code: string;
   next_run_at: string | null;

@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Bot, CalendarDays, Store, SlidersHorizontal, Gauge, Map as MapIcon, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
+import { Bot, CalendarDays, Store, Camera, SlidersHorizontal, Gauge, Map as MapIcon, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -19,6 +19,7 @@ const items = [
   { href: "/midia", label: "Mídia", icon: Images },
   { href: "/diagnosticos", label: "Diagnóstico", icon: Gauge },
   { href: "/google-empresas", label: "Google Empresas", icon: Store },
+  { href: "/instagram", label: "Instagram", icon: Camera },
   { href: "/integracoes", label: "Integrações", icon: Plug },
 ];
 

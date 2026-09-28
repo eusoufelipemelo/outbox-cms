@@ -130,6 +130,16 @@ export const GROUPS: Group[] = [
     ],
   },
   {
+    id: "instagram",
+    title: "Instagram",
+    description: "App da Meta (login pelo Instagram) para publicar carrosséis, posts e stories nas contas dos clientes.",
+    note: "Para publicar nas contas dos clientes, a Meta precisa aprovar o app (revisão). Até lá funciona só com contas adicionadas como testadoras no app.",
+    fields: [
+      { key: "instagram_app_id", label: "ID do app do Instagram", placeholder: "Só números" },
+      { key: "instagram_app_secret", label: "Chave secreta do app do Instagram", secret: true },
+    ],
+  },
+  {
     id: "telegram",
     title: "Telegram",
     description: "Bot que leva o rascunho para o cliente aprovar.",
@@ -163,14 +173,14 @@ function cipherKey(): Buffer {
   return createHash("sha256").update(`outbox-settings:${process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""}`).digest();
 }
 
-function encrypt(value: string): string {
+export function encrypt(value: string): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", cipherKey(), iv);
   const data = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
   return `${PREFIX}${iv.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}.${data.toString("base64url")}`;
 }
 
-function decrypt(stored: string): string | null {
+export function decrypt(stored: string): string | null {
   if (!stored.startsWith(PREFIX)) return stored; // valor antigo, em texto puro
   const [iv, tag, data] = stored.slice(PREFIX.length).split(".");
   try {
