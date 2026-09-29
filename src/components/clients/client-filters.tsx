@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { Loader2, Search } from "lucide-react";
 import { Input, Select } from "@/components/ui/field";
@@ -15,6 +15,7 @@ const same = (a: Filters, b: Filters) => a.q === b.q && a.status === b.status;
 export function ClientFilters({ q, status }: { q: string; status: ClientStatus | "" }) {
   const router = useRouter();
   const pathname = usePathname();
+  const current = useSearchParams();
   const [pending, startTransition] = useTransition();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -43,7 +44,11 @@ export function ClientFilters({ q, status }: { q: string; status: ClientStatus |
   );
 
   function apply(next: Filters) {
-    const params = new URLSearchParams();
+    // Mantém os outros filtros da tela (serviço, estado) e volta para a página 1.
+    const params = new URLSearchParams(current.toString());
+    params.delete("q");
+    params.delete("status");
+    params.delete("pagina");
     const nextQ = next.q.trim().slice(0, 100);
     if (nextQ) params.set("q", nextQ);
     if (next.status) params.set("status", next.status);
