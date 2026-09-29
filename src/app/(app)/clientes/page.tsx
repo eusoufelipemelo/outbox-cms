@@ -313,11 +313,11 @@ function ClientRow({ client }: { client: Row }) {
         <p className="flex min-w-0 items-baseline gap-2">
           <Link
             href={`/clientes/${client.id}`}
-            className="shrink-0 truncate text-[14px] font-semibold text-ink after:absolute after:inset-0 after:content-[''] max-w-[70%]"
+            className="min-w-0 truncate text-[14px] font-semibold text-ink after:absolute after:inset-0 after:content-['']"
           >
             {client.name}
           </Link>
-          <span className="truncate text-[12.5px] text-muted">{client.segment || "Segmento não informado"}</span>
+          <span className="min-w-0 shrink-[3] truncate text-[12.5px] text-muted">{client.segment || "Segmento não informado"}</span>
         </p>
       </div>
       <p className="truncate text-[13px] text-text max-md:hidden">{location ?? <span className="text-muted">Não informada</span>}</p>
