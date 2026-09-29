@@ -28,7 +28,7 @@ export function MonthPicker({ month, cliente }: { month: string; cliente?: strin
           </option>
         ))}
       </Select>
-      <Select aria-label="Ano" value={y} onChange={(e) => go(Number(e.target.value), m)} className="w-24">
+      <Select aria-label="Ano" value={y} onChange={(e) => go(Number(e.target.value), m)} className="w-28">
         {years.sort().map((year) => (
           <option key={year} value={year}>
             {year}
