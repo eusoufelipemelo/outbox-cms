@@ -9,6 +9,7 @@ import { nextRunAt } from "@/lib/automation/schedule";
 import { sendMediaGroup, sendMessage, telegramEnabled } from "@/lib/automation/telegram";
 import { coverSlide, contentSlide, ctaSlide, photoData, storyFrame, type Brand } from "./art";
 import { host, publishIgPost, upload } from "./compose";
+import { slidePhotos } from "./photos";
 import { igAccount } from "./oauth";
 
 /**
@@ -19,7 +20,9 @@ import { igAccount } from "./oauth";
 const schema = z.object({
   topic: z.string().describe("Tema do post em uma frase."),
   cover_title: z.string().describe("Título da capa, até 70 caracteres."),
-  slides: z.array(z.object({ title: z.string(), text: z.string() })).describe("3 a 5 lâminas: título até 45 caracteres e texto até 200."),
+  slides: z
+    .array(z.object({ title: z.string(), text: z.string(), photo_prompt: z.string().describe("Cena fotográfica em inglês para a lâmina, sem texto.") }))
+    .describe("3 a 5 lâminas: título até 45 caracteres, texto até 180 e a cena da foto."),
   closing: z.string().describe("Chamada final curta, até 50 caracteres."),
   caption: z.string().describe("Legenda de 500 a 1300 caracteres, parágrafos curtos, termina com chamada para ação (direct, WhatsApp ou link da bio). Sem hashtags."),
   hashtags: z.array(z.string()).describe("8 a 15 hashtags, sem #."),
@@ -104,9 +107,10 @@ Crie um carrossel educativo, a legenda, as hashtags, o story e a cena da foto de
   const ids: string[] = [];
 
   if (formats.includes("carousel")) {
+    const photos = await slidePhotos(slides.map((s) => s.photo_prompt), client);
     const images = await Promise.all([
       coverSlide(brand, out.cover_title, photo),
-      ...slides.map((s, i) => contentSlide(brand, s, i + 1, slides.length)),
+      ...slides.map((s, i) => contentSlide(brand, s, i + 1, slides.length, photos[i])),
       ctaSlide(brand, out.closing || "Fale com a gente"),
     ]);
     const urls = await Promise.all(images.map((b, i) => upload(clientId, b, `slide-${i + 1}`)));

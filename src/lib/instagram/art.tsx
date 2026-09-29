@@ -50,17 +50,28 @@ const palette = (b: Brand) => ({
 });
 
 /** Foto de fundo como data URL (o renderizador não baixa arquivos grandes sozinho). */
-export async function photoData(url: string | null): Promise<string | null> {
+export async function photoData(url: string | null, width = 1080, height = 1920): Promise<string | null> {
   if (!url) return null;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
     if (!res.ok) return null;
-    const buf = await sharp(Buffer.from(await res.arrayBuffer())).resize(1080, 1920, { fit: "cover" }).jpeg({ quality: 85 }).toBuffer();
+    return photoFromBytes(new Uint8Array(await res.arrayBuffer()), width, height);
+  } catch {
+    return null;
+  }
+}
+
+export async function photoFromBytes(bytes: Uint8Array, width: number, height: number): Promise<string | null> {
+  try {
+    const buf = await sharp(Buffer.from(bytes)).resize(width, height, { fit: "cover" }).jpeg({ quality: 85 }).toBuffer();
     return `data:image/jpeg;base64,${buf.toString("base64")}`;
   } catch {
     return null;
   }
 }
+
+/** Área da foto nas lâminas do meio (topo da lâmina, largura total). */
+export const SLIDE_PHOTO = { width: 1080, height: 720 };
 
 /** 1ª lâmina: foto do artigo, título grande e a faixa na cor da marca. */
 export function coverSlide(b: Brand, title: string, photo: string | null): Promise<Buffer> {
@@ -83,9 +94,34 @@ export function coverSlide(b: Brand, title: string, photo: string | null): Promi
   );
 }
 
-/** Lâminas do meio: número da etapa, título e texto curto. */
-export function contentSlide(b: Brand, s: Slide, index: number, total: number): Promise<Buffer> {
+/** Lâminas do meio: foto no topo (quando houver), número da etapa, título e texto curto. */
+export function contentSlide(b: Brand, s: Slide, index: number, total: number, photo?: string | null): Promise<Buffer> {
   const p = palette(b);
+  if (photo) {
+    return render(
+      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: p.bg, fontFamily: "Archivo" }}>
+        <div style={{ display: "flex", position: "relative", width: 1080, height: SLIDE_PHOTO.height }}>
+          <img src={photo} width={SLIDE_PHOTO.width} height={SLIDE_PHOTO.height} alt="" style={{ objectFit: "cover" }} />
+          <div style={{ position: "absolute", left: 0, bottom: 0, width: 1080, height: 12, display: "flex", background: b.color }} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, padding: "48px 88px 56px" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", fontFamily: "Display", fontSize: 88, lineHeight: 1, color: b.color }}>{String(index).padStart(2, "0")}</div>
+            <div style={{ display: "flex", fontSize: 26, color: p.muted, fontWeight: 500 }}>
+              {index}/{total}
+            </div>
+          </div>
+          <div style={{ display: "flex", marginTop: 28, fontFamily: "Display", fontSize: s.title.length > 36 ? 50 : 58, lineHeight: 1.06, color: p.ink, letterSpacing: "-0.02em" }}>
+            {s.title}
+          </div>
+          <div style={{ display: "flex", marginTop: 24, fontSize: 33, lineHeight: 1.4, color: p.ink, fontWeight: 500, opacity: 0.88 }}>{s.text}</div>
+          <div style={{ display: "flex", marginTop: "auto", fontSize: 26, color: p.muted, fontWeight: 500 }}>{b.handle ? `@${b.handle}` : b.name}</div>
+        </div>
+      </div>,
+      1080,
+      1350,
+    );
+  }
   return render(
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: p.bg, padding: 96, fontFamily: "Archivo" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>

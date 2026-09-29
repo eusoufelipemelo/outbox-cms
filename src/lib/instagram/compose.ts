@@ -5,6 +5,7 @@ import { generate } from "@/lib/ai/server";
 import { plainText } from "@/lib/ai/sanitize";
 import { putImage } from "@/lib/storage";
 import { coverSlide, contentSlide, ctaSlide, photoData, storyFrame, type Brand } from "./art";
+import { slidePhotos } from "./photos";
 import { igAccount } from "./oauth";
 import { publishCarousel, publishStory } from "./api";
 
@@ -13,7 +14,13 @@ import { publishCarousel, publishStory } from "./api";
 const draftSchema = z.object({
   cover_title: z.string().describe("Título da capa do carrossel, até 70 caracteres, que dê vontade de arrastar."),
   slides: z
-    .array(z.object({ title: z.string().describe("Até 45 caracteres."), text: z.string().describe("Até 200 caracteres, uma ideia por lâmina.") }))
+    .array(
+      z.object({
+        title: z.string().describe("Até 45 caracteres."),
+        text: z.string().describe("Até 180 caracteres, uma ideia por lâmina."),
+        photo_prompt: z.string().describe("Cena fotográfica em inglês que ilustra a lâmina, concreta, sem texto na imagem."),
+      }),
+    )
     .describe("3 a 5 lâminas com os pontos principais do artigo, em ordem."),
   closing: z.string().describe("Frase final curta (até 50 caracteres) para a lâmina de chamada."),
   caption: z.string().describe("Legenda em português do Brasil, 600 a 1500 caracteres, parágrafos curtos, termina com chamada para o link da bio. Sem hashtags aqui."),
@@ -42,13 +49,21 @@ export async function draftFromArticle(
 ): Promise<{ carouselId: string | null; storyId: string | null }> {
   const [{ data: post }, { data: client }, { data: site }, account] = await Promise.all([
     db().from("posts").select("title, excerpt, answer_summary, key_takeaways, content_html, cover_image_url").eq("id", postId).maybeSingle(),
-    db().from("clients").select("name, segment, city, tone_of_voice, brand_color, image_mood").eq("id", clientId).maybeSingle(),
+    db().from("clients").select("name, segment, city, tone_of_voice, brand_color, image_mood, image_style").eq("id", clientId).maybeSingle(),
     db().from("sites").select("url").eq("client_id", clientId).eq("status", "active").limit(1).maybeSingle(),
     igAccount(clientId),
   ]);
   if (!post) throw new Error("Artigo não encontrado.");
   const p = post as { title: string; excerpt: string | null; answer_summary: string | null; key_takeaways: string[] | null; content_html: string; cover_image_url: string | null };
-  const c = (client ?? {}) as { name?: string; segment?: string | null; city?: string | null; tone_of_voice?: string | null; brand_color?: string | null; image_mood?: string };
+  const c = (client ?? {}) as {
+    name?: string;
+    segment?: string | null;
+    city?: string | null;
+    tone_of_voice?: string | null;
+    brand_color?: string | null;
+    image_mood?: string;
+    image_style?: string | null;
+  };
 
   const out = await generate(
     draftSchema,
@@ -80,10 +95,11 @@ Monte o carrossel, a legenda, as hashtags e o story.`,
 
   const wantCarousel = formats.includes("carousel");
   const wantStory = formats.includes("story");
+  const photos = wantCarousel ? await slidePhotos(slides.map((s) => s.photo_prompt), c) : [];
   const images = wantCarousel
     ? await Promise.all([
         coverSlide(brand, out.cover_title || p.title, photo),
-        ...slides.map((s, i) => contentSlide(brand, s, i + 1, total)),
+        ...slides.map((s, i) => contentSlide(brand, s, i + 1, total, photos[i])),
         ctaSlide(brand, out.closing || "Quer saber mais?"),
       ])
     : [];
