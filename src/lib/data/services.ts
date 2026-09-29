@@ -9,6 +9,8 @@ export type ServiceClient = {
   id: string;
   name: string;
   segment: string | null;
+  city: string | null;
+  state: string | null;
   blogGbp: boolean;
   instagram: boolean;
   formats: IgFormat[];
@@ -36,7 +38,7 @@ const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
 
 export async function listServiceClients(): Promise<ServiceClient[]> {
   const [clients, sites, gbp, ig, autos, igAutos, bot] = await Promise.all([
-    db().from("clients").select("id, name, segment, svc_blog_gbp, svc_instagram, ig_formats, telegram_chat_id, telegram_link_code").neq("status", "archived"),
+    db().from("clients").select("id, name, segment, city, state, svc_blog_gbp, svc_instagram, ig_formats, telegram_chat_id, telegram_link_code").neq("status", "archived"),
     db().from("sites").select("client_id, status"),
     db().from("gbp_locations").select("client_id"),
     db().from("ig_accounts").select("client_id, username"),
@@ -51,12 +53,14 @@ export async function listServiceClients(): Promise<ServiceClient[]> {
   const blogAutos = new Map(((autos.data ?? []) as { client_id: string; active: boolean }[]).map((a) => [a.client_id, a]));
   const igAutoMap = new Map(((igAutos.data ?? []) as (ServiceClient["igAutomation"] & { client_id: string })[]).map((a) => [a!.client_id, a]));
 
-  type Row = { id: string; name: string; segment: string | null; svc_blog_gbp: boolean; svc_instagram: boolean; ig_formats: string[] | null; telegram_chat_id: string | null; telegram_link_code: string | null };
+  type Row = { id: string; name: string; segment: string | null; city: string | null; state: string | null; svc_blog_gbp: boolean; svc_instagram: boolean; ig_formats: string[] | null; telegram_chat_id: string | null; telegram_link_code: string | null };
   return ((clients.data ?? []) as Row[])
     .map((c) => ({
       id: c.id,
       name: c.name,
       segment: c.segment,
+      city: c.city,
+      state: c.state,
       blogGbp: c.svc_blog_gbp,
       instagram: c.svc_instagram,
       formats: (c.ig_formats ?? ["carousel", "story"]).filter((f): f is IgFormat => f === "carousel" || f === "story"),

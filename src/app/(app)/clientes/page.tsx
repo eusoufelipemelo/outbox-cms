@@ -27,7 +27,17 @@ function plural(n: number, one: string, many: string) {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-const COLS = "md:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)_minmax(0,2.3fr)_6.5rem]";
+const COLS = "md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.1fr)_minmax(0,1.6fr)_minmax(0,1.2fr)_6.5rem]";
+const PAGE = 25;
+
+function pageHref(sp: { q: string; status: string }, page: number) {
+  const p = new URLSearchParams();
+  if (sp.q) p.set("q", sp.q);
+  if (sp.status) p.set("status", sp.status);
+  if (page > 1) p.set("pagina", String(page));
+  const qs = p.toString();
+  return qs ? `/clientes?${qs}` : "/clientes";
+}
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await requireUser();
@@ -39,6 +49,9 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
 
   const clients = await listClients({ q, status: status || undefined });
   const siteTotal = clients.reduce((n, c) => n + c.sites.length, 0);
+  const pages = Math.max(1, Math.ceil(clients.length / PAGE));
+  const page = Math.min(pages, Math.max(1, Number.parseInt(first(sp.pagina), 10) || 1));
+  const shown = clients.slice((page - 1) * PAGE, page * PAGE);
 
   const newButton = (
     <Link href="/clientes/novo" className={buttonClass("primary")}>
@@ -102,75 +115,87 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
           >
             <span>Cliente</span>
             <span>Cidade</span>
-            <span>Sites</span>
+            <span>Site</span>
+            <span>Serviços</span>
             <span className="text-right">Status</span>
           </div>
-          <ul className="space-y-3 md:space-y-0 md:divide-y md:divide-line">
-            {clients.map((client) => (
+          <ul className="space-y-2 md:space-y-0 md:divide-y md:divide-line">
+            {shown.map((client) => (
               <ClientRow key={client.id} client={client} />
             ))}
           </ul>
         </div>
       )}
+
+      {pages > 1 ? (
+        <nav aria-label="Páginas" className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+          <span className="text-muted">
+            {(page - 1) * PAGE + 1} a {Math.min(page * PAGE, clients.length)} de {clients.length}
+          </span>
+          <span className="flex items-center gap-1">
+            {page > 1 ? (
+              <Link href={pageHref({ q, status }, page - 1)} className={buttonClass("secondary", "sm")}>
+                Anterior
+              </Link>
+            ) : null}
+            <span className="px-2 text-muted tabular-nums">
+              {page}/{pages}
+            </span>
+            {page < pages ? (
+              <Link href={pageHref({ q, status }, page + 1)} className={buttonClass("secondary", "sm")}>
+                Próxima
+              </Link>
+            ) : null}
+          </span>
+        </nav>
+      ) : null}
     </>
   );
 }
 
 function ClientRow({ client }: { client: ClientListItem }) {
   const s = CLIENT_STATUS[client.status];
-  const statusBadge = (
-    <Badge tone={s.tone}>
-      <StatusDot tone={s.tone} />
-      {s.label}
-    </Badge>
-  );
   const location = place(client);
+  const site = client.sites[0];
+  const extra = client.sites.length - 1;
+  const c = client as ClientListItem & { svc_blog_gbp?: boolean; svc_instagram?: boolean };
 
   return (
     <li
-      className={`relative grid gap-3 rounded-[var(--radius-panel)] border border-line bg-surface p-4 transition-colors duration-150 hover:bg-sunken md:items-center md:gap-6 md:rounded-none md:border-0 md:px-5 md:py-4 ${COLS}`}
+      className={`relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 rounded-[var(--radius-control)] border border-line bg-surface px-4 py-3 transition-colors duration-150 hover:bg-sunken md:rounded-none md:border-0 md:px-5 md:py-2.5 ${COLS}`}
     >
-      <div className="min-w-0">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <BrandDot color={client.brand_color} />
-            <Link
-              href={`/clientes/${client.id}`}
-              className="truncate text-[15px] font-semibold text-ink after:absolute after:inset-0 after:content-['']"
-            >
-              {client.name}
-            </Link>
-          </div>
-          <div className="md:hidden">{statusBadge}</div>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <BrandDot color={client.brand_color} />
+        <div className="min-w-0">
+          <Link href={`/clientes/${client.id}`} className="block truncate text-[14.5px] font-semibold text-ink after:absolute after:inset-0 after:content-['']">
+            {client.name}
+          </Link>
+          <p className="truncate text-[12.5px] text-muted">{client.segment || "Segmento não informado"}</p>
         </div>
-        <p className="mt-0.5 truncate text-sm text-muted">{client.segment || "Segmento não informado"}</p>
       </div>
-
-      <p className="text-sm text-text">
-        <span className="text-muted md:hidden">Cidade: </span>
-        {location ?? <span className="text-muted">Não informada</span>}
-      </p>
-
-      <div className="min-w-0">
-        {client.sites.length === 0 ? (
-          <p className="text-sm text-muted">Nenhum site ainda</p>
-        ) : (
+      <p className="truncate text-[13.5px] text-text max-md:hidden">{location ?? <span className="text-muted">Não informada</span>}</p>
+      <div className="flex min-w-0 items-center gap-1.5 text-[13.5px] max-md:hidden">
+        {site ? (
           <>
-            <p className="text-[13px] text-muted">{plural(client.sites.length, "site", "sites")}</p>
-            <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-              {client.sites.map((site) => (
-                <li key={site.id} className="flex min-w-0 items-center gap-1.5 text-sm text-text">
-                  <ConnectionDot ok={site.last_check_ok} />
-                  <span className={site.status === "paused" ? "truncate text-muted" : "truncate"}>{hostname(site.url)}</span>
-                  {site.status === "paused" ? <span className="text-[12.5px] text-muted">(pausado)</span> : null}
-                </li>
-              ))}
-            </ul>
+            <ConnectionDot ok={site.last_check_ok} />
+            <span className={site.status === "paused" ? "truncate text-muted" : "truncate text-text"}>{hostname(site.url)}</span>
+            {extra > 0 ? <span className="shrink-0 text-[12px] text-muted">+{extra}</span> : null}
           </>
+        ) : (
+          <span className="text-muted">Nenhum site</span>
         )}
       </div>
-
-      <div className="hidden md:flex md:justify-end">{statusBadge}</div>
+      <div className="flex flex-wrap gap-1 max-md:hidden">
+        {c.svc_blog_gbp ? <Badge tone="info">Blog + Google</Badge> : null}
+        {c.svc_instagram ? <Badge tone="brand">Instagram</Badge> : null}
+        {!c.svc_blog_gbp && !c.svc_instagram ? <span className="text-[12.5px] text-faint">Nenhum</span> : null}
+      </div>
+      <div className="flex justify-end">
+        <Badge tone={s.tone}>
+          <StatusDot tone={s.tone} />
+          {s.label}
+        </Badge>
+      </div>
     </li>
   );
 }

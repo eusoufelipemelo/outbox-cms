@@ -23,6 +23,9 @@
   --color-ink-hover: #262626;
   --color-chart: #e0461f;       /* série dos gráficos (laranja OutBox validado p/ contraste) */
   --color-grid: #eceef1;        /* linhas de grade */
+  --color-ch-blog: #e0461f;     /* canal Blog (laranja OutBox) */
+  --color-ch-google: #1f5fbf;   /* canal Google Empresas */
+  --color-ch-instagram: #8a3ffc; /* canal Instagram */
 
   --color-brand: #f15532;       /* laranja OutBox */
   --color-brand-hover: #e0461f;
@@ -74,6 +77,9 @@ html.dark {
   --color-ink-hover: #e2e2e2;
   --color-chart: #f15532;
   --color-grid: #25272b;
+  --color-ch-blog: #f15532;
+  --color-ch-google: #7fb0ff;
+  --color-ch-instagram: #b995ff;
 
   --color-brand: #f15532;
   --color-brand-hover: #ff6a47;

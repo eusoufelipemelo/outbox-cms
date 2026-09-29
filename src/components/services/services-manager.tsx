@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Check, ChevronRight, Link2, Play, Search, X } from "lucide-react";
+import { Check, Link2, Play, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
+import { ClientPicker, type PickerClient } from "@/components/ui/client-picker";
 import { cn, formatDateTime } from "@/lib/utils";
 import { WEEKDAYS } from "@/lib/automation/schedule";
 import { runIgNow, saveIgAutomation, setServices } from "@/lib/data/service-actions";
@@ -45,13 +46,9 @@ const FILTERS: { key: "todos" | Mode; label: string }[] = [
   { key: "nenhum", label: "Sem serviço" },
 ];
 
-const fold = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-
 export function ServicesManager({ clients }: { clients: ServiceClient[] }) {
-  const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"todos" | Mode>("todos");
   const [selectedId, setSelectedId] = useState<string | null>(clients[0]?.id ?? null);
-  const detail = useRef<HTMLDivElement>(null);
 
   const counts = useMemo(() => {
     const out: Record<string, number> = { todos: clients.length, completo: 0, blog: 0, instagram: 0, nenhum: 0 };
@@ -59,26 +56,28 @@ export function ServicesManager({ clients }: { clients: ServiceClient[] }) {
     return out;
   }, [clients]);
 
-  const filtered = useMemo(() => {
-    const q = fold(query).trim();
-    return clients.filter((c) => (!q || fold(`${c.name} ${c.segment ?? ""}`).includes(q)) && (filter === "todos" || modeOf(c) === filter));
-  }, [clients, query, filter]);
+  const filtered = useMemo(() => clients.filter((c) => filter === "todos" || modeOf(c) === filter), [clients, filter]);
+  const options: PickerClient[] = filtered.map((c) => {
+    const m = modeOf(c);
+    return { id: c.id, name: c.name, segment: c.segment, city: c.city, state: c.state, meta: MODE[m].label, tone: MODE[m].tone };
+  });
   const selected = clients.find((c) => c.id === selectedId) ?? null;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-start">
-      <div className="rounded-[var(--radius-panel)] border border-line bg-surface p-3 lg:sticky lg:top-6">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" aria-hidden />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar cliente" aria-label="Buscar cliente" className="pl-9" autoComplete="off" />
-        </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="space-y-4">
+      <div className="rounded-[var(--radius-panel)] border border-line bg-surface p-3 sm:p-4">
+        <ClientPicker clients={options} value={selectedId} onChange={setSelectedId} />
+        <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por pacote">
           {FILTERS.map((f) => (
             <button
               key={f.key}
               type="button"
               aria-pressed={filter === f.key}
-              onClick={() => setFilter(f.key)}
+              onClick={() => {
+                setFilter(f.key);
+                const first = clients.find((c) => f.key === "todos" || modeOf(c) === f.key);
+                if (first) setSelectedId(first.id);
+              }}
               className={cn(
                 "rounded-[var(--radius-chip)] border px-2.5 py-1 text-[12.5px] transition-colors",
                 filter === f.key ? "border-ink bg-ink font-medium text-on-ink" : "border-line text-muted hover:border-ink hover:text-ink",
@@ -89,35 +88,14 @@ export function ServicesManager({ clients }: { clients: ServiceClient[] }) {
             </button>
           ))}
         </div>
-        <ul className="mt-3 max-h-[min(60vh,560px)] space-y-0.5 overflow-y-auto lg:max-h-[calc(100dvh-16rem)]">
-          {filtered.slice(0, 150).map((c) => {
-            const m = modeOf(c);
-            return (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedId(c.id);
-                    if (window.matchMedia("(max-width: 1023px)").matches) requestAnimationFrame(() => detail.current?.scrollIntoView({ behavior: "smooth" }));
-                  }}
-                  aria-current={c.id === selectedId ? "true" : undefined}
-                  className={cn("flex w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2.5 py-2 text-left", c.id === selectedId ? "bg-sunken" : "hover:bg-sunken")}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className={cn("block truncate text-[14px]", c.id === selectedId ? "font-semibold text-ink" : "text-text")}>{c.name}</span>
-                    <span className="block truncate text-[12px] text-muted">{MODE[m].label}</span>
-                  </span>
-                  <ChevronRight className="size-4 shrink-0 text-faint" aria-hidden />
-                </button>
-              </li>
-            );
-          })}
-          {filtered.length === 0 ? <li className="px-2.5 py-6 text-[13.5px] text-muted">Nenhum cliente com esse filtro.</li> : null}
-        </ul>
       </div>
-      <div ref={detail} className="scroll-mt-20">
-        {selected ? <ServiceEditor key={selected.id} client={selected} onBack={() => setSelectedId(null)} /> : null}
-      </div>
+      {selected ? (
+        <ServiceEditor key={selected.id} client={selected} />
+      ) : (
+        <div className="rounded-[var(--radius-panel)] border border-dashed border-line-strong bg-surface p-10 text-center">
+          <p className="text-[15px] text-muted">Nenhum cliente com esse filtro.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -156,7 +134,7 @@ function copy(text: string, what: string) {
   );
 }
 
-function ServiceEditor({ client, onBack }: { client: ServiceClient; onBack: () => void }) {
+function ServiceEditor({ client }: { client: ServiceClient }) {
   const [blogGbp, setBlogGbp] = useState(client.blogGbp);
   const [instagram, setInstagram] = useState(client.instagram);
   const [formats, setFormats] = useState<IgFormat[]>(client.formats.length ? client.formats : ["carousel", "story"]);
@@ -184,10 +162,6 @@ function ServiceEditor({ client, onBack }: { client: ServiceClient; onBack: () =
   return (
     <div className="space-y-5">
       <section className="rounded-[var(--radius-panel)] border border-line bg-surface p-4 sm:p-5">
-        <button type="button" onClick={onBack} className="mb-1 inline-flex items-center gap-1 text-[13px] text-muted hover:text-ink lg:hidden">
-          <ArrowLeft className="size-3.5" aria-hidden />
-          Lista de clientes
-        </button>
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-[18px] font-bold text-ink">{client.name}</h2>
           <Badge tone={MODE[mode].tone}>{MODE[mode].label}</Badge>

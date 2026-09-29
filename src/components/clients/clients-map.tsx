@@ -48,7 +48,7 @@ export function ClientsMap({ clients }: { clients: MapClient[] }) {
   const fill = (uf: string) => {
     const s = byUf.get(uf);
     if (!s) return "var(--color-line)";
-    const pct = Math.round(30 + 70 * (s.clients.length / max));
+    const pct = Math.round(14 + 26 * (s.clients.length / max));
     return `color-mix(in oklab, var(--color-chart) ${pct}%, var(--color-line))`;
   };
 
@@ -115,16 +115,27 @@ export function ClientsMap({ clients }: { clients: MapClient[] }) {
                 />
               );
             })}
-            {/* marcador com o número de clientes, no ponto do estado mais afastado das bordas */}
+            {/* bolhas proporcionais: tamanho pela quantidade, halo na cor da marca, número em branco */}
             {ranking.map((st) => {
               const shape = UF_SHAPES.find((u) => u.uf === st.uf);
               if (!shape) return null;
               const n = st.clients.length;
-              const r = n > 9 ? 17 : 15;
+              const r = 13 + 11 * Math.sqrt(n / max);
+              const on = selected === st.uf || hover === st.uf;
               return (
                 <g key={st.uf} className="pointer-events-none select-none" aria-hidden>
-                  <circle cx={shape.lx} cy={shape.ly} r={r} fill="var(--color-ink)" stroke="var(--color-surface)" strokeWidth={3} />
-                  <text x={shape.lx} y={shape.ly} dy="0.35em" textAnchor="middle" fill="var(--color-on-ink)" fontSize={15} fontWeight={700} style={{ fontVariantNumeric: "tabular-nums" }}>
+                  <circle cx={shape.lx} cy={shape.ly} r={r + 8} fill="var(--color-chart)" opacity={on ? 0.32 : 0.16} />
+                  <circle cx={shape.lx} cy={shape.ly} r={r} fill="var(--color-chart)" stroke={on ? "var(--color-ink)" : "var(--color-surface)"} strokeWidth={on ? 2.5 : 2} />
+                  <text
+                    x={shape.lx}
+                    y={shape.ly}
+                    dy="0.36em"
+                    textAnchor="middle"
+                    fill="#ffffff"
+                    fontSize={n > 9 ? 13 : 14.5}
+                    fontWeight={700}
+                    style={{ fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}
+                  >
                     {n}
                   </text>
                 </g>
@@ -157,7 +168,7 @@ export function ClientsMap({ clients }: { clients: MapClient[] }) {
 
         <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4 text-[12.5px] text-muted">
           <span>Menos</span>
-          <span aria-hidden className="h-2 min-w-24 flex-1 rounded-full" style={{ background: "linear-gradient(90deg, color-mix(in oklab, var(--color-chart) 30%, var(--color-line)), var(--color-chart))" }} />
+          <span aria-hidden className="h-2 min-w-24 flex-1 rounded-full" style={{ background: "linear-gradient(90deg, color-mix(in oklab, var(--color-chart) 14%, var(--color-line)), color-mix(in oklab, var(--color-chart) 40%, var(--color-line)))" }} />
           <span>Mais clientes</span>
           <span aria-hidden className="ml-2 h-3 w-4 rounded-[4px] bg-line" />
           <span>Sem cliente</span>

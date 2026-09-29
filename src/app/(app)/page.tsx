@@ -13,6 +13,8 @@ import { AreaChart, BarList, ColumnChart, StatTile } from "@/components/dashboar
 import { DashboardFilters } from "@/components/dashboard/filters";
 import { LiveReaders } from "@/components/dashboard/live-readers";
 import { monthName, todayKey } from "@/components/agenda/dates";
+import { getChannels } from "@/lib/data/channels";
+import { ChannelBand, ChannelColumns, QueueAndPackages } from "@/components/dashboard/channels";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -46,10 +48,11 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
   const period = toPeriod(sp.periodo);
   const rawClient = typeof sp.cliente === "string" ? sp.cliente : "";
   const clientId = rawClient && isUuid(rawClient) ? rawClient : "";
-  const [data, analytics, clientOptions] = await Promise.all([
+  const [data, analytics, clientOptions, channels] = await Promise.all([
     getDashboard(),
     getAnalytics(period, clientId || undefined),
     listClientOptions(),
+    getChannels(period, clientId || undefined),
   ]);
   const fresh = data.counts.fresh;
   const activeSites = data.counts.fresh + data.counts.attention + data.counts.stale;
@@ -79,6 +82,20 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
         clients={clientOptions.map((c) => ({ id: c.id, name: c.name }))}
       />
 
+      {/* Os três canais, lado a lado */}
+      <div className="mb-6">
+        <ChannelBand data={channels} previousLabel={analytics.previousLabel} />
+      </div>
+      <div className="mb-8 grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <Panel title="O que foi ao ar, por canal" description={`Blog, Google Empresas e Instagram nos últimos ${period} dias.`}>
+          <ChannelColumns series={channels.series} caption={`Publicações por canal nos últimos ${period} dias`} />
+        </Panel>
+        <Panel title="Aprovações e pacotes">
+          <QueueAndPackages data={channels} />
+        </Panel>
+      </div>
+
+      <h2 className="mb-3 text-[17px] font-semibold text-ink">Blog</h2>
       {/* Indicadores do período */}
       <section aria-label="Indicadores" className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile

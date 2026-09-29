@@ -1,16 +1,17 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Check, ChevronRight, Link2, Play, Power, Search } from "lucide-react";
+import { Check, Link2, Play, Power } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
+import { ClientPicker, type PickerClient } from "@/components/ui/client-picker";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { CONTENT_TYPES } from "@/lib/ai/labels";
-import { WEEKDAYS, rhythmLabel } from "@/lib/automation/schedule";
+import { WEEKDAYS } from "@/lib/automation/schedule";
 import { runNow, saveAutomation, toggleAutomation, unlinkTelegram } from "@/lib/data/automation-actions";
 import type { AutomationClient } from "@/lib/data/automations";
 import type { ContentType } from "@/lib/types";
@@ -45,13 +46,6 @@ const FILTERS = [
 ] as const;
 type FilterKey = (typeof FILTERS)[number]["key"];
 
-const fold = (v: string) =>
-  v
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
-
-const MAX_ROWS = 150;
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** Cliente que pede ação: sem Telegram conectado, contrato vencido/vencendo ou erro na última rodada. */
@@ -70,10 +64,8 @@ function needsAttention(c: AutomationClient): string | null {
 }
 
 export function AutomationManager({ clients, telegramReady }: { clients: AutomationClient[]; telegramReady: boolean }) {
-  const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("todos");
   const [selectedId, setSelectedId] = useState<string | null>(clients.find((c) => c.automation)?.id ?? clients[0]?.id ?? null);
-  const detail = useRef<HTMLDivElement>(null);
 
   const counts = useMemo(
     () => ({
@@ -86,48 +78,56 @@ export function AutomationManager({ clients, telegramReady }: { clients: Automat
     [clients],
   );
 
-  const filtered = useMemo(() => {
-    const q = fold(query).trim();
-    return clients.filter((c) => {
-      if (q && !fold(`${c.name} ${c.segment ?? ""} ${c.city ?? ""}`).includes(q)) return false;
-      if (filter === "ligadas") return Boolean(c.automation?.active);
-      if (filter === "pausadas") return Boolean(c.automation && !c.automation.active);
-      if (filter === "sem") return !c.automation;
-      if (filter === "atencao") return Boolean(needsAttention(c));
-      return true;
-    });
-  }, [clients, query, filter]);
+  const filtered = useMemo(
+    () =>
+      clients.filter((c) => {
+        if (filter === "ligadas") return Boolean(c.automation?.active);
+        if (filter === "pausadas") return Boolean(c.automation && !c.automation.active);
+        if (filter === "sem") return !c.automation;
+        if (filter === "atencao") return Boolean(needsAttention(c));
+        return true;
+      }),
+    [clients, filter],
+  );
 
+  const options: PickerClient[] = filtered.map((c) => {
+    const attention = needsAttention(c);
+    return {
+      id: c.id,
+      name: c.name,
+      segment: c.segment,
+      city: c.city,
+      state: c.state,
+      meta: attention ?? (c.automation ? (c.automation.active ? "Ligada" : "Pausada") : "Sem automação"),
+      tone: attention ? "danger" : c.automation?.active ? "ok" : c.automation ? "warn" : "neutral",
+    };
+  });
   const selected = clients.find((c) => c.id === selectedId) ?? null;
 
-  const choose = (id: string) => {
-    setSelectedId(id);
-    if (window.matchMedia("(max-width: 1023px)").matches) {
-      requestAnimationFrame(() => detail.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-    }
-  };
-
   return (
-    <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-start">
-      <div className="rounded-[var(--radius-panel)] border border-line bg-surface p-3 lg:sticky lg:top-6">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" aria-hidden />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar cliente"
-            aria-label="Buscar cliente"
-            className="pl-9"
-            autoComplete="off"
-          />
-        </div>
-
-        <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="space-y-4">
+      <div className="rounded-[var(--radius-panel)] border border-line bg-surface p-3 sm:p-4">
+        <ClientPicker clients={options} value={selectedId} onChange={setSelectedId} />
+        <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Filtrar clientes">
           {FILTERS.map((f) => (
             <button
               key={f.key}
               type="button"
-              onClick={() => setFilter(f.key)}
+              onClick={() => {
+                setFilter(f.key);
+                const first = clients.find((c) =>
+                  f.key === "ligadas"
+                    ? c.automation?.active
+                    : f.key === "pausadas"
+                      ? c.automation && !c.automation.active
+                      : f.key === "sem"
+                        ? !c.automation
+                        : f.key === "atencao"
+                          ? needsAttention(c)
+                          : true,
+                );
+                if (first) setSelectedId(first.id);
+              }}
               aria-pressed={filter === f.key}
               className={cn(
                 "rounded-[var(--radius-chip)] border px-2.5 py-1 text-[12.5px] transition-colors",
@@ -139,65 +139,20 @@ export function AutomationManager({ clients, telegramReady }: { clients: Automat
             </button>
           ))}
         </div>
-
-        <ul className="mt-3 max-h-[min(60vh,560px)] space-y-0.5 overflow-y-auto lg:max-h-[calc(100dvh-16rem)]">
-          {filtered.slice(0, MAX_ROWS).map((c) => {
-            const a = c.automation;
-            const attention = needsAttention(c);
-            const on = c.id === selectedId;
-            return (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  onClick={() => choose(c.id)}
-                  aria-current={on ? "true" : undefined}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2.5 py-2 text-left transition-colors",
-                    on ? "bg-sunken" : "hover:bg-sunken",
-                  )}
-                >
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "size-2 shrink-0 rounded-full",
-                      a?.active ? "bg-ok" : a ? "bg-warn" : "bg-line-strong",
-                      attention && a?.active ? "bg-danger" : "",
-                    )}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className={cn("block truncate text-[14px]", on ? "font-semibold text-ink" : "text-text")}>{c.name}</span>
-                    <span className="block truncate text-[12px] text-muted">
-                      {a ? rhythmLabel({ weekdays: a.weekdays, hour: a.hour, perMonth: a.per_month }) : (c.segment ?? "Sem automação")}
-                    </span>
-                  </span>
-                  <ChevronRight className="size-4 shrink-0 text-faint" aria-hidden />
-                </button>
-              </li>
-            );
-          })}
-          {filtered.length === 0 ? <li className="px-2.5 py-6 text-[13.5px] text-muted">Nenhum cliente com esse filtro.</li> : null}
-          {filtered.length > MAX_ROWS ? (
-            <li className="px-2.5 py-3 text-[12.5px] text-muted">
-              Mostrando {MAX_ROWS} de {filtered.length}. Use a busca para achar um cliente.
-            </li>
-          ) : null}
-        </ul>
       </div>
 
-      <div ref={detail} className="scroll-mt-20">
-        {selected ? (
-          <AutomationEditor key={selected.id} client={selected} telegramReady={telegramReady} onBack={() => setSelectedId(null)} />
-        ) : (
-          <div className="rounded-[var(--radius-panel)] border border-dashed border-line-strong bg-surface p-10 text-center">
-            <p className="text-[15px] text-muted">Escolha um cliente na lista para configurar a automação dele.</p>
-          </div>
-        )}
-      </div>
+      {selected ? (
+        <AutomationEditor key={selected.id} client={selected} telegramReady={telegramReady} />
+      ) : (
+        <div className="rounded-[var(--radius-panel)] border border-dashed border-line-strong bg-surface p-10 text-center">
+          <p className="text-[15px] text-muted">Nenhum cliente com esse filtro.</p>
+        </div>
+      )}
     </div>
   );
 }
 
-function AutomationEditor({ client, telegramReady, onBack }: { client: AutomationClient; telegramReady: boolean; onBack: () => void }) {
+function AutomationEditor({ client, telegramReady }: { client: AutomationClient; telegramReady: boolean }) {
   const a = client.automation;
   const [pending, start] = useTransition();
   const router = useRouter();
@@ -248,10 +203,6 @@ function AutomationEditor({ client, telegramReady, onBack }: { client: Automatio
     <div className="rounded-[var(--radius-panel)] border border-line bg-surface">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line p-4 sm:p-5">
         <div className="min-w-0">
-          <button type="button" onClick={onBack} className="mb-1 inline-flex items-center gap-1 text-[13px] text-muted hover:text-ink lg:hidden">
-            <ArrowLeft className="size-3.5" aria-hidden />
-            Lista de clientes
-          </button>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-[18px] font-bold text-ink">{client.name}</h2>
             {a ? a.active ? <Badge tone="ok">Ligada</Badge> : <Badge tone="warn">Pausada</Badge> : <Badge>Sem automação</Badge>}

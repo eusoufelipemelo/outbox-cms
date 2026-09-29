@@ -34,6 +34,7 @@ export type AutomationClient = {
   name: string;
   segment: string | null;
   city: string | null;
+  state: string | null;
   expertName: string | null;
   contractEnd: string | null;
   telegramConnected: boolean;
@@ -65,7 +66,7 @@ const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
 export async function listAutomationClients(): Promise<AutomationClient[]> {
   const [{ data: clients }, { data: autos }, bot] = await Promise.all([
     db().from("clients").select(
-      "id, name, segment, city, status, expert_name, contract_end, brand_color, image_style, image_mood, telegram_chat_id, telegram_link_code, svc_blog_gbp, svc_instagram, sites(id, name, status)",
+      "id, name, segment, city, state, status, expert_name, contract_end, brand_color, image_style, image_mood, telegram_chat_id, telegram_link_code, svc_blog_gbp, svc_instagram, sites(id, name, status)",
     ).neq("status", "archived"),
     db().from("automations").select("*"),
     botUsername(),
@@ -88,6 +89,7 @@ export async function listAutomationClients(): Promise<AutomationClient[]> {
         name: c.name,
         segment: c.segment,
         city: c.city,
+        state: c.state,
         expertName: c.expert_name,
         contractEnd: c.contract_end,
         visual: visualSummary(c),

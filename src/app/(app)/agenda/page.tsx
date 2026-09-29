@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MonthPicker } from "@/components/agenda/month-picker";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { PageHeader } from "@/components/ui/panel";
@@ -84,6 +85,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
               <ChevronRight className="size-4" aria-hidden />
             </Link>
           </nav>
+          <MonthPicker month={month} cliente={cliente ?? undefined} />
           <ClientFilter
             basePath="/agenda"
             params={{ m: month === currentMonth ? undefined : month }}

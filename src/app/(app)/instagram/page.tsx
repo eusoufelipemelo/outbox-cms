@@ -14,7 +14,7 @@ export default async function InstagramPage() {
   const configured = igConfigured();
 
   const [clientsRes, accountsRes, postsRes, itemsRes] = await Promise.all([
-    db().from("clients").select("id, name").neq("status", "archived").order("name"),
+    db().from("clients").select("id, name, segment, city, state").neq("status", "archived").order("name"),
     db().from("ig_accounts").select("client_id, username"),
     db()
       .from("post_sites")
@@ -22,12 +22,13 @@ export default async function InstagramPage() {
       .eq("status", "published")
       .order("published_at", { ascending: false })
       .limit(200),
-    db().from("ig_posts").select("id, kind, slides, caption, status, permalink, error, feedback, created_at, clients(name)").order("created_at", { ascending: false }).limit(60),
+    db().from("ig_posts").select("id, client_id, kind, slides, caption, status, permalink, error, feedback, created_at, clients(name)").order("created_at", { ascending: false }).limit(60),
   ]);
 
   const accounts = new Map(((accountsRes.data ?? []) as { client_id: string; username: string | null }[]).map((a) => [a.client_id, a.username]));
-  const clients: IgClient[] = ((clientsRes.data ?? []) as { id: string; name: string }[])
-    .map((c) => ({ id: c.id, name: c.name, username: accounts.get(c.id) ?? null, connected: accounts.has(c.id), link: igConnectLink(c.id) }))
+  type C = { id: string; name: string; segment: string | null; city: string | null; state: string | null };
+  const clients: IgClient[] = ((clientsRes.data ?? []) as C[])
+    .map((c) => ({ ...c, username: accounts.get(c.id) ?? null, connected: accounts.has(c.id), link: igConnectLink(c.id) }))
     .sort((a, b) => Number(b.connected) - Number(a.connected));
 
   type P = { posts: { id: string; title: string } | { id: string; title: string }[]; sites: { client_id: string } | { client_id: string }[] };
@@ -40,9 +41,10 @@ export default async function InstagramPage() {
     })
     .filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)));
 
-  type Row = Omit<IgItem, "clientName"> & { clients: { name: string } | { name: string }[] | null };
+  type Row = Omit<IgItem, "clientName" | "clientId"> & { client_id: string; clients: { name: string } | { name: string }[] | null };
   const items: IgItem[] = ((itemsRes.data ?? []) as unknown as Row[]).map((r) => ({
     ...r,
+    clientId: r.client_id,
     clientName: (Array.isArray(r.clients) ? r.clients[0]?.name : r.clients?.name) ?? "Cliente removido",
   }));
 
