@@ -132,9 +132,11 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
     .single();
   if (runErr || !runRow) return { runId: "", ok: false, message: "Não foi possível registrar a execução." };
   const runId = runRow.id as string;
+  // execução nova (agendada ou "Rodar agora"): o aviso da anterior só volta se esta também falhar
+  await db().from("automations").update({ last_error: null }).eq("id", a.id);
 
   try {
-    if (!aiStatus().enabled) throw new Error("Assistente de IA desligado: falta ANTHROPIC_API_KEY.");
+    if (!aiStatus().enabled) throw new Error("Assistente de IA desligado: configure a chave do OpenRouter no Painel admin.");
 
     const { data: clientRow } = await db().from("clients").select("name, segment, city, expert_name, contract_end, brand_color, image_style, image_mood, telegram_chat_id, svc_blog_gbp").eq("id", a.client_id).maybeSingle();
     const client = (clientRow ?? { name: "cliente", segment: null, city: null, expert_name: null, contract_end: null }) as {
