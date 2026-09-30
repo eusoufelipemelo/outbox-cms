@@ -51,7 +51,7 @@ export function QuickClientForm() {
               if (v !== e.target.value) e.target.value = v;
             }}
             aria-invalid={Boolean(err("domain"))}
-            className="pl-[6.1rem]"
+            className="pl-[5.55rem]"
           />
         </div>
       </Field>

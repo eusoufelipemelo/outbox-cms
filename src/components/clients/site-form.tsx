@@ -124,7 +124,7 @@ export function SiteForm({ clientId, site }: { clientId: string; site?: SiteForm
                 required
                 aria-invalid={invalid("url")}
                 aria-describedby="url-full"
-                className="pl-[6.1rem]"
+                className="pl-[5.55rem]"
               />
               <input type="hidden" name="url" value={url} />
             </div>

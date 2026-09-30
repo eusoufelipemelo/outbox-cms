@@ -1,6 +1,7 @@
 import "server-only";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { domainToUnicode } from "node:url";
 import { env } from "@/lib/env";
 
 export const USER_AGENT = "OutBox-CMS/1.0";
@@ -24,9 +25,11 @@ export type ChannelOutcome = {
   externalUrl?: string | null;
 };
 
+/** Host para mensagens, com acentos legíveis (xn--picemontagem-bbb → ápicemontagem). */
 export function hostOf(url: string): string {
   try {
-    return new URL(url).host;
+    const u = new URL(url);
+    return domainToUnicode(u.hostname) + (u.port ? `:${u.port}` : "");
   } catch {
     return url;
   }
