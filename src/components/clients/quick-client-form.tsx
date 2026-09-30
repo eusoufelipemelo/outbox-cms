@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { quickCreateClient } from "@/lib/data/quick-client-actions";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Field, Input, PrefixInput, Select } from "@/components/ui/field";
 import { UFS } from "@/components/clients/options";
 import type { ActionResult } from "@/lib/types";
 
@@ -33,11 +33,9 @@ export function QuickClientForm() {
         error={err("domain")}
         hint="É por ele que o site do cliente recebe os artigos. Pode ter acento, como ápicemontagem.com.br."
       >
-        <div className="relative">
-          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[15px] text-muted select-none">
-            https://www.
-          </span>
-          <Input
+        <div>
+            <PrefixInput
+              prefix="https://www."
             id="domain"
             name="domain"
             required
@@ -51,7 +49,6 @@ export function QuickClientForm() {
               if (v !== e.target.value) e.target.value = v;
             }}
             aria-invalid={Boolean(err("domain"))}
-            className="pl-[5.55rem]"
           />
         </div>
       </Field>

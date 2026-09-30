@@ -6,7 +6,7 @@ import { startTransition, useActionState, useState, type FormEvent } from "react
 import { Braces, KeyRound, LayoutTemplate, Webhook, type LucideIcon, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Button, buttonClass } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Field, Input, PrefixInput, Select } from "@/components/ui/field";
 import { Panel } from "@/components/ui/panel";
 import { saveSite } from "@/lib/data/site-actions";
 import type { SiteFormValues } from "@/lib/data/sites";
@@ -104,14 +104,9 @@ export function SiteForm({ clientId, site }: { clientId: string; site?: SiteForm
             error={err("url")}
             hint="Digite só o domínio. Pode ter acento, como ápicemontagem.com.br."
           >
-            <div className="relative">
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[15px] text-muted select-none"
-              >
-                https://www.
-              </span>
-              <Input
+            <div>
+            <PrefixInput
+              prefix="https://www."
                 id="url"
                 inputMode="url"
                 autoComplete="off"
@@ -124,7 +119,6 @@ export function SiteForm({ clientId, site }: { clientId: string; site?: SiteForm
                 required
                 aria-invalid={invalid("url")}
                 aria-describedby="url-full"
-                className="pl-[5.55rem]"
               />
               <input type="hidden" name="url" value={url} />
             </div>

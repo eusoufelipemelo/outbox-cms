@@ -67,3 +67,27 @@ export function Field({
     </div>
   );
 }
+
+/** Campo com um prefixo fixo à esquerda (ex.: "https://www."), que acompanha a largura real do texto. */
+export const PrefixInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { prefix: string }>(function PrefixInput(
+  { prefix, className, ...props },
+  ref,
+) {
+  return (
+    <div
+      className={cn(
+        "flex h-10 w-full items-center rounded-[var(--radius-control)] border border-line-strong bg-surface transition-colors duration-150 hover:border-line-hover focus-within:border-ink focus-within:ring-2 focus-within:ring-brand/25 has-[input[aria-invalid=true]]:border-danger",
+        className,
+      )}
+    >
+      <span aria-hidden className="shrink-0 pl-3 text-[15px] text-muted select-none">
+        {prefix}
+      </span>
+      <input
+        ref={ref}
+        className="h-full min-w-0 flex-1 bg-transparent pr-3 text-[15px] text-text placeholder:text-faint focus:outline-none"
+        {...props}
+      />
+    </div>
+  );
+});
