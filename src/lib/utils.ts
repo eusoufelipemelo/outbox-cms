@@ -66,12 +66,40 @@ export function normalizeUrl(input: string): string {
   return url.replace(/\/+$/, "");
 }
 
-export function hostname(url: string): string {
+/** Domínio como foi digitado (mantém acentos): sem protocolo, sem www, sem caminho. */
+export function cleanDomain(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/[:/?#\s].*$/, "")
+    .replace(/\.$/, "");
+}
+
+/**
+ * Domínio em ASCII, para comparar: "ápicemontagem.com.br" e "xn--picemontagem-bbb.com.br"
+ * são o mesmo endereço (o navegador e o servidor usam a segunda forma).
+ */
+export function asciiDomain(input: string): string {
+  const d = cleanDomain(input);
+  if (!d) return "";
   try {
-    return new URL(url).hostname.replace(/^www\./, "");
+    return new URL(`http://${d}`).hostname;
   } catch {
-    return url;
+    return d;
   }
+}
+
+/** Endereço padrão do site do cliente: sempre https://www. + domínio. */
+export function siteUrlFromDomain(domain: string): string {
+  const d = cleanDomain(domain);
+  return d ? `https://www.${d}` : "";
+}
+
+/** Domínio para exibir (sem www), mantendo os acentos como foram cadastrados. */
+export function hostname(url: string): string {
+  return cleanDomain(url) || url;
 }
 
 export function joinUrl(base: string, ...parts: string[]): string {

@@ -11,7 +11,7 @@ import { Panel } from "@/components/ui/panel";
 import { saveSite } from "@/lib/data/site-actions";
 import type { SiteFormValues } from "@/lib/data/sites";
 import type { ActionResult, SitePlatform } from "@/lib/types";
-import { cn, joinUrl, normalizeUrl } from "@/lib/utils";
+import { cleanDomain, cn, joinUrl, normalizeUrl, siteUrlFromDomain } from "@/lib/utils";
 import { DEFAULT_PLATFORM, OUTBOX_REVALIDATE_PATH, PLATFORM, SITE_PLATFORMS } from "./options";
 
 type State = ActionResult<{ id: string }> | null;
@@ -32,7 +32,9 @@ export function SiteForm({ clientId, site }: { clientId: string; site?: SiteForm
   const router = useRouter();
   const isNew = !site;
   const [platform, setPlatform] = useState<SitePlatform>(site?.platform ?? DEFAULT_PLATFORM);
-  const [url, setUrl] = useState(site?.url ?? "");
+  // O campo guarda só o domínio; o endereço salvo é sempre https://www. + domínio.
+  const [domain, setDomain] = useState(cleanDomain(site?.url ?? ""));
+  const url = siteUrlFromDomain(domain);
   // Site novo da OutBox: a URL de atualização acompanha o endereço do site até alguém editar o campo.
   // Site já salvo sem URL (ex.: blog por script) não muda sozinho: o botão "Usar a rota do site OutBox" preenche.
   const [webhookUrl, setWebhookUrl] = useState(site?.webhook_url ?? "");
@@ -96,21 +98,39 @@ export function SiteForm({ clientId, site }: { clientId: string; site?: SiteForm
               aria-invalid={invalid("name")}
             />
           </Field>
-          <Field label="Endereço do site" htmlFor="url" error={err("url")} hint="Pode colar sem https://, o CMS completa.">
-            <Input
-              id="url"
-              name="url"
-              inputMode="url"
-              autoComplete="off"
-              placeholder="www.cliente.com.br"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              onBlur={() => {
-                if (url.trim()) setUrl(normalizeUrl(url));
-              }}
-              required
-              aria-invalid={invalid("url")}
-            />
+          <Field
+            label="Endereço do site"
+            htmlFor="url"
+            error={err("url")}
+            hint="Digite só o domínio. Pode ter acento, como ápicemontagem.com.br."
+          >
+            <div className="relative">
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[15px] text-muted select-none"
+              >
+                https://www.
+              </span>
+              <Input
+                id="url"
+                inputMode="url"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="cliente.com.br"
+                value={domain}
+                onChange={(e) => setDomain(e.target.value.replace(/^\s*https?:\/\//i, "").replace(/^www\./i, ""))}
+                onBlur={() => setDomain(cleanDomain(domain))}
+                required
+                aria-invalid={invalid("url")}
+                aria-describedby="url-full"
+                className="pl-[6.1rem]"
+              />
+              <input type="hidden" name="url" value={url} />
+            </div>
+            <span id="url-full" className="sr-only">
+              {url ? `Endereço completo: ${url}` : ""}
+            </span>
           </Field>
           <Field
             label="Caminho do blog"

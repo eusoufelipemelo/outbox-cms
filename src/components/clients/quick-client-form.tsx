@@ -31,19 +31,29 @@ export function QuickClientForm() {
         label="Domínio do site"
         htmlFor="domain"
         error={err("domain")}
-        hint="É por ele que o site do cliente recebe os artigos. Ex.: clinicasorriso.com.br"
+        hint="É por ele que o site do cliente recebe os artigos. Pode ter acento, como ápicemontagem.com.br."
       >
-        <Input
-          id="domain"
-          name="domain"
-          required
-          inputMode="url"
-          autoComplete="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          placeholder="clinicasorriso.com.br"
-          aria-invalid={Boolean(err("domain"))}
-        />
+        <div className="relative">
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[15px] text-muted select-none">
+            https://www.
+          </span>
+          <Input
+            id="domain"
+            name="domain"
+            required
+            inputMode="url"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="clinicasorriso.com.br"
+            onChange={(e) => {
+              const v = e.target.value.replace(/^\s*https?:\/\//i, "").replace(/^www\./i, "");
+              if (v !== e.target.value) e.target.value = v;
+            }}
+            aria-invalid={Boolean(err("domain"))}
+            className="pl-[6.1rem]"
+          />
+        </div>
       </Field>
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Segmento (opcional)" htmlFor="segment" hint="Ajuda a IA a escrever para o nicho certo.">

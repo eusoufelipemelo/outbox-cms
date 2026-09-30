@@ -4,7 +4,7 @@ import { orderedListSteps } from "@/lib/delivery/markdown";
 import { siteArticleUrl } from "@/lib/delivery/urls";
 import { sanitizeArticleHtml } from "@/lib/sanitize";
 import type { Client, ContentType, FaqItem, Post, PostSite, SitePlatform, SourceItem } from "@/lib/types";
-import { joinUrl, slugify, stripHtml } from "@/lib/utils";
+import { asciiDomain, joinUrl, slugify, stripHtml } from "@/lib/utils";
 import { parseUnits } from "@/lib/units";
 
 // Formato público dos artigos: usado pela Content API (/api/v1), pelo embed e pelo payload do webhook.
@@ -769,13 +769,8 @@ export async function getSiteByKey(key: string): Promise<ContentSite | null> {
 
 /** "https://www.Cliente.com.br/blog" → "cliente.com.br" */
 export function normalizeDomain(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .replace(/[:/?#].*$/, "")
-    .replace(/\.$/, "");
+  // acentos viram a forma xn--… que o site manda: "ápice.com.br" encontra "xn--pice-….com.br"
+  return asciiDomain(input);
 }
 
 let domainCache: { at: number; rows: { id: string; url: string; public_key: string }[] } | null = null;
