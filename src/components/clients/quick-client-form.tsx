@@ -34,8 +34,8 @@ export function QuickClientForm() {
         hint="É por ele que o site do cliente recebe os artigos. Pode ter acento, como ápicemontagem.com.br."
       >
         <div>
-            <PrefixInput
-              prefix="https://www."
+          <PrefixInput
+            prefix="https://www."
             id="domain"
             name="domain"
             required
