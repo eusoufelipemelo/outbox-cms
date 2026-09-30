@@ -1,4 +1,5 @@
 import "server-only";
+import { jsonrepair } from "jsonrepair";
 import { z } from "zod";
 import { env } from "@/lib/env";
 import { pick } from "@/lib/settings-store";
@@ -141,19 +142,10 @@ async function post(body: Record<string, unknown>, timeoutMs: number, signal?: A
   return json;
 }
 
-/**
- * Acha o JSON na resposta: inteiro, dentro de ```json … ``` ou o primeiro objeto equilibrado
- * do texto (alguns modelos escrevem uma frase antes ou deixam blocos de raciocínio).
- */
-export function extractJson(raw: string): unknown {
-  const text = raw.replace(/<(think|thinking|reasoning)>[\s\S]*?<\/\1>/gi, "").trim();
-  const tries = [text];
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced?.[1]) tries.push(fenced[1]);
-  const start = text.search(/[{[]/);
-  if (start >= 0) {
-    const open = text[start];
-    const close = open === "{" ? "}" : "]";
+/** Objetos `{…}` equilibrados do texto, na ordem em que aparecem (ignora chaves dentro de strings). */
+function balancedObjects(text: string): string[] {
+  const found: string[] = [];
+  for (let start = text.indexOf("{"); start >= 0; start = text.indexOf("{", start + 1)) {
     let depth = 0;
     let inString = false;
     let escaped = false;
@@ -166,21 +158,57 @@ export function extractJson(raw: string): unknown {
         continue;
       }
       if (c === '"') inString = true;
-      else if (c === open) depth++;
-      else if (c === close && --depth === 0) {
-        tries.push(text.slice(start, i + 1));
+      else if (c === "{") depth++;
+      else if (c === "}" && --depth === 0) {
+        found.push(text.slice(start, i + 1));
         break;
       }
     }
+    if (found.length >= 12) break;
   }
-  for (const candidate of tries) {
+  return found;
+}
+
+/**
+ * Todos os JSONs que dá para tirar da resposta, do mais provável ao menos provável: a resposta
+ * inteira, o bloco ```json```, cada objeto equilibrado do texto (alguns modelos pensam em voz alta
+ * antes) e, por fim, versões consertadas com o jsonrepair (aspas sem escape, quebra de linha
+ * dentro de string, vírgula sobrando, resposta cortada).
+ */
+export function jsonCandidates(raw: string): unknown[] {
+  const text = raw.replace(/<(think|thinking|reasoning)>[\s\S]*?<\/\1>/gi, "").trim();
+  const sources = [text];
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced?.[1]) sources.push(fenced[1].trim());
+  const objects = balancedObjects(text).sort((a, b) => b.length - a.length);
+  sources.push(...objects);
+  const firstBrace = text.indexOf("{");
+  if (firstBrace > 0) sources.push(text.slice(firstBrace));
+
+  const out: unknown[] = [];
+  const seen = new Set<string>();
+  for (const src of sources) {
     try {
-      return JSON.parse(candidate.trim());
+      out.push(JSON.parse(src));
+      seen.add(src);
     } catch {
-      // tenta o próximo formato
+      // tenta consertar abaixo
     }
   }
-  return undefined;
+  for (const src of sources) {
+    if (seen.has(src)) continue;
+    try {
+      out.push(JSON.parse(jsonrepair(src)));
+    } catch {
+      // não tem conserto
+    }
+  }
+  return out;
+}
+
+/** Primeiro JSON que dá para ler da resposta. */
+export function extractJson(raw: string): unknown {
+  return jsonCandidates(raw)[0];
 }
 
 /** Resposta em JSON, validada pelo schema do zod. */
@@ -211,44 +239,58 @@ export async function openrouterJson<S extends z.ZodType>(
     response_format: format,
   };
 
-  let json: ChatResponse;
-  try {
-    json = await post(body, cfg.timeoutMs, signal);
-  } catch (err) {
-    // modelo sem suporte a JSON Schema: tenta o modo JSON simples antes de desistir
-    if (err instanceof OpenRouterError && (err.status === 400 || err.status === 404 || err.status === 422)) {
-      json = await post(
-        {
-          ...body,
-          provider: undefined,
-          response_format: { type: "json_object" },
-          messages: [{ ...body.messages[0], content: `${body.messages[0].content}${shape || `\n\nFormato do JSON:\n${JSON.stringify(schemaJson)}`}` }, body.messages[1]],
-        },
-        cfg.timeoutMs,
-        signal,
-      );
-    } else throw err;
-  }
+  const call = async (): Promise<ChatResponse> => {
+    try {
+      return await post(body, cfg.timeoutMs, signal);
+    } catch (err) {
+      // modelo sem suporte a JSON Schema: tenta o modo JSON simples antes de desistir
+      if (err instanceof OpenRouterError && (err.status === 400 || err.status === 404 || err.status === 422)) {
+        return post(
+          {
+            ...body,
+            provider: undefined,
+            response_format: { type: "json_object" },
+            messages: [{ ...body.messages[0], content: `${body.messages[0].content}${shape || `\n\nFormato do JSON:\n${JSON.stringify(schemaJson)}`}` }, body.messages[1]],
+          },
+          cfg.timeoutMs,
+          signal,
+        );
+      }
+      throw err;
+    }
+  };
 
-  const choice = json.choices?.[0];
-  const text = choice?.message?.content ?? "";
-  if (choice?.finish_reason === "length") {
-    throw new OpenRouterError("A resposta ficou longa demais e veio cortada. Peça menos palavras ou envie um trecho menor.", 422);
-  }
-  if (!text.trim()) throw new OpenRouterError("O modelo devolveu uma resposta vazia. Tente de novo.", 502);
+  // Modelos sem JSON Schema às vezes escapam do formato numa resposta e acertam na seguinte:
+  // tenta uma segunda vez antes de desistir.
+  let failure: OpenRouterError | null = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const json = await call();
+    const choice = json.choices?.[0];
+    const text = choice?.message?.content ?? "";
+    if (choice?.finish_reason === "length") {
+      // resposta cortada: não aproveita um artigo pela metade, pede de novo
+      failure = new OpenRouterError("A resposta ficou longa demais e veio cortada. Peça menos palavras ou envie um trecho menor.", 422);
+      console.warn(`[openrouter] ${model} (${cfg.task ?? "geral"}) tentativa ${attempt}: resposta cortada pelo limite de tokens`);
+      continue;
+    }
+    if (!text.trim()) {
+      failure = new OpenRouterError("O modelo devolveu uma resposta vazia. Tente de novo.", 502);
+      continue;
+    }
 
-  const data = extractJson(text);
-  if (data === undefined) {
-    throw new OpenRouterError(
-      `O modelo ${model} respondeu fora do formato JSON que o CMS pede. Escolha outro modelo no Painel administrativo (os da OpenAI, Anthropic e Google costumam aceitar).`,
-      502,
+    const candidates = jsonCandidates(text);
+    for (const data of candidates) {
+      const parsed = schema.safeParse(data);
+      if (parsed.success) return parsed.data;
+    }
+    console.warn(
+      `[openrouter] ${model} (${cfg.task ?? "geral"}) tentativa ${attempt}: ${candidates.length ? "JSON fora do schema" : "sem JSON legível"}, fim=${choice?.finish_reason ?? "?"}, início=${JSON.stringify(text.slice(0, 300))}`,
     );
+    failure = candidates.length
+      ? new OpenRouterError(`O modelo ${model} devolveu uma resposta incompleta duas vezes seguidas. Tente de novo em instantes.`, 502)
+      : new OpenRouterError(`O modelo ${model} respondeu fora do formato JSON duas vezes seguidas. Tente de novo em instantes.`, 502);
   }
-  const parsed = schema.safeParse(data);
-  if (!parsed.success) {
-    throw new OpenRouterError(`O modelo ${model} devolveu uma resposta incompleta. Tente de novo ou escolha outro modelo.`, 502);
-  }
-  return parsed.data;
+  throw failure ?? new OpenRouterError("O modelo não devolveu uma resposta válida. Tente de novo.", 502);
 }
 
 /** Texto com busca na web (plugin do OpenRouter). Devolve o texto e os endereços que a busca trouxe. */
