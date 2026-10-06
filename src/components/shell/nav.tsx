@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Bot, Boxes, CalendarDays, Store, Camera, SlidersHorizontal, Gauge, Map as MapIcon, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
+import { Bot, Boxes, BriefcaseBusiness, CalendarDays, Store, Camera, SlidersHorizontal, Gauge, Map as MapIcon, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -21,6 +21,7 @@ const items = [
   { href: "/diagnosticos", label: "Diagnóstico", icon: Gauge },
   { href: "/google-empresas", label: "Google Empresas", icon: Store },
   { href: "/instagram", label: "Instagram", icon: Camera },
+  { href: "/linkedin", label: "LinkedIn", icon: BriefcaseBusiness },
   { href: "/integracoes", label: "Integrações", icon: Plug },
 ];
 

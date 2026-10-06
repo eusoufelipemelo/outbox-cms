@@ -13,16 +13,18 @@ const refresh = () => {
   revalidatePath("/servicos");
   revalidatePath("/automacao");
   revalidatePath("/instagram");
+  revalidatePath("/linkedin");
 };
 
 /** Serviços contratados. Blog e Google Empresas são um pacote só (um inclui o outro). */
-export async function setServices(clientId: string, input: { blogGbp: boolean; instagram: boolean; formats: string[] }): Promise<ActionResult> {
+export async function setServices(clientId: string, input: { blogGbp: boolean; instagram: boolean; linkedin?: boolean; formats: string[] }): Promise<ActionResult> {
   await requireUser();
   const formats = input.formats.filter((f) => f === "carousel" || f === "story");
   if (input.instagram && !formats.length) return { ok: false, error: "Escolha pelo menos um formato do Instagram: carrossel ou story." };
+  if (input.linkedin && !input.blogGbp) return { ok: false, error: "Os posts da LinkedIn saem dos artigos: ligue também Blog + Google Empresas." };
   const { error } = await db()
     .from("clients")
-    .update({ svc_blog_gbp: input.blogGbp, svc_instagram: input.instagram, ig_formats: formats.length ? formats : ["carousel", "story"] })
+    .update({ svc_blog_gbp: input.blogGbp, svc_instagram: input.instagram, svc_linkedin: Boolean(input.linkedin), ig_formats: formats.length ? formats : ["carousel", "story"] })
     .eq("id", clientId);
   if (error) return { ok: false, error: "Não foi possível salvar os serviços." };
   // sem Instagram, o calendário próprio dele para

@@ -140,6 +140,16 @@ export const GROUPS: Group[] = [
     ],
   },
   {
+    id: "linkedin",
+    title: "LinkedIn",
+    description: "App da LinkedIn (Community Management API) para publicar os artigos nas páginas de empresa dos clientes.",
+    note: "A LinkedIn precisa aprovar o Community Management API no app. Até lá, a conexão é recusada. No app, use este endereço de retorno: https://cms.outboxgroup.com.br/api/linkedin/callback",
+    fields: [
+      { key: "linkedin_client_id", label: "Client ID", placeholder: "Letras e números, como 86abc123xyz" },
+      { key: "linkedin_client_secret", label: "Client Secret", secret: true },
+    ],
+  },
+  {
     id: "telegram",
     title: "Telegram",
     description: "Bot que leva o rascunho para o cliente aprovar.",

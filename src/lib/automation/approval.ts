@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase/admin";
 import { publishPost } from "@/lib/delivery";
 import { publishArticleToGbp } from "@/lib/google/publish";
 import { alsoOnInstagram } from "@/lib/instagram/auto";
+import { alsoOnLinkedIn } from "@/lib/linkedin/auto";
 
 /** Aprovação do rascunho pelo cliente (Telegram) ou pela equipe (CMS). */
 
@@ -34,7 +35,7 @@ export async function approveRun(runId: string): Promise<{ ok: boolean; message:
     await db().from("automation_runs").update({ status: "failed", error: "A publicação falhou em todos os destinos." }).eq("id", runId);
     return { ok: false, message: "A publicação falhou. A equipe da OutBox já vai olhar." };
   }
-  const gbpNote = [await alsoOnGoogle(run.automation_id, run.post_id), await alsoOnInstagram(run.automation_id, run.post_id)].filter(Boolean).join(" ") || null;
+  const gbpNote = [await alsoOnGoogle(run.automation_id, run.post_id), await alsoOnInstagram(run.automation_id, run.post_id), await alsoOnLinkedIn(run.automation_id, run.post_id)].filter(Boolean).join(" ") || null;
   await db()
     .from("automation_runs")
     .update({

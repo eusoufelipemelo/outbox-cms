@@ -137,6 +137,7 @@ function copy(text: string, what: string) {
 function ServiceEditor({ client }: { client: ServiceClient }) {
   const [blogGbp, setBlogGbp] = useState(client.blogGbp);
   const [instagram, setInstagram] = useState(client.instagram);
+  const [linkedin, setLinkedin] = useState(client.linkedin);
   const [formats, setFormats] = useState<IgFormat[]>(client.formats.length ? client.formats : ["carousel", "story"]);
   const ia = client.igAutomation;
   const [perMonth, setPerMonth] = useState(ia?.per_month ?? 8);
@@ -148,7 +149,7 @@ function ServiceEditor({ client }: { client: ServiceClient }) {
   const router = useRouter();
 
   const mode = modeOf({ blogGbp, instagram });
-  const dirty = blogGbp !== client.blogGbp || instagram !== client.instagram || formats.join() !== client.formats.join();
+  const dirty = blogGbp !== client.blogGbp || instagram !== client.instagram || linkedin !== client.linkedin || formats.join() !== client.formats.join();
 
   const act = (fn: () => Promise<{ ok: boolean; message?: string; error?: string }>) =>
     start(async () => {
@@ -171,6 +172,7 @@ function ServiceEditor({ client }: { client: ServiceClient }) {
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <Toggle on={blogGbp} onChange={setBlogGbp} label="Blog + Google Empresas" hint="Vendidos juntos: quem contrata o blog leva o Google Empresas, e vice-versa." />
           <Toggle on={instagram} onChange={setInstagram} label="Instagram" hint="Com o blog, os posts saem dos artigos. Sozinho, tem calendário próprio." />
+          <Toggle on={linkedin} onChange={setLinkedin} label="LinkedIn" hint="Cada artigo aprovado vira post na página da empresa. Precisa do Blog + Google Empresas." />
         </div>
 
         {instagram ? (
@@ -204,7 +206,7 @@ function ServiceEditor({ client }: { client: ServiceClient }) {
         ) : null}
 
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
-          <Button disabled={!dirty} loading={pending} onClick={() => act(() => setServices(client.id, { blogGbp, instagram, formats }))}>
+          <Button disabled={!dirty} loading={pending} onClick={() => act(() => setServices(client.id, { blogGbp, instagram, linkedin, formats }))}>
             Salvar serviços
           </Button>
           {dirty ? <span className="text-[13px] text-warn">Alterações não salvas</span> : null}
@@ -237,6 +239,18 @@ function ServiceEditor({ client }: { client: ServiceClient }) {
                 }
               />
             </>
+          ) : null}
+          {client.linkedin ? (
+            <Conn
+              ok={client.liPages > 0}
+              label="LinkedIn"
+              detail={client.liPages ? `${client.liPages} página(s) ligada(s).` : "Nenhuma página da LinkedIn ligada a este cliente."}
+              action={
+                <Link href="/linkedin" className="text-sm text-muted hover:text-ink">
+                  Ligar página
+                </Link>
+              }
+            />
           ) : null}
           {client.instagram ? (
             <Conn

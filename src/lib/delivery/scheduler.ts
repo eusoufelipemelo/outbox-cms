@@ -123,6 +123,8 @@ async function automationTick() {
       const { refreshIgTokens } = await import("@/lib/instagram/oauth");
       const renewed = await refreshIgTokens().catch(() => 0);
       if (renewed) console.log(`[instagram] ${renewed} token(s) renovado(s)`);
+      const { refreshLiToken } = await import("@/lib/linkedin/oauth");
+      if (await refreshLiToken().catch(() => false)) console.log("[linkedin] token renovado");
     }
     for (const r of await processAutomations()) {
       console.log(`[automação] ${r.automationId}: ${r.ok ? "ok" : "falhou"} — ${r.message}`);
