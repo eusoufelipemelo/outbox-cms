@@ -96,6 +96,9 @@ export async function generateImage(input: {
       throw new ImageError("O Google bloqueou o projeto da chave do Gemini (acesso negado). Veja o aviso no e-mail da conta Google ou troque a chave em Painel admin → Imagens.", 403);
     }
     if (res.status === 401 || res.status === 403) throw new ImageError("Chave do Gemini inválida ou sem permissão. Confira a chave em Painel admin → Imagens.", 401);
+    if (res.status === 429 && /spending cap/i.test(body)) {
+      throw new ImageError("O projeto da chave do Gemini atingiu o teto de gastos do mês. Aumente o limite em AI Studio → Billing (Project spend cap) ou troque a chave em Painel admin → Imagens.", 429);
+    }
     if (res.status === 429) throw new ImageError("Limite do Gemini atingido. Espere um pouco ou confira os créditos da conta.", 429);
     throw new ImageError("O Gemini não conseguiu gerar a imagem agora. Tente de novo.");
   }

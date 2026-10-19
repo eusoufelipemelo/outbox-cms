@@ -189,15 +189,22 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
     });
 
     // 4) capa
+    // Se a capa falhar, o artigo segue sem imagem, mas a falha fica visível na execução e na automação.
     let cover: { url: string; alt: string } | null = null;
-    if (a.cover && imagesEnabled()) {
+    let coverNote: string | null = null;
+    if (a.cover && !imagesEnabled()) {
+      coverNote = "Capa não gerada: a chave do Gemini não está configurada no Painel admin. Envie uma capa pelo editor.";
+    } else if (a.cover) {
       await step(runId, "Gerando a imagem de capa");
       try {
         cover = await makeCover(a, { title: article.title, summary: article.answer_summary }, client);
       } catch (err) {
-        console.error(`[automação] capa falhou (${client.name}):`, err instanceof Error ? err.message : err);
+        const reason = err instanceof Error ? err.message : String(err);
+        console.error(`[automação] capa falhou (${client.name}):`, reason);
+        coverNote = `Capa não gerada (${reason}). O artigo saiu sem imagem: envie uma capa pelo editor.`;
       }
     }
+    if (coverNote) await db().from("automations").update({ last_error: coverNote }).eq("id", a.id);
 
     // 5) artigo no CMS, como rascunho
     await step(runId, "Salvando no CMS");
@@ -248,7 +255,7 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
     // 6) aprovação
     if (a.approval === "auto") {
       if (!siteIds.length) {
-        await finish(runId, { status: "manual", error: "Nenhum site ativo neste cliente: o artigo ficou em rascunho." });
+        await finish(runId, { status: "manual", error: note("Nenhum site ativo neste cliente: o artigo ficou em rascunho.", coverNote) });
         return { runId, ok: true, message: "artigo criado, sem site para publicar" };
       }
       await db().from("posts").update({ status: "published", published_at: new Date().toISOString() }).eq("id", postId);
@@ -258,7 +265,7 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
         failed < results.length ? [await alsoOnGoogle(a.id, postId), await alsoOnInstagram(a.id, postId), await alsoOnLinkedIn(a.id, postId)].filter(Boolean).join(" ") || null : null;
       await finish(runId, {
         status: failed === results.length ? "failed" : "published",
-        error: [failed ? `${failed} destino(s) falharam.` : null, gbpNote].filter(Boolean).join(" ") || null,
+        error: note(failed ? `${failed} destino(s) falharam.` : null, gbpNote, coverNote),
       });
       return { runId, ok: failed < results.length, message: `publicado em ${results.length - failed}/${results.length} destinos` };
     }
@@ -281,7 +288,7 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
           { text: "✏️ Pedir ajustes", callback_data: `no:${runId}` },
         ],
       ]);
-      await finish(runId, { status: "awaiting", telegram_message_id: msg.message_id });
+      await finish(runId, { status: "awaiting", telegram_message_id: msg.message_id, error: note(coverNote) });
       return { runId, ok: true, message: "rascunho enviado para o cliente" };
     }
 
@@ -291,7 +298,7 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
           ? "Telegram desligado no servidor: o artigo ficou em rascunho."
           : "O cliente ainda não conectou o Telegram: o artigo ficou em rascunho."
         : null;
-    await finish(runId, { status: "manual", error: reason });
+    await finish(runId, { status: "manual", error: note(reason, coverNote) });
     return { runId, ok: true, message: "artigo criado como rascunho" };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Falha inesperada na automação.";
@@ -299,6 +306,11 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
     await db().from("automations").update({ last_error: message }).eq("id", a.id);
     return { runId, ok: false, message };
   }
+}
+
+/** Junta observações da execução (falhas parciais, avisos) em uma frase só. */
+function note(...parts: (string | null | undefined)[]): string | null {
+  return parts.filter(Boolean).join(" ") || null;
 }
 
 export function escapeHtml(value: string): string {
