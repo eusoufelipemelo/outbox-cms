@@ -1,9 +1,11 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
 import { draftFromArticle, publishIgPost } from "@/lib/instagram/compose";
+import { rebuildWithPhotos } from "@/lib/instagram/rephoto";
 import type { ActionResult } from "@/lib/types";
 
 const done = () => revalidatePath("/instagram");
@@ -54,4 +56,22 @@ export async function disconnectIg(clientId: string): Promise<ActionResult> {
   if (error) return { ok: false, error: "Não foi possível desconectar." };
   done();
   return { ok: true, message: "Instagram desconectado" };
+}
+
+/** Refaz as fotos do post (e do par carrossel/story) mantendo o texto; leva alguns minutos. */
+export async function rephotoIgPost(igPostId: string): Promise<ActionResult> {
+  await requireUser();
+  const { data } = await db().from("ig_posts").select("status").eq("id", igPostId).maybeSingle();
+  if (!data) return { ok: false, error: "Post não encontrado." };
+  if ((data as { status: string }).status === "published") return { ok: false, error: "Este post já foi publicado." };
+  await db().from("ig_posts").update({ status: "draft", error: "Refazendo as fotos…" }).eq("id", igPostId);
+  after(async () => {
+    try {
+      await rebuildWithPhotos(igPostId);
+    } catch (err) {
+      await db().from("ig_posts").update({ error: err instanceof Error ? err.message.slice(0, 500) : "Não foi possível refazer as fotos." }).eq("id", igPostId);
+    }
+  });
+  done();
+  return { ok: true, message: "Refazendo as fotos. Em alguns minutos o post atualiza e vai para aprovação." };
 }

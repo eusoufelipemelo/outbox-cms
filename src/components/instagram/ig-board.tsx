@@ -3,13 +3,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, ExternalLink, Link2, Send, Sparkles, Trash2 } from "lucide-react";
+import { Check, ExternalLink, ImagePlus, Link2, Send, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, Textarea } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { ClientPicker, type PickerClient } from "@/components/ui/client-picker";
 import { formatDateTime } from "@/lib/utils";
-import { createIgDraft, deleteIgPost, disconnectIg, publishIg, updateIgCaption } from "@/lib/data/ig-actions";
+import { createIgDraft, deleteIgPost, disconnectIg, publishIg, rephotoIgPost, updateIgCaption } from "@/lib/data/ig-actions";
 
 export type IgClient = {
   id: string;
@@ -208,6 +208,10 @@ export function IgBoard({ clients, articles, items }: { clients: IgClient[]; art
                   <Button size="sm" disabled={pending || it.status === "publishing"} onClick={() => act(() => publishIg(it.id))}>
                     <Send className="size-3.5" aria-hidden />
                     {it.status === "failed" ? "Tentar de novo" : "Publicar agora"}
+                  </Button>
+                  <Button variant="secondary" size="sm" disabled={pending || it.status === "publishing"} onClick={() => act(() => rephotoIgPost(it.id))}>
+                    <ImagePlus className="size-3.5" aria-hidden />
+                    Refazer fotos
                   </Button>
                   <Button
                     variant="ghost"
