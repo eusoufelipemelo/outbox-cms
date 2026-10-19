@@ -92,7 +92,10 @@ export async function generateImage(input: {
     if (res.status === 400 && /safety|blocked|policy/i.test(body)) {
       throw new ImageError("O Gemini recusou este pedido. Reescreva a descrição sem pessoas reais, marcas ou conteúdo sensível.", 422);
     }
-    if (res.status === 401 || res.status === 403) throw new ImageError("Chave do Gemini inválida ou sem permissão. Confira GEMINI_API_KEY.", 401);
+    if (res.status === 403 && /denied access/i.test(body)) {
+      throw new ImageError("O Google bloqueou o projeto da chave do Gemini (acesso negado). Veja o aviso no e-mail da conta Google ou troque a chave em Painel admin → Imagens.", 403);
+    }
+    if (res.status === 401 || res.status === 403) throw new ImageError("Chave do Gemini inválida ou sem permissão. Confira a chave em Painel admin → Imagens.", 401);
     if (res.status === 429) throw new ImageError("Limite do Gemini atingido. Espere um pouco ou confira os créditos da conta.", 429);
     throw new ImageError("O Gemini não conseguiu gerar a imagem agora. Tente de novo.");
   }
