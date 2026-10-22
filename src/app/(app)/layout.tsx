@@ -2,17 +2,23 @@ import { requireUser } from "@/lib/auth";
 import { signOut } from "@/app/(entrada)/actions";
 import { AppNav } from "@/components/shell/nav";
 import { countPendingProfiles } from "@/lib/data/team";
+import { db } from "@/lib/supabase/admin";
 import { ProfileGate } from "@/components/shell/profile-gate";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
-  const pendingCount = user.role === "admin" ? await countPendingProfiles() : 0;
+  const [pendingCount, clientsRes] = await Promise.all([
+    user.role === "admin" ? countPendingProfiles() : Promise.resolve(0),
+    // lista curta para a busca rápida (⌘K) achar clientes de qualquer tela
+    db().from("clients").select("id, name, segment, city, state").neq("status", "archived").order("name"),
+  ]);
   return (
     <div className="min-h-dvh">
       <AppNav
         user={{ name: user.name, email: user.email, role: user.role, avatarUrl: user.avatarUrl, jobTitle: user.jobTitle }}
         pendingCount={pendingCount}
         signOut={signOut}
+        clients={(clientsRes.data ?? []) as { id: string; name: string; segment: string | null; city: string | null; state: string | null }[]}
       />
       <ProfileGate complete={user.profileComplete} />
       <main className="lg:pl-[248px] print:pl-0">

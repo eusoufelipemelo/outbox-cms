@@ -4,75 +4,62 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Bot, Boxes, BriefcaseBusiness, CalendarDays, ListChecks, Store, Camera, SlidersHorizontal, Gauge, Map as MapIcon, Lightbulb, FileText, Images, LayoutGrid, LogOut, Menu, Plug, Plus, UserCog, Users, X } from "lucide-react";
+import { LogOut, Menu, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
-
-const items = [
-  { href: "/", label: "Painel", icon: LayoutGrid, exact: true },
-  { href: "/clientes", label: "Clientes e sites", icon: Users },
-  { href: "/mapa", label: "Mapa", icon: MapIcon },
-  { href: "/servicos", label: "Serviços", icon: Boxes },
-  { href: "/artigos", label: "Artigos", icon: FileText },
-  { href: "/pautas", label: "Pautas", icon: Lightbulb },
-  { href: "/automacao", label: "Automação", icon: Bot },
-  { href: "/agenda", label: "Agenda", icon: CalendarDays },
-  { href: "/midia", label: "Mídia", icon: Images },
-  { href: "/diagnosticos", label: "Diagnóstico", icon: Gauge },
-  { href: "/google-empresas", label: "Google Empresas", icon: Store, exact: true },
-  { href: "/google-empresas/otimizacao", label: "Otimização Google", icon: ListChecks },
-  { href: "/instagram", label: "Instagram", icon: Camera },
-  { href: "/linkedin", label: "LinkedIn", icon: BriefcaseBusiness },
-  { href: "/integracoes", label: "Integrações", icon: Plug },
-];
-
-// Só administradores veem (e acessam) a gestão da equipe.
-const adminItems = [
-  { href: "/equipe", label: "Equipe", icon: UserCog, exact: false },
-  { href: "/painel", label: "Painel admin", icon: SlidersHorizontal, exact: false },
-];
+import { CommandPalette, type PaletteClient } from "./command-palette";
+import { isActive, NAV_GROUPS } from "./nav-items";
 
 export type NavUser = { name: string; email: string; role: "admin" | "editor" | "writer"; avatarUrl: string | null; jobTitle: string | null };
 
 function NavLinks({ user, pendingCount, onNavigate }: { user: NavUser; pendingCount: number; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const links = user.role === "admin" ? [...items, ...adminItems] : items;
+  const groups = NAV_GROUPS.filter((g) => !g.adminOnly || user.role === "admin");
   return (
-    <ul className="space-y-0.5">
-      {links.map(({ href, label, icon: Icon, exact }) => {
-        const badge = href === "/equipe" && pendingCount > 0 ? pendingCount : 0;
-        const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-        return (
-          <li key={href}>
-            <Link
-              href={href}
-              onClick={onNavigate}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "relative flex h-10 items-center gap-3 rounded-[var(--radius-control)] px-3 text-[14.5px] transition-colors duration-150",
-                active ? "bg-sunken font-semibold text-ink" : "text-muted hover:bg-sunken hover:text-ink",
-              )}
-            >
-              {active ? <span aria-hidden className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r bg-brand" /> : null}
-              <Icon className="size-[18px] shrink-0" strokeWidth={active ? 2.2 : 1.8} aria-hidden />
-              {label}
-              {badge ? (
-                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1.5 text-[11.5px] font-semibold text-on-ink tabular-nums">
-                  {badge}
-                  <span className="sr-only"> {badge === 1 ? "conta aguardando aprovação" : "contas aguardando aprovação"}</span>
-                </span>
-              ) : null}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="space-y-4 pb-4">
+      {groups.map((g) => (
+        <div key={g.label ?? "inicio"}>
+          {g.label ? <p className="px-3 pb-1 text-[12px] font-medium text-faint">{g.label}</p> : null}
+          <ul className="space-y-0.5">
+            {g.items.map((item) => {
+              const { href, label, icon: Icon } = item;
+              const badge = href === "/equipe" && pendingCount > 0 ? pendingCount : 0;
+              const active = isActive(pathname, item);
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    onClick={onNavigate}
+                    aria-current={active ? "page" : undefined}
+                    title={item.hint}
+                    className={cn(
+                      "relative flex h-9 items-center gap-3 rounded-[var(--radius-control)] px-3 text-[14px] transition-colors duration-150",
+                      active ? "bg-sunken font-semibold text-ink" : "text-muted hover:bg-sunken hover:text-ink",
+                    )}
+                  >
+                    {active ? <span aria-hidden className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r bg-brand" /> : null}
+                    <Icon className="size-[17px] shrink-0" strokeWidth={active ? 2.2 : 1.8} aria-hidden />
+                    {label}
+                    {badge ? (
+                      <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1.5 text-[11.5px] font-semibold text-on-ink tabular-nums">
+                        {badge}
+                        <span className="sr-only"> {badge === 1 ? "conta aguardando aprovação" : "contas aguardando aprovação"}</span>
+                      </span>
+                    ) : null}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }
 
-type ShellProps = { user: NavUser; pendingCount?: number; signOut: () => Promise<void> };
+type ShellProps = { user: NavUser; pendingCount?: number; signOut: () => Promise<void>; clients?: PaletteClient[] };
 
-function SidebarBody({ user, pendingCount = 0, signOut, onNavigate }: ShellProps & { onNavigate?: () => void }) {
+function SidebarBody({ user, pendingCount = 0, signOut, clients = [], onNavigate }: ShellProps & { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className="px-5 pt-6 pb-5">
@@ -86,10 +73,11 @@ function SidebarBody({ user, pendingCount = 0, signOut, onNavigate }: ShellProps
         <Link
           href="/artigos/novo"
           onClick={onNavigate}
-          className="mb-5 flex h-10 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-ink text-sm font-medium text-on-ink transition-colors hover:bg-ink-hover"
+          className="mb-3 flex h-10 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-ink text-sm font-medium text-on-ink transition-colors hover:bg-ink-hover"
         >
           <Plus className="size-4" aria-hidden /> Novo artigo
         </Link>
+        <CommandPalette clients={clients} isAdmin={user.role === "admin"} onNavigate={onNavigate} />
       </div>
       <nav aria-label="Principal" className="flex-1 overflow-y-auto px-3">
         <NavLinks user={user} pendingCount={pendingCount} onNavigate={onNavigate} />
@@ -132,13 +120,13 @@ function SidebarBody({ user, pendingCount = 0, signOut, onNavigate }: ShellProps
   );
 }
 
-export function AppNav({ user, pendingCount = 0, signOut }: ShellProps) {
+export function AppNav({ user, pendingCount = 0, signOut, clients = [] }: ShellProps) {
   const [open, setOpen] = useState(false);
   return (
     <>
       {/* desktop */}
       <aside className="print:hidden fixed inset-y-0 left-0 z-30 hidden w-[248px] border-r border-line bg-surface lg:block">
-        <SidebarBody user={user} pendingCount={pendingCount} signOut={signOut} />
+        <SidebarBody user={user} pendingCount={pendingCount} signOut={signOut} clients={clients} />
       </aside>
 
       {/* mobile */}
@@ -169,7 +157,7 @@ export function AppNav({ user, pendingCount = 0, signOut }: ShellProps) {
             >
               <X className="size-5" />
             </button>
-            <SidebarBody user={user} pendingCount={pendingCount} signOut={signOut} onNavigate={() => setOpen(false)} />
+            <SidebarBody user={user} pendingCount={pendingCount} signOut={signOut} clients={clients} onNavigate={() => setOpen(false)} />
           </div>
         </div>
       ) : null}
