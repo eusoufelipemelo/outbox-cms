@@ -3,7 +3,9 @@ import { db } from "@/lib/supabase/admin";
 import { publishPost } from "@/lib/delivery";
 import { publishArticleToGbp } from "@/lib/google/publish";
 import { alsoOnInstagram } from "@/lib/instagram/auto";
-import { alsoOnLinkedIn } from "@/lib/linkedin/auto";
+import { alsoOnLinkedIn, alsoOnLinkedInForClient } from "@/lib/linkedin/auto";
+import { alsoOnInstagramForClient } from "@/lib/instagram/auto";
+import { recordApproval } from "@/lib/approval/history";
 
 /** Aprovação do rascunho pelo cliente (Telegram) ou pela equipe (CMS). */
 
@@ -36,6 +38,7 @@ export async function approveRun(runId: string): Promise<{ ok: boolean; message:
     return { ok: false, message: "A publicação falhou. A equipe da OutBox já vai olhar." };
   }
   const gbpNote = [await alsoOnGoogle(run.automation_id, run.post_id), await alsoOnInstagram(run.automation_id, run.post_id), await alsoOnLinkedIn(run.automation_id, run.post_id)].filter(Boolean).join(" ") || null;
+  await recordApproval(run.post_id, { approval_status: "approved", approval_decided_at: new Date().toISOString() }, { by: "cliente", kind: "aprovado" });
   await db()
     .from("automation_runs")
     .update({
@@ -54,7 +57,10 @@ export async function approveRun(runId: string): Promise<{ ok: boolean; message:
 export async function alsoOnGoogle(automationId: string, postId: string): Promise<string | null> {
   const { data } = await db().from("automations").select("client_id").eq("id", automationId).maybeSingle();
   const clientId = (data as { client_id: string } | null)?.client_id;
-  if (!clientId) return null;
+  return clientId ? alsoOnGoogleForClient(clientId, postId) : null;
+}
+
+export async function alsoOnGoogleForClient(clientId: string, postId: string): Promise<string | null> {
   const { data: client } = await db().from("clients").select("svc_blog_gbp").eq("id", clientId).maybeSingle();
   if (!(client as { svc_blog_gbp?: boolean } | null)?.svc_blog_gbp) return null;
   const { count } = await db().from("gbp_locations").select("id", { count: "exact", head: true }).eq("client_id", clientId);
@@ -67,11 +73,18 @@ export async function alsoOnGoogle(automationId: string, postId: string): Promis
   }
 }
 
+/** Depois do blog: Google Empresas, Instagram e LinkedIn, conforme os serviços do cliente. */
+export async function channelsForClient(clientId: string, postId: string): Promise<string | null> {
+  const notes = [await alsoOnGoogleForClient(clientId, postId), await alsoOnInstagramForClient(clientId, postId), await alsoOnLinkedInForClient(clientId, postId)];
+  return notes.filter(Boolean).join(" ") || null;
+}
+
 /** Cliente pediu ajustes: o artigo fica em rascunho e a equipe recebe o recado. */
 export async function requestChanges(runId: string): Promise<{ ok: boolean }> {
   const run = await loadRun(runId);
   if (!run) return { ok: false };
   await db().from("automation_runs").update({ status: "changes" }).eq("id", runId);
+  if (run.post_id) await recordApproval(run.post_id, { approval_status: "changes", approval_decided_at: new Date().toISOString() }, { by: "cliente", kind: "ajustes" });
   return { ok: true };
 }
 
@@ -110,6 +123,7 @@ export async function attachFeedback(chatId: string, text: string): Promise<{ ok
     .maybeSingle();
   if (!run) return { ok: false };
   await db().from("automation_runs").update({ feedback: text.slice(0, 2000) }).eq("id", run.id);
+  if (run.post_id) await recordApproval(run.post_id, { approval_status: "changes", approval_feedback: text.slice(0, 2000) }, { by: "cliente", kind: "ajustes", text });
   const { data: post } = run.post_id ? await db().from("posts").select("title").eq("id", run.post_id).maybeSingle() : { data: null };
   return { ok: true, title: (post as { title: string } | null)?.title };
 }

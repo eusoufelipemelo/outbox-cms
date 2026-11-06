@@ -10,7 +10,10 @@ import { igAccount } from "./oauth";
 export async function alsoOnInstagram(automationId: string, postId: string): Promise<string | null> {
   const { data } = await db().from("automations").select("client_id").eq("id", automationId).maybeSingle();
   const clientId = (data as { client_id: string } | null)?.client_id;
-  if (!clientId) return null;
+  return clientId ? alsoOnInstagramForClient(clientId, postId) : null;
+}
+
+export async function alsoOnInstagramForClient(clientId: string, postId: string): Promise<string | null> {
   const { data: client } = await db().from("clients").select("svc_blog_gbp, svc_instagram, ig_formats").eq("id", clientId).maybeSingle();
   const c = client as { svc_blog_gbp?: boolean; svc_instagram?: boolean; ig_formats?: string[] } | null;
   if (!c?.svc_blog_gbp || !c.svc_instagram) return null;

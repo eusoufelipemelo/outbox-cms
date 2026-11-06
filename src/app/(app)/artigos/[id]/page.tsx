@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { canPublish, requireUser } from "@/lib/auth";
 import { getPostForEditor, listCategorySuggestions, listClientOptions, listDestinationSites } from "@/lib/data/posts";
 import { ArticleEditor } from "@/components/editor/article-editor";
+import { ApprovalPanel } from "@/components/editor/approval-panel";
+import { getPostApproval } from "@/lib/data/approvals";
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -17,12 +19,18 @@ export default async function EditArticlePage({ params }: PageProps<"/artigos/[i
   const user = await requireUser();
   const { id } = await params;
   if (!GUID.test(id)) notFound();
-  const [post, sites, categories, clients] = await Promise.all([
+  const [post, sites, categories, clients, approval] = await Promise.all([
     getPostForEditor(id),
     listDestinationSites(),
     listCategorySuggestions(),
     listClientOptions(),
+    getPostApproval(id),
   ]);
   if (!post) notFound();
-  return <ArticleEditor key={post.id} canPublish={canPublish(user)} post={post} sites={sites} categories={categories} clients={clients} />;
+  return (
+    <>
+      <ApprovalPanel postId={post.id} approval={approval} published={post.status === "published"} />
+      <ArticleEditor key={post.id} canPublish={canPublish(user)} post={post} sites={sites} categories={categories} clients={clients} />
+    </>
+  );
 }

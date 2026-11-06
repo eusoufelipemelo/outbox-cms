@@ -18,7 +18,7 @@ export type Automation = {
   cover: boolean;
   cover_model: string;
   site_ids: string[];
-  approval: "telegram" | "auto" | "manual";
+  approval: "telegram" | "portal" | "auto" | "manual";
   author_name: string | null;
   gbp_post: boolean;
   ig_post: boolean;

@@ -32,7 +32,8 @@ const MODELS = [
 ];
 
 const APPROVALS = [
-  { value: "telegram", label: "Cliente aprova pelo Telegram", hint: "O rascunho vai para o cliente. Ele toca em aprovar e o artigo vai ao ar." },
+  { value: "telegram", label: "Cliente aprova pelo Telegram", hint: "O rascunho vai para o Telegram e para a área do cliente. Aprovou, vai ao ar." },
+  { value: "portal", label: "Cliente aprova pela área do cliente", hint: "O rascunho aparece na área do cliente (link em Serviços). Aprovou, vai ao ar." },
   { value: "auto", label: "Publicar direto", hint: "Sem aprovação: o artigo vai ao ar no horário combinado." },
   { value: "manual", label: "Deixar em rascunho", hint: "A equipe revisa e publica pelo CMS." },
 ] as const;
@@ -57,7 +58,6 @@ function needsAttention(c: AutomationClient): string | null {
     const days = Math.round((Date.parse(c.contractEnd) - Date.now()) / 86_400_000);
     if (days <= 30) return `Contrato vence em ${days} dia(s)`;
   }
-  if (a?.active && a.approval === "telegram" && !c.telegramConnected) return "Falta conectar o Telegram";
   if (a?.active && !c.services.blogGbp) return "Sem o serviço Blog + Google";
   if (a?.active && !c.sites.some((s) => s.status === "active")) return "Sem site ativo";
   return null;
@@ -195,7 +195,7 @@ function AutomationEditor({ client, telegramReady }: { client: AutomationClient;
         cover,
         coverModel,
         siteIds,
-        approval: approval as "telegram" | "auto" | "manual",
+        approval: approval as "telegram" | "portal" | "auto" | "manual",
       }),
     );
 

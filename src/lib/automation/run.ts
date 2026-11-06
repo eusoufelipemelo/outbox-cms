@@ -17,6 +17,8 @@ import { connectLink, sendMessage, telegramEnabled } from "./telegram";
 import { alsoOnGoogle } from "./approval";
 import { alsoOnInstagram } from "@/lib/instagram/auto";
 import { alsoOnLinkedIn } from "@/lib/linkedin/auto";
+import { recordApproval } from "@/lib/approval/history";
+import { sendForApproval } from "@/lib/approval/client-approval";
 
 export type AutomationRow = {
   id: string;
@@ -30,7 +32,7 @@ export type AutomationRow = {
   cover: boolean;
   cover_model: string;
   site_ids: string[];
-  approval: "telegram" | "auto" | "manual";
+  approval: "telegram" | "portal" | "auto" | "manual";
   author_name: string | null;
   telegram_chat_id: string | null;
   telegram_link_code: string;
@@ -288,8 +290,23 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
           { text: "✏️ Pedir ajustes", callback_data: `no:${runId}` },
         ],
       ]);
+      await recordApproval(
+        postId,
+        { approval_status: "awaiting", approval_client_id: a.client_id, approval_requested_at: new Date().toISOString() },
+        { by: "automacao", kind: "enviado" },
+      );
       await finish(runId, { status: "awaiting", telegram_message_id: msg.message_id, error: note(coverNote) });
       return { runId, ok: true, message: "rascunho enviado para o cliente" };
+    }
+
+    // área do cliente: escolhida na automação, ou no lugar do Telegram quando ele não está conectado
+    if (a.approval === "portal" || a.approval === "telegram") {
+      await step(runId, "Enviando para a área do cliente");
+      const r = await sendForApproval(postId, { clientId: a.client_id, by: "automacao" });
+      if (r.ok) {
+        await finish(runId, { status: "awaiting", error: note(coverNote) });
+        return { runId, ok: true, message: "rascunho na área do cliente" };
+      }
     }
 
     const reason =

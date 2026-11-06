@@ -15,6 +15,8 @@ import { LiveReaders } from "@/components/dashboard/live-readers";
 import { monthName, todayKey } from "@/components/agenda/dates";
 import { getChannels } from "@/lib/data/channels";
 import { ChannelBand, ChannelColumns, QueueAndPackages } from "@/components/dashboard/channels";
+import { ChangeRequests } from "@/components/dashboard/change-requests";
+import { listChangeRequests } from "@/lib/data/approvals";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -81,6 +83,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
         clientId={clientId}
         clients={clientOptions.map((c) => ({ id: c.id, name: c.name }))}
       />
+
+      <ChangeRequests items={await listChangeRequests()} />
 
       {/* Os três canais, lado a lado */}
       <div className="mb-6">

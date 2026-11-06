@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { botUsername, connectLink } from "@/lib/automation/telegram";
 import { igConnectLink } from "@/lib/instagram/link";
+import { portalUrl } from "@/lib/approval/client-approval";
 
 export type IgFormat = "carousel" | "story";
 
@@ -23,6 +24,7 @@ export type ServiceClient = {
   igLink: string;
   telegram: boolean;
   telegramLink: string | null;
+  portalLink: string | null;
   blogAutomation: { active: boolean } | null;
   igAutomation: {
     active: boolean;
@@ -40,7 +42,7 @@ const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
 
 export async function listServiceClients(): Promise<ServiceClient[]> {
   const [clients, sites, gbp, ig, autos, igAutos, bot, li] = await Promise.all([
-    db().from("clients").select("id, name, segment, city, state, svc_blog_gbp, svc_instagram, svc_linkedin, ig_formats, telegram_chat_id, telegram_link_code").neq("status", "archived"),
+    db().from("clients").select("id, name, segment, city, state, svc_blog_gbp, svc_instagram, svc_linkedin, ig_formats, telegram_chat_id, telegram_link_code, portal_token").neq("status", "archived"),
     db().from("sites").select("client_id, status"),
     db().from("gbp_locations").select("client_id"),
     db().from("ig_accounts").select("client_id, username"),
@@ -58,7 +60,7 @@ export async function listServiceClients(): Promise<ServiceClient[]> {
   const blogAutos = new Map(((autos.data ?? []) as { client_id: string; active: boolean }[]).map((a) => [a.client_id, a]));
   const igAutoMap = new Map(((igAutos.data ?? []) as (ServiceClient["igAutomation"] & { client_id: string })[]).map((a) => [a!.client_id, a]));
 
-  type Row = { id: string; name: string; segment: string | null; city: string | null; state: string | null; svc_blog_gbp: boolean; svc_instagram: boolean; svc_linkedin: boolean | null; ig_formats: string[] | null; telegram_chat_id: string | null; telegram_link_code: string | null };
+  type Row = { id: string; name: string; segment: string | null; city: string | null; state: string | null; svc_blog_gbp: boolean; svc_instagram: boolean; svc_linkedin: boolean | null; ig_formats: string[] | null; telegram_chat_id: string | null; telegram_link_code: string | null; portal_token: string | null };
   return ((clients.data ?? []) as Row[])
     .map((c) => ({
       id: c.id,
@@ -78,6 +80,7 @@ export async function listServiceClients(): Promise<ServiceClient[]> {
       igLink: igConnectLink(c.id),
       telegram: Boolean(c.telegram_chat_id),
       telegramLink: c.telegram_link_code ? connectLink(c.telegram_link_code, bot) : null,
+      portalLink: c.portal_token ? portalUrl(c.portal_token) : null,
       blogAutomation: blogAutos.get(c.id) ?? null,
       igAutomation: igAutoMap.get(c.id) ?? null,
     }))

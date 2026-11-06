@@ -10,7 +10,10 @@ import { liConnection } from "./oauth";
 export async function alsoOnLinkedIn(automationId: string, postId: string): Promise<string | null> {
   const { data } = await db().from("automations").select("client_id").eq("id", automationId).maybeSingle();
   const clientId = (data as { client_id: string } | null)?.client_id;
-  if (!clientId) return null;
+  return clientId ? alsoOnLinkedInForClient(clientId, postId) : null;
+}
+
+export async function alsoOnLinkedInForClient(clientId: string, postId: string): Promise<string | null> {
   const { data: client } = await db().from("clients").select("svc_blog_gbp, svc_linkedin").eq("id", clientId).maybeSingle();
   const c = client as { svc_blog_gbp?: boolean; svc_linkedin?: boolean } | null;
   if (!c?.svc_blog_gbp || !c.svc_linkedin) return null;

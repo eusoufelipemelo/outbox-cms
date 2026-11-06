@@ -25,7 +25,7 @@ const schema = z.object({
   cover: z.boolean(),
   coverModel: z.string().refine((v) => (IMAGE_MODELS as readonly string[]).includes(v), "Modelo de imagem inválido."),
   siteIds: z.array(z.string().uuid()),
-  approval: z.enum(["telegram", "auto", "manual"]),
+  approval: z.enum(["telegram", "portal", "auto", "manual"]),
   authorName: z.string().trim().max(120).nullable(),
   gbpPost: z.boolean().optional(),
   igPost: z.boolean().optional(),
