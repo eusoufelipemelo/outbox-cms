@@ -60,18 +60,19 @@ export function ClientShell({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-dvh bg-paper">
+    <div className={`min-h-dvh bg-paper ${preview ? "pt-10" : ""}`}>
       {preview ? (
-        <div className="relative z-40 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 bg-ink px-4 py-2 text-center text-[13.5px] text-on-ink lg:pl-[272px]">
-          <span>
-            Você está vendo como <strong className="font-semibold">{company.name}</strong>. Os botões de decisão ficam travados.
+        <div className="fixed inset-x-0 top-0 z-40 flex h-10 items-center justify-center gap-4 bg-ink px-4 text-center text-[13.5px] text-on-ink">
+          <span className="truncate">
+            Você está vendo como <strong className="font-semibold">{company.name}</strong>
+            <span className="hidden sm:inline">. Os botões de decisão ficam travados.</span>
           </span>
-          <a href="/api/cliente-preview?sair=1" className="font-semibold underline underline-offset-4 hover:no-underline">
+          <a href="/api/cliente-preview?sair=1" className="shrink-0 font-semibold underline underline-offset-4 hover:no-underline">
             Sair da visualização
           </a>
         </div>
       ) : null}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[272px] flex-col border-r border-line bg-surface lg:flex">
+      <aside className={`fixed bottom-0 left-0 ${preview ? "top-10" : "top-0"} z-20 hidden w-[272px] flex-col border-r border-line bg-surface lg:flex`}>
         <div className="flex items-center gap-3 px-5 pt-6 pb-5">
           <CompanyMark company={company} />
           <div className="min-w-0">
@@ -107,7 +108,7 @@ export function ClientShell({
         </div>
       </aside>
 
-      <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-surface/95 px-4 backdrop-blur lg:hidden">
+      <header className={`sticky ${preview ? "top-10" : "top-0"} z-20 flex h-16 items-center gap-3 border-b border-line bg-surface/95 px-4 backdrop-blur lg:hidden`}>
         <CompanyMark company={company} size={36} />
         <p className="min-w-0 flex-1 truncate text-[15px] font-bold text-ink">{company.name}</p>
         <Link
