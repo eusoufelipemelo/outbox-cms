@@ -4,6 +4,7 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/admin";
 import { ensureProfile } from "@/lib/auth";
 import { safeNext } from "@/lib/safe-next";
+import { env } from "@/lib/env";
 import type { NoticeCode } from "@/lib/auth-errors";
 
 // Retorno dos links do Supabase: confirmação de e-mail, redefinição de senha e login com Google.
@@ -14,8 +15,9 @@ const RESET_PATH = "/redefinir-senha";
 // Área do cliente: mesmas contas do Supabase, telas próprias.
 const CLIENT_RESET_PATH = "/cliente/nova-senha";
 
-function go(request: NextRequest, path: string) {
-  return NextResponse.redirect(new URL(path, request.url));
+// Atrás do proxy, request.url aponta para o endereço interno (0.0.0.0:3000): usa o endereço público.
+function go(_request: NextRequest, path: string) {
+  return NextResponse.redirect(new URL(path, env.appUrl));
 }
 
 /** Google manda `full_name`; o resto do CMS lê `user_metadata.name`. */
