@@ -87,4 +87,4 @@ export function ThemeToggle({ className }: { className?: string }) {
 }
 
 /** Roda no <head>, antes da pintura: evita o flash de tela clara no modo escuro. */
-export const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('${KEY}');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark');}catch(e){}})();`;
+export const THEME_SCRIPT = `(function(){try{if(location.pathname.indexOf('/cliente')===0)return;var t=localStorage.getItem('${KEY}');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark');}catch(e){}})();`;

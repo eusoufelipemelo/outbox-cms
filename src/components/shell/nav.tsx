@@ -12,7 +12,7 @@ import { isActive, NAV_GROUPS } from "./nav-items";
 
 export type NavUser = { name: string; email: string; role: "admin" | "editor" | "writer"; avatarUrl: string | null; jobTitle: string | null };
 
-function NavLinks({ user, pendingCount, changeCount = 0, onNavigate }: { user: NavUser; pendingCount: number; changeCount?: number; onNavigate?: () => void }) {
+function NavLinks({ user, pendingCount, changeCount = 0, clientCount = 0, onNavigate }: { user: NavUser; pendingCount: number; changeCount?: number; clientCount?: number; onNavigate?: () => void }) {
   const pathname = usePathname();
   const groups = NAV_GROUPS.filter((g) => !g.adminOnly || user.role === "admin");
   return (
@@ -23,7 +23,7 @@ function NavLinks({ user, pendingCount, changeCount = 0, onNavigate }: { user: N
           <ul className="space-y-0.5">
             {g.items.map((item) => {
               const { href, label, icon: Icon } = item;
-              const badge = href === "/equipe" ? pendingCount : href === "/" ? changeCount : 0;
+              const badge = href === "/equipe" ? pendingCount : href === "/" ? changeCount : href === "/area-do-cliente" ? clientCount : 0;
               const active = isActive(pathname, item);
               return (
                 <li key={href}>
@@ -44,7 +44,7 @@ function NavLinks({ user, pendingCount, changeCount = 0, onNavigate }: { user: N
                       <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1.5 text-[11.5px] font-semibold text-on-ink tabular-nums">
                         {badge}
                         <span className="sr-only">
-                          {href === "/" ? (badge === 1 ? " pedido de ajuste de cliente" : " pedidos de ajuste de clientes") : badge === 1 ? " conta aguardando aprovação" : " contas aguardando aprovação"}
+                          {href === "/" ? (badge === 1 ? " pedido de ajuste de cliente" : " pedidos de ajuste de clientes") : href === "/area-do-cliente" ? (badge === 1 ? " cliente pedindo acesso" : " clientes pedindo acesso") : badge === 1 ? " conta aguardando aprovação" : " contas aguardando aprovação"}
                         </span>
                       </span>
                     ) : null}
@@ -59,9 +59,9 @@ function NavLinks({ user, pendingCount, changeCount = 0, onNavigate }: { user: N
   );
 }
 
-type ShellProps = { user: NavUser; pendingCount?: number; changeCount?: number; signOut: () => Promise<void>; clients?: PaletteClient[] };
+type ShellProps = { user: NavUser; pendingCount?: number; changeCount?: number; clientCount?: number; signOut: () => Promise<void>; clients?: PaletteClient[] };
 
-function SidebarBody({ user, pendingCount = 0, changeCount = 0, signOut, clients = [], onNavigate }: ShellProps & { onNavigate?: () => void }) {
+function SidebarBody({ user, pendingCount = 0, changeCount = 0, clientCount = 0, signOut, clients = [], onNavigate }: ShellProps & { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className="px-5 pt-6 pb-5">
@@ -82,7 +82,7 @@ function SidebarBody({ user, pendingCount = 0, changeCount = 0, signOut, clients
         <CommandPalette clients={clients} isAdmin={user.role === "admin"} onNavigate={onNavigate} />
       </div>
       <nav aria-label="Principal" className="flex-1 overflow-y-auto px-3">
-        <NavLinks user={user} pendingCount={pendingCount} changeCount={changeCount} onNavigate={onNavigate} />
+        <NavLinks user={user} pendingCount={pendingCount} changeCount={changeCount} clientCount={clientCount} onNavigate={onNavigate} />
       </nav>
       <div className="border-t border-line p-3">
         <ThemeToggle className="mb-2" />
@@ -122,13 +122,13 @@ function SidebarBody({ user, pendingCount = 0, changeCount = 0, signOut, clients
   );
 }
 
-export function AppNav({ user, pendingCount = 0, changeCount = 0, signOut, clients = [] }: ShellProps) {
+export function AppNav({ user, pendingCount = 0, changeCount = 0, clientCount = 0, signOut, clients = [] }: ShellProps) {
   const [open, setOpen] = useState(false);
   return (
     <>
       {/* desktop */}
       <aside className="print:hidden fixed inset-y-0 left-0 z-30 hidden w-[248px] border-r border-line bg-surface lg:block">
-        <SidebarBody user={user} pendingCount={pendingCount} changeCount={changeCount} signOut={signOut} clients={clients} />
+        <SidebarBody user={user} pendingCount={pendingCount} changeCount={changeCount} clientCount={clientCount} signOut={signOut} clients={clients} />
       </aside>
 
       {/* mobile */}
@@ -159,7 +159,7 @@ export function AppNav({ user, pendingCount = 0, changeCount = 0, signOut, clien
             >
               <X className="size-5" />
             </button>
-            <SidebarBody user={user} pendingCount={pendingCount} changeCount={changeCount} signOut={signOut} clients={clients} onNavigate={() => setOpen(false)} />
+            <SidebarBody user={user} pendingCount={pendingCount} changeCount={changeCount} clientCount={clientCount} signOut={signOut} clients={clients} onNavigate={() => setOpen(false)} />
           </div>
         </div>
       ) : null}

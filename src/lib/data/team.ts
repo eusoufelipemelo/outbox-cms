@@ -7,7 +7,7 @@ const STATUS_ORDER: Record<ProfileStatus, number> = { pending: 0, active: 1, blo
 
 /** Equipe: aguardando aprovação primeiro (mais antigos antes), depois ativos e bloqueados por nome. */
 export async function listTeam(): Promise<Profile[]> {
-  const { data, error } = await db().from("profiles").select(PROFILE_COLUMNS).order("created_at", { ascending: true });
+  const { data, error } = await db().from("profiles").select(PROFILE_COLUMNS).neq("role", "client").order("created_at", { ascending: true });
   if (error) throw new Error(`Não foi possível carregar a equipe: ${error.message}`);
   const rows = (data ?? []) as Profile[];
   return rows.sort((a, b) => {
@@ -19,6 +19,6 @@ export async function listTeam(): Promise<Profile[]> {
 
 /** Contas esperando aprovação (selo na navegação dos admins). */
 export async function countPendingProfiles(): Promise<number> {
-  const { count, error } = await db().from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending");
+  const { count, error } = await db().from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending").neq("role", "client");
   return error ? 0 : (count ?? 0);
 }

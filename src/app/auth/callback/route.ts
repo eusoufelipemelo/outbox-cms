@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 
 const OTP_TYPES: EmailOtpType[] = ["signup", "recovery", "invite", "magiclink", "email", "email_change"];
 const RESET_PATH = "/redefinir-senha";
+// Área do cliente: mesmas contas do Supabase, telas próprias.
+const CLIENT_RESET_PATH = "/cliente/nova-senha";
 
 function go(request: NextRequest, path: string) {
   return NextResponse.redirect(new URL(path, request.url));
@@ -28,11 +30,17 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const tokenHash = params.get("token_hash");
   const otpType = params.get("type") as EmailOtpType | null;
-  const isRecovery = otpType === "recovery" || params.get("next") === RESET_PATH;
-  const next = isRecovery ? RESET_PATH : safeNext(params.get("next"));
+  const rawNext = params.get("next") ?? "";
+  const fromClientArea = rawNext.startsWith("/cliente");
+  const isRecovery = otpType === "recovery" || rawNext === RESET_PATH || rawNext === CLIENT_RESET_PATH;
+  const next = isRecovery ? RESET_PATH : safeNext(rawNext);
 
   const fail = (code: NoticeCode) =>
-    isRecovery ? go(request, `/esqueci-senha?erro=${code}`) : go(request, `/login?erro=${code}`);
+    fromClientArea
+      ? go(request, isRecovery ? `/cliente/esqueci-senha?erro=${code}` : `/cliente/entrar?erro=${code}`)
+      : isRecovery
+        ? go(request, `/esqueci-senha?erro=${code}`)
+        : go(request, `/login?erro=${code}`);
 
   // Erro devolvido pelo Supabase/Google (link vencido, consentimento negado...).
   if (params.get("error") || params.get("error_code")) {
@@ -73,11 +81,14 @@ export async function GET(request: NextRequest) {
   try {
     await syncName(user);
     const profile = await ensureProfile(user);
-    if (isRecovery) return go(request, RESET_PATH);
+    const isClient = profile.role === "client";
+    if (isRecovery) return go(request, isClient ? CLIENT_RESET_PATH : RESET_PATH);
     if (profile.status === "blocked") {
       await supabase.auth.signOut();
-      return fail("bloqueado");
+      return isClient ? go(request, "/cliente/entrar?erro=bloqueado") : fail("bloqueado");
     }
+    // a própria /cliente libera convidados e mostra "aguardando" para os demais
+    if (isClient) return go(request, "/cliente");
     if (profile.status === "pending") return go(request, "/aguardando-aprovacao");
   } catch {
     return fail("falha");

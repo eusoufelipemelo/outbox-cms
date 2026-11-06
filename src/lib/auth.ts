@@ -32,7 +32,7 @@ export function canPublish(user: { role: ProfileRole }): boolean {
   return user.role === "admin" || user.role === "editor";
 }
 
-export const PROFILE_COLUMNS = "id, email, name, avatar_url, phone, job_title, bio, role, status, created_at, approved_at, approved_by";
+export const PROFILE_COLUMNS = "id, email, name, avatar_url, phone, job_title, bio, role, status, created_at, approved_at, approved_by, client_id, company_name";
 
 function metaString(meta: Record<string, unknown>, ...keys: string[]): string | null {
   for (const key of keys) {
@@ -89,7 +89,7 @@ export async function ensureProfile(user: User): Promise<Profile> {
   }
 
   const confirmed = Boolean(user.email_confirmed_at);
-  if (profile.status === "pending" && confirmed && user.email && env.autoApproveDomains.includes(emailDomain(user.email))) {
+  if (profile.status === "pending" && profile.role !== "client" && confirmed && user.email && env.autoApproveDomains.includes(emailDomain(user.email))) {
     const { data: approved } = await db()
       .from("profiles")
       .update({ status: "active", approved_at: new Date().toISOString() })
@@ -127,19 +127,24 @@ export const getUser = cache(async (): Promise<CurrentUser | null> => {
  * Garante sessão válida e conta aprovada em páginas, server actions e rotas do painel.
  * Conta aguardando aprovação vai para /aguardando-aprovacao; bloqueada volta ao login.
  */
-export async function requireUser(): Promise<CurrentUser> {
+/** Conta da equipe (requireUser nunca devolve conta de cliente). */
+export type TeamUser = CurrentUser & { role: Exclude<ProfileRole, "client"> };
+
+export async function requireUser(): Promise<TeamUser> {
   const user = await getUser();
   // chaves e modelos do Painel administrativo (cache de 30 s); getUser() já leu os cookies,
   // então a página é dinâmica e o banco só é tocado em tempo de execução.
   await loadSettings();
   if (!user) redirect("/login");
+  // conta da área do cliente nunca entra no CMS da equipe
+  if (user.role === "client") redirect("/cliente");
   if (user.status === "pending") redirect("/aguardando-aprovacao");
   if (user.status === "blocked") redirect("/login?erro=bloqueado");
-  return user;
+  return user as TeamUser;
 }
 
 /** Só administradores (gestão da equipe). */
-export async function requireAdmin(): Promise<CurrentUser> {
+export async function requireAdmin(): Promise<TeamUser> {
   const user = await requireUser();
   if (user.role !== "admin") redirect("/");
   return user;

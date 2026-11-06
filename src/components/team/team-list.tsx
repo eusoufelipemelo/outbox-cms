@@ -36,7 +36,7 @@ function Avatar({ profile }: { profile: Profile }) {
 type Pending = { id: string; change: TeamChange } | null;
 type Confirm = { profile: Profile; change: "block" | "remove" | "demote"; to?: TeamChange } | null;
 
-const ROLE_LABEL = { admin: "Administrador", editor: "Editor", writer: "Redator" } as const;
+const ROLE_LABEL = { admin: "Administrador", editor: "Editor", writer: "Redator", client: "Cliente" } as const;
 const ROLE_CHANGE: Record<string, TeamChange> = { admin: "make_admin", editor: "make_editor", writer: "make_writer" };
 
 function MemberRow({

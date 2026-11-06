@@ -2,17 +2,19 @@ import { requireUser } from "@/lib/auth";
 import { signOut } from "@/app/(entrada)/actions";
 import { AppNav } from "@/components/shell/nav";
 import { countPendingProfiles } from "@/lib/data/team";
+import { countPendingClientAccounts } from "@/lib/data/client-access";
 import { db } from "@/lib/supabase/admin";
 import { countChangeRequests } from "@/lib/data/approvals";
 import { ProfileGate } from "@/components/shell/profile-gate";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
-  const [pendingCount, clientsRes, changeCount] = await Promise.all([
+  const [pendingCount, clientsRes, changeCount, clientCount] = await Promise.all([
     user.role === "admin" ? countPendingProfiles() : Promise.resolve(0),
     // lista curta para a busca rápida (⌘K) achar clientes de qualquer tela
     db().from("clients").select("id, name, segment, city, state").neq("status", "archived").order("name"),
     countChangeRequests(),
+    user.role === "admin" ? countPendingClientAccounts() : Promise.resolve(0),
   ]);
   return (
     <div className="min-h-dvh">
@@ -20,6 +22,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         user={{ name: user.name, email: user.email, role: user.role, avatarUrl: user.avatarUrl, jobTitle: user.jobTitle }}
         pendingCount={pendingCount}
         changeCount={changeCount}
+        clientCount={clientCount}
         signOut={signOut}
         clients={(clientsRes.data ?? []) as { id: string; name: string; segment: string | null; city: string | null; state: string | null }[]}
       />

@@ -3,13 +3,13 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MessageSquareWarning, Send, Sparkles } from "lucide-react";
+import { Archive, MessageSquareWarning, Send, Sparkles, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { redoWithClientFeedback, sendToClient } from "@/lib/data/approval-actions";
+import { dismissRejection, redoWithClientFeedback, sendToClient } from "@/lib/data/approval-actions";
 import type { PostApproval } from "@/lib/data/approvals";
 import { formatDateTime } from "@/lib/utils";
 
-const KIND: Record<string, string> = { enviado: "Enviado para aprovação", ajustes: "Cliente pediu ajustes", aprovado: "Cliente aprovou", refeito: "Ajustado e reenviado" };
+const KIND: Record<string, string> = { enviado: "Enviado para aprovação", ajustes: "Cliente pediu ajustes", aprovado: "Cliente aprovou", recusado: "Cliente recusou", refeito: "Ajustado e reenviado", arquivado: "Recusa arquivada" };
 const BY: Record<string, string> = { cliente: "cliente", equipe: "equipe", automacao: "automação" };
 
 /** Aprovação do cliente dentro do artigo: status, recado do cliente e as ações da equipe. */
@@ -29,6 +29,15 @@ export function ApprovalPanel({ postId, approval, published }: { postId: string;
       } else toast.error(r.error);
     });
 
+  const dismiss = () =>
+    start(async () => {
+      const r = await dismissRejection(postId);
+      if (r.ok) {
+        toast.success(r.message ?? "Arquivado");
+        router.refresh();
+      } else toast.error(r.error);
+    });
+
   const redo = () => {
     if (!confirm("A IA vai reescrever o texto com o pedido do cliente. Salve o que você editou antes: a página recarrega no fim. Continuar?")) return;
     start(async () => {
@@ -43,14 +52,25 @@ export function ApprovalPanel({ postId, approval, published }: { postId: string;
   return (
     <section
       className={
-        approval.status === "changes"
+        approval.status === "changes" || approval.status === "rejected"
           ? "mb-5 rounded-[var(--radius-panel)] border border-warn/40 bg-warn-soft p-4 sm:p-5"
           : "mb-5 rounded-[var(--radius-panel)] border border-line bg-surface p-4 sm:p-5"
       }
     >
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
-          {approval.status === "changes" ? (
+          {approval.status === "rejected" ? (
+            <>
+              <p className="flex items-center gap-2 text-[15px] font-semibold text-ink">
+                <ThumbsDown className="size-4 text-warn" aria-hidden />
+                {approval.clientName ?? "O cliente"} recusou este artigo
+              </p>
+              <blockquote className="mt-2 border-l-2 border-warn pl-3 text-[14.5px] whitespace-pre-wrap text-text">
+                {approval.feedback ?? "Recusou sem escrever o motivo."}
+              </blockquote>
+              <p className="mt-2 text-[13px] text-muted">Ele não vai para o site. Refaça e reenvie, ou arquive a recusa.</p>
+            </>
+          ) : approval.status === "changes" ? (
             <>
               <p className="flex items-center gap-2 text-[15px] font-semibold text-ink">
                 <MessageSquareWarning className="size-4 text-warn" aria-hidden />
@@ -74,8 +94,14 @@ export function ApprovalPanel({ postId, approval, published }: { postId: string;
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {approval.status === "changes" ? (
+          {approval.status === "changes" || approval.status === "rejected" ? (
             <>
+              {approval.status === "rejected" ? (
+                <Button variant="ghost" size="sm" disabled={pending} onClick={dismiss}>
+                  <Archive className="size-3.5" aria-hidden />
+                  Arquivar recusa
+                </Button>
+              ) : null}
               <Button variant="secondary" size="sm" loading={pending} disabled={!approval.feedback} onClick={redo}>
                 <Sparkles className="size-3.5" aria-hidden />
                 Refazer com a IA

@@ -34,7 +34,7 @@ const MODELS = [
 
 const APPROVALS = [
   { value: "telegram", label: "Cliente aprova pelo Telegram", hint: "O rascunho vai para o Telegram e para a área do cliente. Aprovou, vai ao ar." },
-  { value: "portal", label: "Cliente aprova pela área do cliente", hint: "O rascunho aparece na área do cliente (link em Serviços). Aprovou, vai ao ar." },
+  { value: "portal", label: "Cliente aprova pela área do cliente", hint: "O rascunho aparece na área do cliente (cms.outboxgroup.com.br/cliente). Aprovou, vai ao ar." },
   { value: "auto", label: "Publicar direto", hint: "Sem aprovação: o artigo vai ao ar no horário combinado." },
   { value: "manual", label: "Deixar em rascunho", hint: "A equipe revisa e publica pelo CMS." },
 ] as const;

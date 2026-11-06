@@ -1,17 +1,9 @@
 import "server-only";
+import { cache } from "react";
 import { db } from "@/lib/supabase/admin";
 import { siteArticleUrl } from "@/lib/delivery/urls";
-import { isPortalToken } from "@/lib/approval/client-approval";
 
-export type PortalClient = { id: string; name: string; logo_url: string | null };
-
-export async function getPortalClient(token: string): Promise<PortalClient | null> {
-  if (!isPortalToken(token)) return null;
-  const { data } = await db().from("clients").select("id, name, logo_url, status").eq("portal_token", token).maybeSingle();
-  if (!data || (data as { status: string }).status === "archived") return null;
-  const c = data as PortalClient;
-  return { id: c.id, name: c.name, logo_url: c.logo_url };
-}
+// Dados da área do cliente (/cliente). Toda consulta recebe o clientId da conta logada (requireClient).
 
 export type PortalItem = {
   id: string;
@@ -27,7 +19,7 @@ export type PortalItem = {
 const one = <T,>(v: T | T[] | null) => (Array.isArray(v) ? (v[0] ?? null) : v);
 
 /** O que o cliente vê: artigos para aprovar, em ajuste e os últimos publicados. */
-export async function listPortalItems(clientId: string): Promise<PortalItem[]> {
+export const listPortalItems = cache(async function listPortalItems(clientId: string): Promise<PortalItem[]> {
   const [pending, live] = await Promise.all([
     db()
       .from("posts")
@@ -43,7 +35,7 @@ export async function listPortalItems(clientId: string): Promise<PortalItem[]> {
       .eq("status", "published")
       .eq("sites.client_id", clientId)
       .order("published_at", { ascending: false })
-      .limit(30),
+      .limit(100),
   ]);
 
   type P = { id: string; title: string; excerpt: string | null; cover_image_url: string | null; approval_status: "awaiting" | "changes"; approval_requested_at: string | null; approval_feedback: string | null };
@@ -84,7 +76,7 @@ export async function listPortalItems(clientId: string): Promise<PortalItem[]> {
     });
   }
   return items;
-}
+});
 
 /** Artigo da área do cliente, só se for mesmo deste cliente. */
 export async function getPortalPost(clientId: string, postId: string) {
@@ -111,7 +103,7 @@ export async function getPortalPost(clientId: string, postId: string) {
     author_name: string | null;
     created_at: string;
     status: string;
-    approval_status: "awaiting" | "changes" | "approved" | null;
+    approval_status: "awaiting" | "changes" | "approved" | "rejected" | null;
     approval_client_id: string | null;
     approval_feedback: string | null;
   };
@@ -131,8 +123,36 @@ export async function getPortalPost(clientId: string, postId: string) {
   return mine ? { ...post, url } : null;
 }
 
-/** Temas que o cliente pediu e ainda estão na fila. */
-export async function listPortalTopics(clientId: string): Promise<{ id: string; title: string; created_at: string }[]> {
-  const { data } = await db().from("client_topics").select("id, title, created_at").eq("client_id", clientId).eq("status", "pending").order("created_at").limit(30);
-  return (data ?? []) as { id: string; title: string; created_at: string }[];
+export type PortalTopic = {
+  id: string;
+  title: string;
+  notes: string | null;
+  source: "equipe" | "cliente";
+  status: "pending" | "used";
+  created_at: string;
+  used_at: string | null;
+  post_id: string | null;
+};
+
+/** Temas do cliente: os que estão na fila (na ordem em que viram artigo) e os que já viraram artigo. */
+export async function listPortalTopics(clientId: string): Promise<{ queue: PortalTopic[]; done: PortalTopic[] }> {
+  const cols = "id, title, notes, source, status, created_at, used_at, post_id";
+  const [queue, done] = await Promise.all([
+    db().from("client_topics").select(cols).eq("client_id", clientId).eq("status", "pending").order("created_at").limit(50),
+    db().from("client_topics").select(cols).eq("client_id", clientId).eq("status", "used").order("used_at", { ascending: false }).limit(12),
+  ]);
+  return { queue: (queue.data ?? []) as PortalTopic[], done: (done.data ?? []) as PortalTopic[] };
+}
+
+/** Números do início: o que espera o cliente, o que está com a OutBox e o que já foi ao ar. */
+export function summarize(items: PortalItem[]) {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const published = items.filter((i) => i.status === "published");
+  return {
+    awaiting: items.filter((i) => i.status === "awaiting").length,
+    changes: items.filter((i) => i.status === "changes").length,
+    published: published.length,
+    publishedThisMonth: published.filter((i) => new Date(i.date).getTime() >= monthStart).length,
+  };
 }

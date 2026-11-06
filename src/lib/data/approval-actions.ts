@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { randomBytes } from "node:crypto";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
 import { runAi, toAiError } from "@/lib/ai/server";
@@ -54,11 +53,10 @@ export async function redoWithClientFeedback(postId: string): Promise<ActionResu
   }
 }
 
-/** Troca o link da área do cliente (o antigo para de funcionar). */
-export async function regeneratePortalLink(clientId: string): Promise<ActionResult> {
+/** A equipe arquiva a recusa do cliente: o artigo sai dos pedidos do Painel e fica como rascunho. */
+export async function dismissRejection(postId: string): Promise<ActionResult> {
   await requireUser();
-  const { error } = await db().from("clients").update({ portal_token: randomBytes(16).toString("hex") }).eq("id", clientId);
-  if (error) return { ok: false, error: "Não foi possível gerar um novo link." };
-  revalidatePath("/servicos");
-  return { ok: true, message: "Novo link gerado. O anterior não funciona mais." };
+  await recordApproval(postId, { approval_status: null, approval_feedback: null }, { by: "equipe", kind: "arquivado" });
+  refresh(postId);
+  return { ok: true, message: "Recusa arquivada. O artigo continua nos rascunhos." };
 }

@@ -2,10 +2,10 @@ import "server-only";
 import { db } from "@/lib/supabase/admin";
 
 /** Um registro do vaivém de aprovação do artigo (quem fez o quê, e o recado quando houver). */
-export type ApprovalEvent = { at: string; by: "cliente" | "equipe" | "automacao"; kind: "enviado" | "ajustes" | "aprovado" | "refeito"; text?: string };
+export type ApprovalEvent = { at: string; by: "cliente" | "equipe" | "automacao"; kind: "enviado" | "ajustes" | "aprovado" | "recusado" | "refeito" | "arquivado"; text?: string };
 
 type Fields = {
-  approval_status?: "awaiting" | "changes" | "approved" | null;
+  approval_status?: "awaiting" | "changes" | "approved" | "rejected" | null;
   approval_client_id?: string | null;
   approval_feedback?: string | null;
   approval_requested_at?: string | null;

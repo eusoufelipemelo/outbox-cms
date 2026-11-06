@@ -193,7 +193,8 @@ export type ActionResult<T = undefined> =
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 // ============ Equipe (supabase/migrations/003_profiles.sql) ============
-export type ProfileRole = "admin" | "editor" | "writer";
+/** "client" = conta da área do cliente (/cliente); nunca entra no CMS da equipe. */
+export type ProfileRole = "admin" | "editor" | "writer" | "client";
 export type ProfileStatus = "pending" | "active" | "blocked";
 
 export interface Profile {
@@ -209,4 +210,7 @@ export interface Profile {
   created_at: string;
   approved_at: string | null;
   approved_by: string | null;
+  /** Só contas de cliente: a empresa (clients.id) que a conta enxerga e a empresa informada no cadastro. */
+  client_id?: string | null;
+  company_name?: string | null;
 }

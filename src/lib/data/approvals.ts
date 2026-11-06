@@ -3,7 +3,7 @@ import { db } from "@/lib/supabase/admin";
 import type { ApprovalEvent } from "@/lib/approval/history";
 
 export type PostApproval = {
-  status: "awaiting" | "changes" | "approved" | null;
+  status: "awaiting" | "changes" | "approved" | "rejected" | null;
   feedback: string | null;
   history: ApprovalEvent[];
   clientName: string | null;
@@ -34,28 +34,29 @@ export async function getPostApproval(postId: string): Promise<PostApproval> {
   };
 }
 
-export type ChangeRequest = { postId: string; title: string; clientName: string; feedback: string | null; at: string | null };
+export type ChangeRequest = { postId: string; title: string; clientName: string; feedback: string | null; at: string | null; kind: "changes" | "rejected" };
 
-/** Pedidos de ajuste dos clientes que ainda não foram reenviados. */
+/** Pedidos de ajuste e recusas dos clientes que a equipe ainda não resolveu. */
 export async function listChangeRequests(limit = 20): Promise<ChangeRequest[]> {
   const { data } = await db()
     .from("posts")
-    .select("id, title, approval_feedback, approval_decided_at, clients:approval_client_id(name)")
-    .eq("approval_status", "changes")
+    .select("id, title, approval_status, approval_feedback, approval_decided_at, clients:approval_client_id(name)")
+    .in("approval_status", ["changes", "rejected"])
     .neq("status", "published")
     .order("approval_decided_at", { ascending: false })
     .limit(limit);
-  type Row = { id: string; title: string; approval_feedback: string | null; approval_decided_at: string | null; clients: { name: string } | { name: string }[] | null };
+  type Row = { id: string; title: string; approval_status: "changes" | "rejected"; approval_feedback: string | null; approval_decided_at: string | null; clients: { name: string } | { name: string }[] | null };
   return ((data ?? []) as unknown as Row[]).map((r) => ({
     postId: r.id,
     title: r.title,
     clientName: one(r.clients)?.name ?? "Cliente",
     feedback: r.approval_feedback,
     at: r.approval_decided_at,
+    kind: r.approval_status,
   }));
 }
 
 export async function countChangeRequests(): Promise<number> {
-  const { count } = await db().from("posts").select("id", { count: "exact", head: true }).eq("approval_status", "changes").neq("status", "published");
+  const { count } = await db().from("posts").select("id", { count: "exact", head: true }).in("approval_status", ["changes", "rejected"]).neq("status", "published");
   return count ?? 0;
 }

@@ -6,7 +6,7 @@ import { EmailForm, PasswordForm, ProfileForm } from "@/components/profile/profi
 
 export const metadata: Metadata = { title: "Meu perfil" };
 
-const ROLE_LABEL = { admin: "Administrador", editor: "Editor", writer: "Redator" } as const;
+const ROLE_LABEL = { admin: "Administrador", editor: "Editor", writer: "Redator", client: "Cliente" } as const;
 
 export default async function ProfilePage({ searchParams }: PageProps<"/perfil">) {
   const user = await requireUser();

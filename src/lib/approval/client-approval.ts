@@ -6,13 +6,14 @@ import { approveRun, channelsForClient } from "@/lib/automation/approval";
 import { sendMessage, telegramEnabled } from "@/lib/automation/telegram";
 import { recordApproval } from "./history";
 
-/** Endereço da área do cliente (ou de um artigo dentro dela). */
-export function portalUrl(token: string, postId?: string): string {
-  return `${env.appUrl}/portal/${token}${postId ? `/${postId}` : ""}`;
+/** Link único da área do cliente (o cliente entra com e-mail e senha). */
+export function clientAreaUrl(path = ""): string {
+  return `${env.appUrl}/cliente${path}`;
 }
 
-export function isPortalToken(token: string): boolean {
-  return /^[0-9a-f]{32}$/i.test(token);
+/** Artigo dentro da área do cliente. */
+export function clientArticleUrl(postId: string): string {
+  return clientAreaUrl(`/artigos/${postId}`);
 }
 
 /** Cliente dono do artigo: o que pediu a aprovação ou o dono do primeiro site de destino. */
@@ -45,7 +46,8 @@ export async function sendForApproval(
   const { data: links } = await db().from("post_sites").select("site_id").eq("post_id", postId).neq("status", "unpublished");
   if (!links?.length) return { ok: false, message: "Escolha o site de destino antes de enviar para aprovação." };
 
-  const wasChanges = (post as { approval_status: string | null }).approval_status === "changes";
+  const previous = (post as { approval_status: string | null }).approval_status;
+  const wasChanges = previous === "changes" || previous === "rejected";
   await recordApproval(
     postId,
     { approval_status: "awaiting", approval_client_id: clientId, approval_requested_at: new Date().toISOString(), approval_decided_at: null },
@@ -55,9 +57,9 @@ export async function sendForApproval(
   await db().from("automation_runs").update({ status: "awaiting" }).eq("post_id", postId).in("status", ["changes", "manual"]);
 
   if (opts.notify !== false) {
-    const { data: c } = await db().from("clients").select("telegram_chat_id, portal_token").eq("id", clientId).maybeSingle();
-    const client = c as { telegram_chat_id: string | null; portal_token: string | null } | null;
-    if (client?.telegram_chat_id && client.portal_token && telegramEnabled()) {
+    const { data: c } = await db().from("clients").select("telegram_chat_id").eq("id", clientId).maybeSingle();
+    const client = c as { telegram_chat_id: string | null } | null;
+    if (client?.telegram_chat_id && telegramEnabled()) {
       const title = (post as { title: string }).title;
       await sendMessage(
         client.telegram_chat_id,
@@ -66,7 +68,7 @@ export async function sendForApproval(
           "",
           wasChanges ? "Ajustamos o artigo com o que você pediu." : "Tem artigo novo esperando a sua aprovação.",
           "",
-          `Leia e aprove por aqui: ${portalUrl(client.portal_token, postId)}`,
+          `Leia e aprove na sua área do cliente: ${clientArticleUrl(postId)}`,
         ].join("\n"),
       ).catch((err) => console.error("[aprovação] aviso no Telegram falhou:", err instanceof Error ? err.message : err));
     }
@@ -127,4 +129,23 @@ export async function changesByClient(postId: string, text: string): Promise<{ o
   );
   await db().from("automation_runs").update({ status: "changes", feedback: message.slice(0, 2000) }).eq("post_id", postId).in("status", ["awaiting", "changes", "manual"]);
   return { ok: true, message: "Pedido enviado. A equipe da OutBox vai ajustar e mandar de novo para você aprovar." };
+}
+
+/** O cliente recusou o artigo (não quer este texto/tema): o motivo chega ao Painel do CMS. */
+export async function rejectByClient(postId: string, reason: string): Promise<{ ok: boolean; message: string }> {
+  const text = reason.trim();
+  const { data: post } = await db().from("posts").select("status").eq("id", postId).maybeSingle();
+  if (!post) return { ok: false, message: "Este artigo não existe mais." };
+  if ((post as { status: string }).status === "published") return { ok: false, message: "Este artigo já está no ar. Fale com a equipe da OutBox para tirar do site." };
+  await recordApproval(
+    postId,
+    { approval_status: "rejected", approval_feedback: text ? text.slice(0, 2000) : null, approval_decided_at: new Date().toISOString() },
+    { by: "cliente", kind: "recusado", ...(text ? { text } : {}) },
+  );
+  await db()
+    .from("automation_runs")
+    .update({ status: "rejected", ...(text ? { feedback: text.slice(0, 2000) } : {}) })
+    .eq("post_id", postId)
+    .in("status", ["awaiting", "changes", "manual"]);
+  return { ok: true, message: "Artigo recusado. Ele não vai para o seu site, e a OutBox já recebeu o seu motivo." };
 }

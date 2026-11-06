@@ -2,7 +2,6 @@ import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { botUsername, connectLink } from "@/lib/automation/telegram";
 import { igConnectLink } from "@/lib/instagram/link";
-import { portalUrl } from "@/lib/approval/client-approval";
 
 export type IgFormat = "carousel" | "story";
 
@@ -24,7 +23,8 @@ export type ServiceClient = {
   igLink: string;
   telegram: boolean;
   telegramLink: string | null;
-  portalLink: string | null;
+  /** Pessoas do cliente com acesso liberado à área do cliente. */
+  portalUsers: number;
   blogAutomation: { active: boolean } | null;
   igAutomation: {
     active: boolean;
@@ -41,8 +41,8 @@ export type ServiceClient = {
 const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
 
 export async function listServiceClients(): Promise<ServiceClient[]> {
-  const [clients, sites, gbp, ig, autos, igAutos, bot, li] = await Promise.all([
-    db().from("clients").select("id, name, segment, city, state, svc_blog_gbp, svc_instagram, svc_linkedin, ig_formats, telegram_chat_id, telegram_link_code, portal_token").neq("status", "archived"),
+  const [clients, sites, gbp, ig, autos, igAutos, bot, li, portal] = await Promise.all([
+    db().from("clients").select("id, name, segment, city, state, svc_blog_gbp, svc_instagram, svc_linkedin, ig_formats, telegram_chat_id, telegram_link_code").neq("status", "archived"),
     db().from("sites").select("client_id, status"),
     db().from("gbp_locations").select("client_id"),
     db().from("ig_accounts").select("client_id, username"),
@@ -50,17 +50,20 @@ export async function listServiceClients(): Promise<ServiceClient[]> {
     db().from("ig_automations").select("client_id, active, per_month, weekdays, hour, approval, focus, next_run_at, last_error"),
     botUsername(),
     db().from("li_pages").select("client_id"),
+    db().from("profiles").select("client_id").eq("role", "client").eq("status", "active"),
   ]);
   const activeSites = new Set(((sites.data ?? []) as { client_id: string; status: string }[]).filter((s) => s.status === "active").map((s) => s.client_id));
   const gbpCount = new Map<string, number>();
   for (const l of (gbp.data ?? []) as { client_id: string | null }[]) if (l.client_id) gbpCount.set(l.client_id, (gbpCount.get(l.client_id) ?? 0) + 1);
   const liCount = new Map<string, number>();
   for (const l of (li.data ?? []) as { client_id: string | null }[]) if (l.client_id) liCount.set(l.client_id, (liCount.get(l.client_id) ?? 0) + 1);
+  const portalCount = new Map<string, number>();
+  for (const p of (portal.data ?? []) as { client_id: string | null }[]) if (p.client_id) portalCount.set(p.client_id, (portalCount.get(p.client_id) ?? 0) + 1);
   const igUsers = new Map(((ig.data ?? []) as { client_id: string; username: string | null }[]).map((a) => [a.client_id, a.username]));
   const blogAutos = new Map(((autos.data ?? []) as { client_id: string; active: boolean }[]).map((a) => [a.client_id, a]));
   const igAutoMap = new Map(((igAutos.data ?? []) as (ServiceClient["igAutomation"] & { client_id: string })[]).map((a) => [a!.client_id, a]));
 
-  type Row = { id: string; name: string; segment: string | null; city: string | null; state: string | null; svc_blog_gbp: boolean; svc_instagram: boolean; svc_linkedin: boolean | null; ig_formats: string[] | null; telegram_chat_id: string | null; telegram_link_code: string | null; portal_token: string | null };
+  type Row = { id: string; name: string; segment: string | null; city: string | null; state: string | null; svc_blog_gbp: boolean; svc_instagram: boolean; svc_linkedin: boolean | null; ig_formats: string[] | null; telegram_chat_id: string | null; telegram_link_code: string | null };
   return ((clients.data ?? []) as Row[])
     .map((c) => ({
       id: c.id,
@@ -80,7 +83,7 @@ export async function listServiceClients(): Promise<ServiceClient[]> {
       igLink: igConnectLink(c.id),
       telegram: Boolean(c.telegram_chat_id),
       telegramLink: c.telegram_link_code ? connectLink(c.telegram_link_code, bot) : null,
-      portalLink: c.portal_token ? portalUrl(c.portal_token) : null,
+      portalUsers: portalCount.get(c.id) ?? 0,
       blogAutomation: blogAutos.get(c.id) ?? null,
       igAutomation: igAutoMap.get(c.id) ?? null,
     }))

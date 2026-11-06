@@ -12,6 +12,7 @@ export const metadata: Metadata = { title: "Aguardando aprovação" };
 export default async function PendingApprovalPage() {
   const user = await getUser().catch(() => null);
   if (!user) redirect("/login");
+  if (user.role === "client") redirect("/cliente");
   if (user.status === "active") redirect("/");
   if (user.status === "blocked") redirect("/login?erro=bloqueado");
 

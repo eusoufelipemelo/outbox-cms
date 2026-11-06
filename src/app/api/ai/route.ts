@@ -14,7 +14,7 @@ const fail = (error: string, status: number) => Response.json({ ok: false, error
 async function currentUser(): Promise<CurrentUser | null> {
   try {
     const user = await getUser();
-    return user?.status === "active" ? user : null;
+    return user?.status === "active" && user.role !== "client" ? user : null;
   } catch {
     return null;
   }

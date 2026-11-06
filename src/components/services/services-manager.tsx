@@ -12,7 +12,6 @@ import { ClientPicker, type PickerClient } from "@/components/ui/client-picker";
 import { cn, formatDateTime } from "@/lib/utils";
 import { WEEKDAYS } from "@/lib/automation/schedule";
 import { runIgNow, saveIgAutomation, setServices } from "@/lib/data/service-actions";
-import { regeneratePortalLink } from "@/lib/data/approval-actions";
 import type { IgFormat, ServiceClient } from "@/lib/data/services";
 
 type Mode = "completo" | "blog" | "instagram" | "nenhum";
@@ -269,31 +268,17 @@ function ServiceEditor({ client }: { client: ServiceClient }) {
             />
           ) : null}
           <Conn
-            ok={Boolean(client.portalLink)}
+            ok={client.portalUsers > 0}
             label="Área do cliente"
-            detail="Link exclusivo onde o cliente aprova os artigos ou pede ajustes. Quem tem o link, acessa: envie só para o responsável."
+            detail={
+              client.portalUsers
+                ? `${client.portalUsers} ${client.portalUsers === 1 ? "pessoa entra" : "pessoas entram"} com e-mail e senha para aprovar artigos e sugerir temas.`
+                : "Ninguém do cliente tem acesso ainda. Libere o e-mail do responsável e mande o link da área do cliente."
+            }
             action={
-              client.portalLink ? (
-                <div className="flex flex-wrap gap-1.5">
-                  <Button variant="secondary" size="sm" onClick={() => copy(client.portalLink!, "Link da área do cliente")}>
-                    <Link2 className="size-3.5" aria-hidden />
-                    Copiar link
-                  </Button>
-                  <a href={client.portalLink} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center px-2 text-sm text-muted hover:text-ink">
-                    Abrir
-                  </a>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={pending}
-                    onClick={() => {
-                      if (confirm("Gerar um novo link? O link atual para de funcionar na hora.")) act(() => regeneratePortalLink(client.id));
-                    }}
-                  >
-                    Trocar link
-                  </Button>
-                </div>
-              ) : null
+              <Link href="/area-do-cliente" className="inline-flex h-8 items-center px-2 text-sm font-medium text-ink underline-offset-2 hover:underline">
+                Gerenciar acessos
+              </Link>
             }
           />
           <Conn

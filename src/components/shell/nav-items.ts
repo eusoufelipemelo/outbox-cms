@@ -11,6 +11,7 @@ import {
   Lightbulb,
   ListChecks,
   Map as MapIcon,
+  MonitorSmartphone,
   Plug,
   SlidersHorizontal,
   Store,
@@ -71,6 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Administração",
     adminOnly: true,
     items: [
+      { href: "/area-do-cliente", label: "Área do cliente", icon: MonitorSmartphone, hint: "Liberar o acesso dos clientes que aprovam artigos e sugerem temas", keywords: ["portal", "cliente aprova", "acesso do cliente", "login do cliente", "link do cliente"] },
       { href: "/equipe", label: "Equipe", icon: UserCog, hint: "Usuários, acessos e aprovações de conta", keywords: ["usuarios", "acessos", "convites"] },
       { href: "/painel", label: "Painel admin", icon: SlidersHorizontal, hint: "Chaves de API, modelos de IA e conexões", keywords: ["chaves", "api key", "openrouter", "gemini", "modelos", "configuracoes", "meta", "telegram bot"] },
     ],
