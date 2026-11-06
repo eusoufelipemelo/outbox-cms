@@ -130,3 +130,9 @@ export async function getPortalPost(clientId: string, postId: string) {
   }
   return mine ? { ...post, url } : null;
 }
+
+/** Temas que o cliente pediu e ainda estão na fila. */
+export async function listPortalTopics(clientId: string): Promise<{ id: string; title: string; created_at: string }[]> {
+  const { data } = await db().from("client_topics").select("id, title, created_at").eq("client_id", clientId).eq("status", "pending").order("created_at").limit(30);
+  return (data ?? []) as { id: string; title: string; created_at: string }[];
+}

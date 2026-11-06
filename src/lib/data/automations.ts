@@ -19,6 +19,7 @@ export type Automation = {
   cover_model: string;
   site_ids: string[];
   approval: "telegram" | "portal" | "auto" | "manual";
+  topic_mode: "auto" | "client_first" | "client_only";
   author_name: string | null;
   gbp_post: boolean;
   ig_post: boolean;
@@ -44,7 +45,10 @@ export type AutomationClient = {
   sites: { id: string; name: string; status: string }[];
   automation: Automation | null;
   connectUrl: string | null;
+  topics: ClientTopic[];
 };
+
+export type ClientTopic = { id: string; title: string; notes: string | null; source: "equipe" | "cliente"; status: "pending" | "used"; created_at: string; post_id: string | null };
 
 export type RunItem = {
   id: string;
@@ -64,13 +68,20 @@ const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
 
 /** Clientes ativos com a automação de cada um (se houver). */
 export async function listAutomationClients(): Promise<AutomationClient[]> {
-  const [{ data: clients }, { data: autos }, bot] = await Promise.all([
+  const [{ data: clients }, { data: autos }, bot, { data: topicRows }] = await Promise.all([
     db().from("clients").select(
       "id, name, segment, city, state, status, expert_name, contract_end, brand_color, image_style, image_mood, telegram_chat_id, telegram_link_code, svc_blog_gbp, svc_instagram, sites(id, name, status)",
     ).neq("status", "archived"),
     db().from("automations").select("*"),
     botUsername(),
+    db().from("client_topics").select("id, client_id, title, notes, source, status, created_at, post_id").order("created_at", { ascending: true }).limit(2000),
   ]);
+  const topicsBy = new Map<string, ClientTopic[]>();
+  for (const t of (topicRows ?? []) as (ClientTopic & { client_id: string })[]) {
+    const list = topicsBy.get(t.client_id) ?? [];
+    list.push(t);
+    topicsBy.set(t.client_id, list);
+  }
   const byClient = new Map(((autos ?? []) as Automation[]).map((a) => [a.client_id, a]));
   type Row = AutomationClient & {
     status: string;
@@ -96,6 +107,7 @@ export async function listAutomationClients(): Promise<AutomationClient[]> {
         sites: [...(c.sites ?? [])].sort((a, b) => collator.compare(a.name, b.name)),
         automation,
         connectUrl: c.telegram_link_code ? connectLink(c.telegram_link_code, bot) : null,
+        topics: topicsBy.get(c.id) ?? [],
         telegramConnected: Boolean(c.telegram_chat_id),
         services: { blogGbp: Boolean(c.svc_blog_gbp), instagram: Boolean(c.svc_instagram) },
       };

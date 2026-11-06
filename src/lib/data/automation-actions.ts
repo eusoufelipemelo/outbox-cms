@@ -26,6 +26,7 @@ const schema = z.object({
   coverModel: z.string().refine((v) => (IMAGE_MODELS as readonly string[]).includes(v), "Modelo de imagem inválido."),
   siteIds: z.array(z.string().uuid()),
   approval: z.enum(["telegram", "portal", "auto", "manual"]),
+  topicMode: z.enum(["auto", "client_first", "client_only"]).optional(),
   authorName: z.string().trim().max(120).nullable(),
   gbpPost: z.boolean().optional(),
   igPost: z.boolean().optional(),
@@ -53,6 +54,7 @@ export async function saveAutomation(input: AutomationInput): Promise<ActionResu
     cover_model: v.coverModel,
     site_ids: v.siteIds,
     approval: v.approval,
+    topic_mode: v.topicMode ?? "auto",
     author_name: v.authorName || null,
     gbp_post: Boolean(v.gbpPost),
     ig_post: Boolean(v.igPost),
@@ -120,4 +122,42 @@ export async function connectTelegramBot(): Promise<ActionResult<{ bot: string }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Não foi possível conectar o bot." };
   }
+}
+
+/** Adiciona temas à fila do cliente (um por linha). */
+export async function addClientTopics(clientId: string, text: string, notes: string): Promise<ActionResult<{ added: number }>> {
+  const user = await requireUser();
+  const titles = text
+    .split(/\n+/)
+    .map((t) => t.replace(/^[-•*\d.)\s]+/, "").trim())
+    .filter((t) => t.length >= 5)
+    .slice(0, 30);
+  if (!titles.length) return { ok: false, error: "Escreva pelo menos um tema (um por linha)." };
+  const note = notes.trim().slice(0, 1000) || null;
+  const { error } = await db()
+    .from("client_topics")
+    .insert(titles.map((title) => ({ client_id: clientId, title: title.slice(0, 200), notes: note, source: "equipe", created_by: user.id })));
+  if (error) return { ok: false, error: "Não foi possível salvar os temas." };
+  revalidatePath("/automacao");
+  return { ok: true, data: { added: titles.length }, message: titles.length === 1 ? "Tema adicionado à fila" : `${titles.length} temas adicionados à fila` };
+}
+
+export async function removeClientTopic(topicId: string): Promise<ActionResult> {
+  await requireUser();
+  const { error } = await db().from("client_topics").delete().eq("id", topicId).eq("status", "pending");
+  if (error) return { ok: false, error: "Não foi possível remover o tema." };
+  revalidatePath("/automacao");
+  return { ok: true, message: "Tema removido" };
+}
+
+/** Escreve agora o artigo deste tema e manda para aprovação, como a automação faria. */
+export async function writeTopicNow(clientId: string, topicId: string): Promise<ActionResult> {
+  await requireUser();
+  const { data } = await db().from("automations").select("id").eq("client_id", clientId).maybeSingle();
+  if (!data) return { ok: false, error: "Salve a automação deste cliente antes (sites, aprovação e capa)." };
+  const automation = await loadAutomation((data as { id: string }).id);
+  if (!automation) return { ok: false, error: "Automação não encontrada." };
+  after(() => runAutomation(automation, { topicId }));
+  revalidatePath("/automacao");
+  return { ok: true, message: "Escrevendo o artigo deste tema. Em alguns minutos ele vai para o cliente aprovar." };
 }

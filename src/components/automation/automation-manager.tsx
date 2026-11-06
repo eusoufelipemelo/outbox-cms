@@ -14,6 +14,7 @@ import { CONTENT_TYPES } from "@/lib/ai/labels";
 import { WEEKDAYS } from "@/lib/automation/schedule";
 import { runNow, saveAutomation, toggleAutomation, unlinkTelegram } from "@/lib/data/automation-actions";
 import type { AutomationClient } from "@/lib/data/automations";
+import { TopicQueue, type TopicMode } from "./topic-queue";
 import type { ContentType } from "@/lib/types";
 
 const TYPE_LABEL: Record<ContentType, string> = {
@@ -167,6 +168,7 @@ function AutomationEditor({ client, telegramReady }: { client: AutomationClient;
   const [coverModel, setCoverModel] = useState(a?.cover_model ?? "gemini-3.1-flash-image");
   const [approval, setApproval] = useState<string>(a?.approval ?? "telegram");
   const [siteIds, setSiteIds] = useState<string[]>(a?.site_ids ?? []);
+  const [topicMode, setTopicMode] = useState<TopicMode>(a?.topic_mode ?? "auto");
 
   const activeSites = client.sites.filter((s) => s.status === "active");
   const connected = client.telegramConnected;
@@ -196,6 +198,7 @@ function AutomationEditor({ client, telegramReady }: { client: AutomationClient;
         coverModel,
         siteIds,
         approval: approval as "telegram" | "portal" | "auto" | "manual",
+        topicMode,
       }),
     );
 
@@ -341,9 +344,11 @@ function AutomationEditor({ client, telegramReady }: { client: AutomationClient;
           </fieldset>
         </div>
 
+        <TopicQueue clientId={client.id} hasAutomation={Boolean(a)} topics={client.topics} mode={topicMode} onMode={setTopicMode} />
+
         <fieldset className="mt-5">
           <legend className="text-sm font-medium text-ink">Quando o artigo ficar pronto</legend>
-          <div className="mt-2 grid gap-2 md:grid-cols-3">
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
             {APPROVALS.map((opt) => (
               <label
                 key={opt.value}

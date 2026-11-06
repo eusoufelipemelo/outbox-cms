@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
-import { getPortalClient, listPortalItems, type PortalItem } from "@/lib/data/portal";
+import { getPortalClient, listPortalItems, listPortalTopics, type PortalItem } from "@/lib/data/portal";
+import { SuggestTopic } from "@/components/portal/suggest-topic";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { formatDate } from "@/lib/utils";
 
@@ -22,7 +23,7 @@ export default async function PortalPage({ params }: PageProps<"/portal/[token]"
   const { token } = await params;
   const client = await getPortalClient(token);
   if (!client) notFound();
-  const items = await listPortalItems(client.id);
+  const [items, topics] = await Promise.all([listPortalItems(client.id), listPortalTopics(client.id)]);
   const awaiting = items.filter((i) => i.status === "awaiting");
   const changes = items.filter((i) => i.status === "changes");
   const published = items.filter((i) => i.status === "published");
@@ -43,6 +44,22 @@ export default async function PortalPage({ params }: PageProps<"/portal/[token]"
 
       {awaiting.length ? <Section title="Para aprovar" items={awaiting} token={token} /> : null}
       {changes.length ? <Section title="Em ajuste com a OutBox" items={changes} token={token} /> : null}
+      <section className="mt-10">
+        <h2 className="text-[16px] font-semibold text-ink">Quer um artigo sobre um tema seu?</h2>
+        <p className="mt-1 text-[14px] text-muted">Envie o tema. A OutBox escreve e o artigo aparece aqui para você aprovar.</p>
+        <SuggestTopic token={token} />
+        {topics.length ? (
+          <div className="mt-3">
+            <p className="text-[13px] text-muted">Temas na fila para escrever</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[14px] text-text">
+              {topics.map((t) => (
+                <li key={t.id}>{t.title}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
+
       {published.length ? <Section title="Publicados no seu site" items={published} token={token} /> : null}
     </PortalShell>
   );

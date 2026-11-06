@@ -33,6 +33,7 @@ export type AutomationRow = {
   cover_model: string;
   site_ids: string[];
   approval: "telegram" | "portal" | "auto" | "manual";
+  topic_mode?: "auto" | "client_first" | "client_only";
   author_name: string | null;
   telegram_chat_id: string | null;
   telegram_link_code: string;
@@ -126,8 +127,19 @@ async function makeCover(a: AutomationRow, article: { title: string; summary: st
 }
 
 /** Roda uma automação: escolhe a pauta, escreve o artigo, gera a capa e encaminha para aprovação. */
-export async function runAutomation(a: AutomationRow): Promise<{ runId: string; ok: boolean; message: string }> {
+export async function runAutomation(a: AutomationRow, opts: { topicId?: string } = {}): Promise<{ runId: string; ok: boolean; message: string }> {
   await loadSettings();
+  // só temas do cliente e fila vazia: pula esta data em vez de inventar um tema
+  if (a.topic_mode === "client_only" && !opts.topicId) {
+    const { count } = await db().from("client_topics").select("id", { count: "exact", head: true }).eq("client_id", a.client_id).eq("status", "pending");
+    if (!count) {
+      await db()
+        .from("automations")
+        .update({ last_error: "Sem tema do cliente na fila: a automação pulou esta data. Adicione temas em Automação → Temas do cliente." })
+        .eq("id", a.id);
+      return { runId: "", ok: true, message: "sem tema do cliente na fila" };
+    }
+  }
   const { data: runRow, error: runErr } = await db()
     .from("automation_runs")
     .insert({ automation_id: a.id, client_id: a.client_id, status: "running", step: "Escolhendo a pauta" })
@@ -159,14 +171,20 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
       throw new Error(`Contrato de ${client.name} venceu em ${client.contract_end.split("-").reverse().join("/")}. Renove a data no cadastro do cliente.`);
     }
 
-    // 1) pauta
-    const { ideas } = await runAi("ideas", { clientId: a.client_id, count: 3 });
-    const idea = ideas[0];
+    // 1) pauta: tema pedido pelo cliente (fila) ou sugerido pela IA
+    const topic = opts.topicId || a.topic_mode === "client_first" || a.topic_mode === "client_only" ? await claimTopic(a.client_id, runId, opts.topicId) : null;
+    let idea: { title: string; keyword?: string; content_type?: ContentType; source?: string; notes?: string | null };
+    if (topic) {
+      idea = { title: topic.title, source: "cliente", notes: topic.notes };
+    } else {
+      const { ideas } = await runAi("ideas", { clientId: a.client_id, count: 3 });
+      idea = ideas[0];
+    }
     await db().from("automation_runs").update({ idea, step: "Escrevendo o artigo" }).eq("id", runId);
 
     // 2) artigo completo (mesma qualidade da escrita manual: pesquisa + checklist de SEO e GEO)
     const article = await runAi("full_article", {
-      topic: idea.title,
+      topic: topic?.notes ? `${idea.title}\n\nOrientação do cliente para este artigo: ${topic.notes}` : idea.title,
       keyword: idea.keyword,
       clientId: a.client_id,
       contentType: a.content_type ?? idea.content_type,
@@ -253,6 +271,7 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
         );
     }
     await db().from("automation_runs").update({ post_id: postId }).eq("id", runId);
+    if (topic) await db().from("client_topics").update({ post_id: postId }).eq("id", topic.id);
 
     // 6) aprovação
     if (a.approval === "auto") {
@@ -320,9 +339,26 @@ export async function runAutomation(a: AutomationRow): Promise<{ runId: string; 
   } catch (err) {
     const message = err instanceof Error ? err.message : "Falha inesperada na automação.";
     await finish(runId, { status: "failed", error: message });
+    await db().from("client_topics").update({ status: "pending", run_id: null, used_at: null }).eq("run_id", runId).is("post_id", null);
     await db().from("automations").update({ last_error: message }).eq("id", a.id);
     return { runId, ok: false, message };
   }
+}
+
+/** Pega o próximo tema da fila do cliente (ou um tema específico) e marca como usado por esta execução. */
+async function claimTopic(clientId: string, runId: string, topicId?: string): Promise<{ id: string; title: string; notes: string | null } | null> {
+  let q = db().from("client_topics").select("id, title, notes").eq("client_id", clientId).eq("status", "pending");
+  q = topicId ? q.eq("id", topicId) : q.order("created_at", { ascending: true });
+  const { data } = await q.limit(1).maybeSingle();
+  const t = data as { id: string; title: string; notes: string | null } | null;
+  if (!t) return null;
+  const { data: claimed } = await db()
+    .from("client_topics")
+    .update({ status: "used", run_id: runId, used_at: new Date().toISOString() })
+    .eq("id", t.id)
+    .eq("status", "pending")
+    .select("id");
+  return claimed?.length ? t : null;
 }
 
 /** Junta observações da execução (falhas parciais, avisos) em uma frase só. */
@@ -335,7 +371,7 @@ export function escapeHtml(value: string): string {
 }
 
 const COLUMNS =
-  "id, client_id, active, per_month, weekdays, hour, words, content_type, cover, cover_model, site_ids, approval, author_name, telegram_chat_id, telegram_link_code, next_run_at, created_by";
+  "id, client_id, active, per_month, weekdays, hour, words, content_type, cover, cover_model, site_ids, approval, topic_mode, author_name, telegram_chat_id, telegram_link_code, next_run_at, created_by";
 
 /**
  * Executa as automações vencidas. Cada uma é "reivindicada" com um update condicional
