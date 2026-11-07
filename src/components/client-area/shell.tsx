@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { LogOut, UserRound } from "lucide-react";
+import { LogOut } from "lucide-react";
 import type { ClientAccount, ClientCompany } from "@/lib/client-auth";
 import { clientSignOut } from "@/lib/data/client-area-actions";
 import { SideNav, TabBar } from "./nav";
 import { CompanyMark } from "./company-mark";
+import { ClientAvatar } from "./avatar";
 
 export { CompanyMark };
 
@@ -64,9 +65,9 @@ export function ClientShell({
         </div>
         <div className="space-y-4 border-t border-line px-5 py-4">
           <div className="flex items-center gap-3">
-            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-sunken text-muted">
-              <UserRound className="size-[18px]" aria-hidden />
-            </span>
+            <Link href="/cliente/conta" aria-label="Minha conta" className="rounded-full">
+              <ClientAvatar url={account.avatarUrl} size={36} />
+            </Link>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[14px] font-medium text-ink">{account.name}</p>
               <p className="truncate text-[12.5px] text-muted">{account.email}</p>
@@ -91,10 +92,10 @@ export function ClientShell({
         <p className="min-w-0 flex-1 truncate text-[15px] font-bold text-ink">{company.name}</p>
         <Link
           href="/cliente/conta"
-          className="inline-flex size-10 items-center justify-center rounded-full border border-line text-muted hover:text-ink"
+          className="inline-flex size-10 items-center justify-center rounded-full"
           aria-label="Minha conta"
         >
-          <UserRound className="size-[18px]" aria-hidden />
+          <ClientAvatar url={account.avatarUrl} size={38} />
         </Link>
       </header>
 

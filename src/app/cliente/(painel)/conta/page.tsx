@@ -3,7 +3,7 @@ import { LogOut } from "lucide-react";
 import { requireClient } from "@/lib/client-auth";
 import { clientSignOut } from "@/lib/data/client-area-actions";
 import { ClientPageHeader } from "@/components/client-area/shell";
-import { AccountForm, PasswordForm } from "@/components/client-area/account-forms";
+import { AccountForm, AvatarForm, PasswordForm } from "@/components/client-area/account-forms";
 
 export const metadata: Metadata = { title: "Minha conta" };
 
@@ -11,7 +11,10 @@ export default async function AccountPage() {
   const { account, company } = await requireClient();
   return (
     <div className="max-w-[880px]">
-      <ClientPageHeader title="Minha conta" description="Seus dados de acesso à área do cliente." />
+      <ClientPageHeader title="Minha conta" description="Sua foto, seus dados e a senha de acesso à área do cliente." />
+      <section aria-label="Foto de perfil" className="mb-6 rounded-[var(--radius-panel)] border border-line bg-surface p-5 sm:p-6">
+        <AvatarForm url={account.avatarUrl} name={account.name} />
+      </section>
       <div className="grid gap-6 md:grid-cols-2">
         <section aria-labelledby="dados" className="rounded-[var(--radius-panel)] border border-line bg-surface p-5 sm:p-6">
           <h2 id="dados" className="mb-4 text-[17px] font-bold text-ink">

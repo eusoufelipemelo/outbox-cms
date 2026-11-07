@@ -19,6 +19,7 @@ export type ClientAccount = {
   name: string;
   phone: string | null;
   companyName: string | null;
+  avatarUrl: string | null;
 };
 
 export type ClientAccess =
@@ -32,7 +33,7 @@ export type ClientAccess =
 export const PREVIEW_COOKIE = "ob_cliente_preview";
 
 function toAccount(p: Profile): ClientAccount {
-  return { id: p.id, email: p.email, name: p.name?.trim() || p.email.split("@")[0], phone: p.phone, companyName: p.company_name ?? null };
+  return { id: p.id, email: p.email, name: p.name?.trim() || p.email.split("@")[0], phone: p.phone, companyName: p.company_name ?? null, avatarUrl: p.avatar_url ?? null };
 }
 
 /**
