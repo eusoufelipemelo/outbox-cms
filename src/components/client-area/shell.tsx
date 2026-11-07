@@ -5,31 +5,9 @@ import { LogOut, UserRound } from "lucide-react";
 import type { ClientAccount, ClientCompany } from "@/lib/client-auth";
 import { clientSignOut } from "@/lib/data/client-area-actions";
 import { SideNav, TabBar } from "./nav";
+import { CompanyMark } from "./company-mark";
 
-function initials(name: string): string {
-  const words = name.replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
-  return ((words[0]?.[0] ?? "") + (words.length > 1 ? (words[words.length - 1]?.[0] ?? "") : "")).toUpperCase() || "•";
-}
-
-/** Marca da empresa do cliente: o logo dele quando houver, senão um monograma. */
-export function CompanyMark({ company, size = 44 }: { company: ClientCompany; size?: number }) {
-  if (company.logo_url) {
-    return (
-      <span className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[12px] border border-line bg-surface" style={{ width: size, height: size }}>
-        <Image src={company.logo_url} alt="" width={size} height={size} className="size-full object-contain p-1" unoptimized />
-      </span>
-    );
-  }
-  return (
-    <span
-      aria-hidden
-      className="inline-flex shrink-0 items-center justify-center rounded-[12px] bg-ink font-extrabold tracking-[-0.02em] text-on-ink [font-stretch:112%]"
-      style={{ width: size, height: size, fontSize: size * 0.36 }}
-    >
-      {initials(company.name)}
-    </span>
-  );
-}
+export { CompanyMark };
 
 function PoweredBy() {
   return (
