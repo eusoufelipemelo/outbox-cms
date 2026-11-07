@@ -11,9 +11,11 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Automação" };
 
-export default async function AutomacaoPage() {
+export default async function AutomacaoPage({ searchParams }: PageProps<"/automacao">) {
   await requireUser();
   const [clients, runs] = await Promise.all([listAutomationClients(), listRuns()]);
+  const wanted = (await searchParams).cliente;
+  const initialClientId = typeof wanted === "string" && clients.some((c) => c.id === wanted) ? wanted : undefined;
   const status = await automationStatus();
   const active = clients.filter((c) => c.automation?.active).length;
   const perMonth = clients.reduce((n, c) => n + (c.automation?.active ? c.automation.per_month : 0), 0);
@@ -69,7 +71,7 @@ export default async function AutomacaoPage() {
         <p className="mb-6 rounded-[var(--radius-control)] bg-warn-soft px-4 py-3 text-sm text-warn">Último erro do Telegram: {status.webhook.error}</p>
       ) : null}
 
-      <AutomationManager clients={clients} telegramReady={status.telegram} />
+      <AutomationManager key={initialClientId ?? "todos"} clients={clients} telegramReady={status.telegram} initialClientId={initialClientId} />
 
       <section className="mt-10">
         <h2 className="mb-3 text-[17px] font-semibold text-ink">Últimas execuções</h2>

@@ -247,6 +247,7 @@ export async function suggestTopic(title: string, notes: string): Promise<Result
   if (error) return { ok: false, message: "Não foi possível enviar o tema. Tente de novo." };
   revalidatePath("/cliente", "layout");
   revalidatePath("/automacao");
+  revalidatePath("/", "layout"); // contador do Painel da equipe
   return { ok: true, message: "Tema enviado. Ele entrou na fila e vira artigo para você aprovar." };
 }
 
@@ -265,5 +266,6 @@ export async function removeTopic(topicId: string): Promise<Result> {
   if (!data?.length) return { ok: false, message: "Este tema já virou artigo ou não está mais na fila." };
   revalidatePath("/cliente", "layout");
   revalidatePath("/automacao");
+  revalidatePath("/", "layout"); // contador do Painel da equipe
   return { ok: true, message: "Tema retirado da fila." };
 }

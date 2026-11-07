@@ -16,7 +16,8 @@ import { monthName, todayKey } from "@/components/agenda/dates";
 import { getChannels } from "@/lib/data/channels";
 import { ChannelBand, ChannelColumns, QueueAndPackages } from "@/components/dashboard/channels";
 import { ChangeRequests } from "@/components/dashboard/change-requests";
-import { listChangeRequests } from "@/lib/data/approvals";
+import { listChangeRequests, listSuggestedTopics } from "@/lib/data/approvals";
+import { SuggestedTopics } from "@/components/dashboard/suggested-topics";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -85,6 +86,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
       />
 
       <ChangeRequests items={await listChangeRequests()} />
+      <SuggestedTopics items={await listSuggestedTopics()} />
 
       {/* Os três canais, lado a lado */}
       <div className="mb-6">

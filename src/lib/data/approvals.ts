@@ -60,3 +60,38 @@ export async function countChangeRequests(): Promise<number> {
   const { count } = await db().from("posts").select("id", { count: "exact", head: true }).in("approval_status", ["changes", "rejected"]).neq("status", "published");
   return count ?? 0;
 }
+
+export type SuggestedTopic = { id: string; clientId: string; clientName: string; title: string; notes: string | null; author: string | null; at: string };
+
+/** Temas que os clientes mandaram pela área do cliente e ainda não viraram artigo. */
+export async function listSuggestedTopics(limit = 20): Promise<SuggestedTopic[]> {
+  const { data } = await db()
+    .from("client_topics")
+    .select("id, client_id, title, notes, created_by, created_at, clients(name)")
+    .eq("source", "cliente")
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  type Row = { id: string; client_id: string; title: string; notes: string | null; created_by: string | null; created_at: string; clients: { name: string } | { name: string }[] | null };
+  const rows = (data ?? []) as unknown as Row[];
+  const authorIds = [...new Set(rows.map((r) => r.created_by).filter((v): v is string => Boolean(v)))];
+  const names = new Map<string, string>();
+  if (authorIds.length) {
+    const { data: people } = await db().from("profiles").select("id, name, email").in("id", authorIds);
+    for (const p of (people ?? []) as { id: string; name: string | null; email: string }[]) names.set(p.id, p.name?.trim() || p.email);
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    clientId: r.client_id,
+    clientName: one(r.clients)?.name ?? "Cliente",
+    title: r.title,
+    notes: r.notes,
+    author: r.created_by ? (names.get(r.created_by) ?? null) : null,
+    at: r.created_at,
+  }));
+}
+
+export async function countSuggestedTopics(): Promise<number> {
+  const { count } = await db().from("client_topics").select("id", { count: "exact", head: true }).eq("source", "cliente").eq("status", "pending");
+  return count ?? 0;
+}

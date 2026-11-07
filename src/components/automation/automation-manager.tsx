@@ -64,9 +64,9 @@ function needsAttention(c: AutomationClient): string | null {
   return null;
 }
 
-export function AutomationManager({ clients, telegramReady }: { clients: AutomationClient[]; telegramReady: boolean }) {
+export function AutomationManager({ clients, telegramReady, initialClientId }: { clients: AutomationClient[]; telegramReady: boolean; initialClientId?: string }) {
   const [filter, setFilter] = useState<FilterKey>("todos");
-  const [selectedId, setSelectedId] = useState<string | null>(clients.find((c) => c.automation)?.id ?? clients[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialClientId ?? clients.find((c) => c.automation)?.id ?? clients[0]?.id ?? null);
 
   const counts = useMemo(
     () => ({

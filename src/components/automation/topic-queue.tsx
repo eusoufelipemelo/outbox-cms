@@ -52,7 +52,7 @@ export function TopicQueue({
     });
 
   return (
-    <section className="mt-5 rounded-[var(--radius-control)] border border-line p-4">
+    <section id="temas" className="mt-5 scroll-mt-24 rounded-[var(--radius-control)] border border-line p-4">
       <h3 className="text-sm font-semibold text-ink">Temas dos artigos</h3>
       <div className="mt-2 grid gap-2 md:grid-cols-3" role="radiogroup" aria-label="De onde vêm os temas">
         {MODES.map((m) => (
