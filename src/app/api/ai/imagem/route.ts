@@ -2,7 +2,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
 import { putImage } from "@/lib/storage";
-import { generateImage, imagesEnabled, IMAGE_ASPECTS, IMAGE_MODELS, IMAGE_SIZES, ImageError } from "@/lib/ai/image";
+import { generateImage, imageProvider, imagesEnabled, IMAGE_ASPECTS, IMAGE_MODELS, IMAGE_SIZES, ImageError } from "@/lib/ai/image";
 import { MEDIA_COLUMNS, isUuid } from "@/lib/data/media";
 import { slugify } from "@/lib/utils";
 import { visualDirection, type VisualClient } from "@/lib/ai/visual";
@@ -24,10 +24,10 @@ const schema = z.object({
 
 export async function GET() {
   await requireUser();
-  return Response.json({ enabled: imagesEnabled() });
+  return Response.json({ enabled: imagesEnabled(), provider: imageProvider() });
 }
 
-/** Gera a imagem no Gemini, guarda no armazenamento do CMS e devolve o registro da Mídia. */
+/** Gera a imagem (Magnific ou Gemini), guarda no armazenamento do CMS e devolve o registro da Mídia. */
 export async function POST(request: Request) {
   const user = await requireUser();
   const body: unknown = await request.json().catch(() => null);

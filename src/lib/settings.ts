@@ -96,12 +96,28 @@ export const GROUPS: Group[] = [
   {
     id: "imagens",
     title: "Imagens",
-    description: "Capas dos artigos e imagens da biblioteca de Mídia.",
+    description: "Capas dos artigos, fotos dos carrosséis do Instagram e imagens da biblioteca de Mídia.",
     fields: [
-      { key: "gemini_api_key", label: "Chave do Gemini", secret: true, placeholder: "AIza...", envVar: "GEMINI_API_KEY" },
+      {
+        key: "image_provider",
+        label: "Quem gera as imagens",
+        hint: "Com a chave da Magnific salva, todas as imagens saem no Nano Banana 2.1 pelos créditos da conta (50 créditos em 1K, 65 em 2K). O Gemini fica de reserva se a Magnific falhar.",
+        options: [
+          { value: "", label: "Magnific (Nano Banana 2.1)" },
+          { value: "gemini", label: "Só Google (Gemini)" },
+        ],
+      },
+      {
+        key: "magnific_api_key",
+        label: "Chave da Magnific",
+        secret: true,
+        placeholder: "Criada em Magnific → Settings → API Keys",
+        envVar: "MAGNIFIC_API_KEY",
+      },
+      { key: "gemini_api_key", label: "Chave do Gemini", secret: true, placeholder: "AIza...", envVar: "GEMINI_API_KEY", hint: "Reserva quando a Magnific está ligada." },
       {
         key: "gemini_image_model",
-        label: "Modelo padrão",
+        label: "Modelo padrão do Gemini",
         placeholder: "gemini-3-pro-image",
         envVar: "GEMINI_IMAGE_MODEL",
         options: [

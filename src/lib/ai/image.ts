@@ -1,8 +1,11 @@
 import "server-only";
+import sharp from "sharp";
 import { env } from "@/lib/env";
 
 /**
- * Geração de imagens com o Gemini (Nano Banana), pela Interactions API.
+ * Geração de imagens. Com a chave da Magnific salva, tudo sai no Nano Banana 2.1 pela API da
+ * Magnific (créditos da conta), e o Gemini (Interactions API do Google) fica de reserva.
+ * Sem a Magnific, ou com "Só Google" no Painel admin, vai direto para o Gemini.
  * Devolve os bytes prontos para ir ao armazenamento de mídia do CMS.
  */
 
@@ -50,17 +53,120 @@ function findImage(node: unknown, depth = 0): { data: string; mime: string } | n
   return null;
 }
 
-export function imagesEnabled(): boolean {
-  return Boolean(env.geminiApiKey);
+export type ImageProvider = "magnific" | "gemini";
+
+/** Quem gera as imagens agora: a Magnific quando a chave dela está salva e não foi escolhido "Só Google". */
+export function imageProvider(): ImageProvider | null {
+  if (env.magnificApiKey && env.imageProvider !== "gemini") return "magnific";
+  if (env.geminiApiKey) return "gemini";
+  return null;
 }
 
-export async function generateImage(input: {
+export function imagesEnabled(): boolean {
+  return imageProvider() !== null;
+}
+
+type ImageInput = {
   prompt: string;
   aspect?: ImageAspect;
   size?: ImageSize;
+  /** Modelo do Gemini; na Magnific todas as imagens saem no Nano Banana 2.1. */
   model?: ImageModel;
   signal?: AbortSignal;
-}): Promise<GeneratedImage> {
+};
+
+export async function generateImage(input: ImageInput): Promise<GeneratedImage> {
+  const provider = imageProvider();
+  if (!provider) throw new ImageError("Geração de imagens desligada: salve a chave da Magnific ou do Gemini em Painel admin → Imagens.", 503);
+  if (provider === "gemini") return generateWithGemini(input);
+  try {
+    return await generateWithMagnific(input);
+  } catch (err) {
+    // cancelado por quem pediu, recusa de conteúdo ou sem reserva: não tenta o Gemini
+    if (input.signal?.aborted || !env.geminiApiKey || (err instanceof ImageError && err.status === 422)) throw err;
+    console.error("[imagem] Magnific falhou, usando o Gemini:", err instanceof Error ? err.message : err);
+    return generateWithGemini(input);
+  }
+}
+
+// ---------- Magnific: Nano Banana 2.1 (tarefa assíncrona: cria, acompanha, baixa) ----------
+
+const MAGNIFIC_ENDPOINT = "https://api.magnific.com/v1/ai/text-to-image/nano-banana-2-1";
+
+const wait = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    if (signal.aborted) return reject(signal.reason);
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => (clearTimeout(t), reject(signal.reason)), { once: true });
+  });
+
+function magnificError(status: number, body: string): ImageError {
+  console.error("[imagem] Magnific HTTP", status, body.slice(0, 300));
+  if (status === 400 && /safety|blocked|policy|moderat|nsfw|inappropriate/i.test(body)) {
+    return new ImageError("A Magnific recusou este pedido. Reescreva a descrição sem pessoas reais, marcas ou conteúdo sensível.", 422);
+  }
+  if (status === 401 || status === 403) return new ImageError("Chave da Magnific inválida ou desativada. Confira a chave em Painel admin → Imagens.", 401);
+  if (status === 402 || /credit|insufficient|balance/i.test(body)) return new ImageError("A conta da Magnific ficou sem créditos para a API. Confira o saldo na Magnific.", 402);
+  if (status === 429) return new ImageError("Limite de pedidos da Magnific atingido. Espere um pouco e tente de novo.", 429);
+  return new ImageError("A Magnific não conseguiu gerar a imagem agora. Tente de novo.");
+}
+
+async function generateWithMagnific(input: ImageInput): Promise<GeneratedImage> {
+  const key = env.magnificApiKey;
+  if (!key) throw new ImageError("Chave da Magnific não configurada.", 503);
+  const signal = input.signal ?? AbortSignal.timeout(240_000);
+  const headers = { "x-magnific-api-key": key, "content-type": "application/json", accept: "application/json" };
+
+  let res: Response;
+  try {
+    res = await fetch(MAGNIFIC_ENDPOINT, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ prompt: input.prompt.slice(0, 12_000), aspect_ratio: input.aspect ?? "16:9", resolution: input.size ?? "2K" }),
+      signal,
+      cache: "no-store",
+    });
+  } catch {
+    if (signal.aborted) throw new ImageError("A geração da imagem foi cancelada ou demorou demais.", 504);
+    throw new ImageError("Não foi possível falar com a Magnific agora. Tente de novo em instantes.");
+  }
+  if (!res.ok) throw magnificError(res.status, await res.text().catch(() => ""));
+
+  type Task = { data?: { task_id?: string; status?: string; generated?: string[] } };
+  let task = ((await res.json().catch(() => null)) as Task | null)?.data;
+  const taskId = task?.task_id;
+  if (!taskId) throw new ImageError("A Magnific não devolveu a tarefa da imagem. Tente de novo.");
+
+  // acompanha a tarefa: costuma ficar pronta em 10 a 40 segundos
+  for (let attempt = 0; task?.status !== "COMPLETED"; attempt++) {
+    if (task?.status === "FAILED") throw new ImageError("A Magnific não conseguiu gerar esta imagem. Tente de novo com outra descrição.");
+    if (attempt > 75) throw new ImageError("A Magnific demorou demais para gerar a imagem. Tente de novo.", 504);
+    try {
+      await wait(attempt < 5 ? 2_000 : 4_000, signal);
+      const poll = await fetch(`${MAGNIFIC_ENDPOINT}/${taskId}`, { headers, signal, cache: "no-store" });
+      if (!poll.ok) {
+        if (poll.status >= 500 || poll.status === 429) continue; // instabilidade passageira: tenta de novo
+        throw magnificError(poll.status, await poll.text().catch(() => ""));
+      }
+      task = ((await poll.json().catch(() => null)) as Task | null)?.data;
+    } catch (err) {
+      if (err instanceof ImageError) throw err;
+      if (signal.aborted) throw new ImageError("A Magnific demorou demais para gerar a imagem. Tente de novo.", 504);
+    }
+  }
+
+  const url = task.generated?.find((u) => typeof u === "string" && u.startsWith("https://"));
+  if (!url) throw new ImageError("A Magnific terminou sem imagem. Tente de novo com outra descrição.");
+  const file = await fetch(url, { signal, cache: "no-store" }).catch(() => null);
+  if (!file?.ok) throw new ImageError("Não foi possível baixar a imagem da Magnific. Tente de novo.");
+  // mesmo formato que o Gemini entrega (JPEG), para capas e lâminas leves
+  const jpeg = await sharp(Buffer.from(await file.arrayBuffer())).rotate().jpeg({ quality: 88, mozjpeg: true }).toBuffer();
+  return { bytes: new Uint8Array(jpeg), mime: "image/jpeg" };
+}
+
+// ---------- Google: Gemini (Nano Banana) pela Interactions API ----------
+
+async function generateWithGemini(input: ImageInput): Promise<GeneratedImage> {
   const key = env.geminiApiKey;
   if (!key) throw new ImageError("Geração de imagens desligada: configure GEMINI_API_KEY nas variáveis do Easypanel.", 503);
 

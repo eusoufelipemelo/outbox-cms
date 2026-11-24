@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Select, Textarea } from "@/components/ui/field";
 import type { Media } from "@/lib/types";
 
-// Geração de imagem com IA (Gemini) dentro do CMS. A imagem gerada entra na Mídia e já fica
+// Geração de imagem com IA (Magnific ou Gemini) dentro do CMS. A imagem gerada entra na Mídia e já fica
 // selecionada para receber o texto alternativo.
 
 const STYLES = [
@@ -42,6 +42,9 @@ const MODELS = [
   },
 ] as const;
 
+// Créditos da conta Magnific por imagem do Nano Banana 2.1 (o preço muda só com a resolução).
+const MAGNIFIC_CREDITS: Record<string, number> = { "1K": 50, "2K": 65, "4K": 145 };
+
 const ASPECTS = [
   { value: "16:9", label: "16:9 (capa do artigo)" },
   { value: "4:3", label: "4:3 (imagem no texto)" },
@@ -60,6 +63,8 @@ export function AiImagePanel({
   onGenerated: (media: Media) => void;
 }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [provider, setProvider] = useState<"magnific" | "gemini" | null>(null);
+  const magnific = provider === "magnific";
   const [prompt, setPrompt] = useState(suggest ? `Imagem de capa para um artigo sobre ${suggest}.` : "");
   const [style, setStyle] = useState<string>(STYLES[0].value);
   const [aspect, setAspect] = useState<string>("16:9");
@@ -76,7 +81,11 @@ export function AiImagePanel({
     let alive = true;
     fetch("/api/ai/imagem")
       .then((r) => r.json())
-      .then((d: { enabled?: boolean }) => alive && setEnabled(Boolean(d.enabled)))
+      .then((d: { enabled?: boolean; provider?: "magnific" | "gemini" | null }) => {
+        if (!alive) return;
+        setEnabled(Boolean(d.enabled));
+        setProvider(d.provider ?? null);
+      })
       .catch(() => alive && setEnabled(false));
     return () => {
       alive = false;
@@ -119,8 +128,8 @@ export function AiImagePanel({
   if (enabled === false) {
     return (
       <p className="text-sm text-muted">
-        Geração de imagens desligada. Configure a variável <code className="font-mono text-[13px] text-ink">GEMINI_API_KEY</code> no Easypanel
-        para criar imagens sem depender de banco de imagens.
+        Geração de imagens desligada. Salve a chave da Magnific (ou a do Gemini) em Painel admin → Imagens para criar imagens sem depender
+        de banco de imagens.
       </p>
     );
   }
@@ -178,7 +187,7 @@ export function AiImagePanel({
         </Field>
         <Field label="Resolução" htmlFor="ia-resolucao">
           <Select id="ia-resolucao" value={size} disabled={busy} onChange={(e) => setSize(e.target.value)}>
-            {current.sizes.map((sz) => (
+            {(magnific ? (["1K", "2K", "4K"] as const) : current.sizes).map((sz) => (
               <option key={sz} value={sz}>
                 {sz === "1K" ? "1K (leve)" : sz === "2K" ? "2K (recomendada)" : "4K (máxima)"}
               </option>
@@ -186,24 +195,30 @@ export function AiImagePanel({
           </Select>
         </Field>
       </div>
-      <Field label="Modelo" htmlFor="ia-modelo" hint={`${current.note} Custo aproximado: ${current.price[size] ?? current.price[current.sizes[0]]} por imagem.`}>
-        <Select
-          id="ia-modelo"
-          value={model}
-          disabled={busy}
-          onChange={(e) => {
-            const next = MODELS.find((m) => m.value === e.target.value) ?? MODELS[0];
-            setModel(next.value);
-            if (!next.sizes.includes(size as never)) setSize(next.sizes.includes("2K" as never) ? "2K" : next.sizes[0]);
-          }}
-        >
-          {MODELS.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      {magnific ? (
+        <p className="text-[13px] text-muted">
+          Gerada pelo Nano Banana 2.1 da Magnific: {MAGNIFIC_CREDITS[size] ?? MAGNIFIC_CREDITS["2K"]} créditos por imagem em {size}.
+        </p>
+      ) : (
+        <Field label="Modelo" htmlFor="ia-modelo" hint={`${current.note} Custo aproximado: ${current.price[size] ?? current.price[current.sizes[0]]} por imagem.`}>
+          <Select
+            id="ia-modelo"
+            value={model}
+            disabled={busy}
+            onChange={(e) => {
+              const next = MODELS.find((m) => m.value === e.target.value) ?? MODELS[0];
+              setModel(next.value);
+              if (!next.sizes.includes(size as never)) setSize(next.sizes.includes("2K" as never) ? "2K" : next.sizes[0]);
+            }}
+          >
+            {MODELS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
       {error ? (
         <p role="alert" className="rounded-[var(--radius-control)] bg-danger-soft px-3 py-2 text-sm text-danger">
           {error}
@@ -216,7 +231,7 @@ export function AiImagePanel({
         </Button>
         {busy ? (
           <span className="text-[13px] text-muted tabular-nums">
-            {elapsed}s. Costuma levar de 20 a 60 segundos.{" "}
+            {elapsed}s. {magnific ? "Costuma levar de 10 a 40 segundos." : "Costuma levar de 20 a 60 segundos."}{" "}
             <button type="button" className="cursor-pointer underline underline-offset-4" onClick={() => abort.current?.abort()}>
               Cancelar
             </button>

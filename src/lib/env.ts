@@ -75,6 +75,14 @@ export const env = {
     if (!accountId || !accessKeyId || !secretAccessKey || !bucket || !publicUrl) return null;
     return { accountId, accessKeyId, secretAccessKey, bucket, publicUrl };
   },
+  /** Opcional: geração de imagens pela Magnific (Nano Banana 2.1, consome créditos da conta). */
+  get magnificApiKey() {
+    return pick("magnific_api_key", process.env.MAGNIFIC_API_KEY);
+  },
+  /** Quem gera as imagens: "" = Magnific quando houver chave (Gemini de reserva); "gemini" = só o Google. */
+  get imageProvider() {
+    return pick("image_provider", process.env.IMAGE_PROVIDER);
+  },
   /** Opcional: geração de imagens com o Gemini (Nano Banana). */
   get geminiApiKey() {
     return pick("gemini_api_key", process.env.GEMINI_API_KEY);

@@ -20,7 +20,7 @@ type Row = { id: string; client_id: string; post_id: string | null; kind: string
  */
 export async function rebuildWithPhotos(igPostId: string): Promise<{ ids: string[]; sent: boolean }> {
   await loadSettings();
-  if (!imagesEnabled()) throw new Error("Geração de imagens desligada: configure a chave do Gemini no Painel admin.");
+  if (!imagesEnabled()) throw new Error("Geração de imagens desligada: salve a chave da Magnific ou do Gemini no Painel admin → Imagens.");
   const { data } = await db().from("ig_posts").select("id, client_id, post_id, kind, slides, status, created_at").eq("id", igPostId).maybeSingle();
   const first = data as Row | null;
   if (!first) throw new Error("Post não encontrado.");

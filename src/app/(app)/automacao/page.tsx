@@ -28,7 +28,11 @@ export default async function AutomacaoPage({ searchParams }: PageProps<"/automa
         : "Falta OPENROUTER_API_KEY",
       icon: Sparkles,
     },
-    { on: status.images, label: status.images ? "Imagens ligadas" : "Falta GEMINI_API_KEY", icon: ImageIcon },
+    {
+      on: status.images,
+      label: status.imageProvider === "magnific" ? "Imagens: Magnific (Nano Banana 2.1)" : status.imageProvider === "gemini" ? "Imagens: Google (Gemini)" : "Falta a chave de imagens",
+      icon: ImageIcon,
+    },
     {
       on: status.telegram && status.webhook.connected,
       label: !status.telegram
@@ -71,7 +75,7 @@ export default async function AutomacaoPage({ searchParams }: PageProps<"/automa
         <p className="mb-6 rounded-[var(--radius-control)] bg-warn-soft px-4 py-3 text-sm text-warn">Último erro do Telegram: {status.webhook.error}</p>
       ) : null}
 
-      <AutomationManager key={initialClientId ?? "todos"} clients={clients} telegramReady={status.telegram} initialClientId={initialClientId} />
+      <AutomationManager key={initialClientId ?? "todos"} clients={clients} telegramReady={status.telegram} imagesByMagnific={status.imageProvider === "magnific"} initialClientId={initialClientId} />
 
       <section className="mt-10">
         <h2 className="mb-3 text-[17px] font-semibold text-ink">Últimas execuções</h2>

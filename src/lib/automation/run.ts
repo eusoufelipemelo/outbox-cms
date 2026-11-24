@@ -213,7 +213,7 @@ export async function runAutomation(a: AutomationRow, opts: { topicId?: string }
     let cover: { url: string; alt: string } | null = null;
     let coverNote: string | null = null;
     if (a.cover && !imagesEnabled()) {
-      coverNote = "Capa não gerada: a chave do Gemini não está configurada no Painel admin. Envie uma capa pelo editor.";
+      coverNote = "Capa não gerada: nenhuma chave de imagens (Magnific ou Gemini) está salva no Painel admin. Envie uma capa pelo editor.";
     } else if (a.cover) {
       await step(runId, "Gerando a imagem de capa");
       try {

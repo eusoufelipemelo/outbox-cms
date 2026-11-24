@@ -64,7 +64,17 @@ function needsAttention(c: AutomationClient): string | null {
   return null;
 }
 
-export function AutomationManager({ clients, telegramReady, initialClientId }: { clients: AutomationClient[]; telegramReady: boolean; initialClientId?: string }) {
+export function AutomationManager({
+  clients,
+  telegramReady,
+  imagesByMagnific = false,
+  initialClientId,
+}: {
+  clients: AutomationClient[];
+  telegramReady: boolean;
+  imagesByMagnific?: boolean;
+  initialClientId?: string;
+}) {
   const [filter, setFilter] = useState<FilterKey>("todos");
   const [selectedId, setSelectedId] = useState<string | null>(initialClientId ?? clients.find((c) => c.automation)?.id ?? clients[0]?.id ?? null);
 
@@ -143,7 +153,7 @@ export function AutomationManager({ clients, telegramReady, initialClientId }: {
       </div>
 
       {selected ? (
-        <AutomationEditor key={selected.id} client={selected} telegramReady={telegramReady} />
+        <AutomationEditor key={selected.id} client={selected} telegramReady={telegramReady} imagesByMagnific={imagesByMagnific} />
       ) : (
         <div className="rounded-[var(--radius-panel)] border border-dashed border-line-strong bg-surface p-10 text-center">
           <p className="text-[15px] text-muted">Nenhum cliente com esse filtro.</p>
@@ -153,7 +163,7 @@ export function AutomationManager({ clients, telegramReady, initialClientId }: {
   );
 }
 
-function AutomationEditor({ client, telegramReady }: { client: AutomationClient; telegramReady: boolean }) {
+function AutomationEditor({ client, telegramReady, imagesByMagnific }: { client: AutomationClient; telegramReady: boolean; imagesByMagnific: boolean }) {
   const a = client.automation;
   const [pending, start] = useTransition();
   const router = useRouter();
@@ -311,7 +321,9 @@ function AutomationEditor({ client, telegramReady }: { client: AutomationClient;
                 </Link>
               </p>
             ) : null}
-            {cover ? (
+            {cover && imagesByMagnific ? (
+              <p className="mt-3 text-[12.5px] text-muted">Capa em 2K pelo Nano Banana 2.1 da Magnific: 65 créditos por artigo.</p>
+            ) : cover ? (
               <Select className="mt-3" value={coverModel} onChange={(e) => setCoverModel(e.target.value)} aria-label="Modelo da imagem">
                 {MODELS.map((m) => (
                   <option key={m.value} value={m.value}>
