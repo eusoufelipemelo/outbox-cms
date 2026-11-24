@@ -155,6 +155,9 @@ Defina a identidade visual das fotos deste cliente.`,
     { maxTokens: 1500, timeoutMs: 60_000, effort: "low", task: "apoio" },
   );
 
+  // resposta sem frases (ex.: "natural-softly-lit-interior-photography") não serve como direção de arte
+  const style = out.image_style.trim();
+  if (style.split(/\s+/).length < 12) throw new Error(`A IA devolveu um estilo incompleto para ${client.name}. Tente de novo.`);
   const picked = out.brand_color?.trim().toLowerCase();
   const brand_color = current ?? (picked && /^#[0-9a-f]{6}$/.test(picked) ? picked : (siteColors[0] ?? null));
   return { brand_color, image_mood: out.image_mood, image_style: fitStyle(out.image_style), siteColors, siteUrl };
@@ -163,8 +166,12 @@ Defina a identidade visual das fotos deste cliente.`,
 /** Cabe no campo (600 caracteres) sem cortar no meio da frase. */
 function fitStyle(text: string, max = 600): string {
   const t = text.trim().replace(/\s+/g, " ");
-  if (t.length <= max) return t;
-  const cut = t.slice(0, max);
-  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("; "));
-  return end > max * 0.5 ? cut.slice(0, end + 1).trim() : `${cut.slice(0, cut.lastIndexOf(" ")).trim()}.`;
+  let out = t;
+  if (t.length > max) {
+    const cut = t.slice(0, max);
+    const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("; "));
+    out = end > max * 0.5 ? cut.slice(0, end + 1).trim() : cut.slice(0, cut.lastIndexOf(" ")).trim();
+  }
+  // sempre termina como frase completa
+  return /[.!?]$/.test(out) ? out : `${out.replace(/[;,:\s]+$/, "")}.`;
 }
