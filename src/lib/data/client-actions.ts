@@ -227,7 +227,7 @@ export async function fillClientIdentity(clientId: string): Promise<ActionResult
   const { data } = await db().from("clients").select("name, brand_color, image_mood, image_style").eq("id", clientId).maybeSingle();
   const c = data as { name: string; brand_color: string | null; image_mood: string; image_style: string | null } | null;
   if (!c) return { ok: false, error: "Cliente não encontrado." };
-  if (!styleNeedsWork(c.image_style)) return { ok: true, data: { name: c.name, brand_color: c.brand_color, image_mood: c.image_mood, image_style: c.image_style, skipped: true } };
+  if (!styleNeedsWork(c.image_style)) return { ok: true, data: { name: c.name, brand_color: c.brand_color, image_mood: c.image_mood, image_style: c.image_style ?? "", skipped: true } };
   try {
     const s = await suggestIdentity(clientId);
     const patch = {
