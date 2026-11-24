@@ -133,7 +133,7 @@ export async function suggestIdentity(clientId: string): Promise<IdentitySuggest
       image_style: z
         .string()
         .describe(
-          "Direção de arte em português, 2 a 4 frases, até 450 caracteres: paleta e onde a cor da marca aparece (material, objeto ou luz), tipo de luz, ambientes e materiais típicos do negócio, perfil das pessoas (público real da região) e enquadramento. Concreta, sem adjetivos vazios, sem texto na imagem.",
+          "Direção de arte em português, 2 a 3 frases curtas, no máximo 450 caracteres (conte): paleta e onde a cor da marca aparece (material, objeto ou luz), tipo de luz, ambientes e materiais típicos do negócio, perfil das pessoas (público real da região) e enquadramento. Concreta, sem adjetivos vazios, sem texto na imagem.",
         ),
     }),
     {
@@ -157,5 +157,14 @@ Defina a identidade visual das fotos deste cliente.`,
 
   const picked = out.brand_color?.trim().toLowerCase();
   const brand_color = current ?? (picked && /^#[0-9a-f]{6}$/.test(picked) ? picked : (siteColors[0] ?? null));
-  return { brand_color, image_mood: out.image_mood, image_style: out.image_style.trim().slice(0, 600), siteColors, siteUrl };
+  return { brand_color, image_mood: out.image_mood, image_style: fitStyle(out.image_style), siteColors, siteUrl };
+}
+
+/** Cabe no campo (600 caracteres) sem cortar no meio da frase. */
+function fitStyle(text: string, max = 600): string {
+  const t = text.trim().replace(/\s+/g, " ");
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("; "));
+  return end > max * 0.5 ? cut.slice(0, end + 1).trim() : `${cut.slice(0, cut.lastIndexOf(" ")).trim()}.`;
 }

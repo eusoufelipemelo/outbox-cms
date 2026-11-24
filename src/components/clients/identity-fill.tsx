@@ -38,7 +38,7 @@ export function IdentityFill({ missing }: { missing: Item[] }) {
         <div className="min-w-0 max-w-[640px]">
           <h2 id="identidade-visual" className="flex items-center gap-2 text-[16px] font-semibold text-ink">
             <Palette className="size-[18px] text-muted" aria-hidden />
-            {missing.length === 1 ? "1 cliente sem identidade visual nas imagens" : `${missing.length} clientes sem identidade visual nas imagens`}
+            {missing.length === 1 ? "1 cliente sem identidade visual completa nas imagens" : `${missing.length} clientes sem identidade visual completa nas imagens`}
           </h2>
           <p className="mt-1 text-[13.5px] text-muted">
             Sem cor, tom e estilo definidos, as capas e os posts saem genéricos. O CMS lê o site e o cadastro de cada um e preenche os três campos. Dá para

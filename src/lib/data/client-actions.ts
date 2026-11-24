@@ -8,6 +8,7 @@ import { isUuid } from "@/lib/data/sites";
 import { CLIENT_STATUSES, UFS } from "@/components/clients/options";
 import type { ActionResult } from "@/lib/types";
 import { suggestIdentity, type IdentitySuggestion } from "@/lib/ai/brand-identity";
+import { styleNeedsWork } from "@/lib/ai/visual";
 
 const text = (max: number) =>
   z
@@ -217,7 +218,7 @@ export async function suggestClientIdentity(clientId: string): Promise<ActionRes
 }
 
 /**
- * Monta e salva a identidade de um cliente que ainda não tem "Estilo das imagens".
+ * Monta e salva a identidade de um cliente sem "Estilo das imagens" (ou com o texto cortado).
  * Não sobrescreve nada que a equipe já definiu: cor só se estiver vazia, clima só se estiver em Automático.
  */
 export async function fillClientIdentity(clientId: string): Promise<ActionResult<IdentityResult>> {
@@ -226,7 +227,7 @@ export async function fillClientIdentity(clientId: string): Promise<ActionResult
   const { data } = await db().from("clients").select("name, brand_color, image_mood, image_style").eq("id", clientId).maybeSingle();
   const c = data as { name: string; brand_color: string | null; image_mood: string; image_style: string | null } | null;
   if (!c) return { ok: false, error: "Cliente não encontrado." };
-  if (c.image_style?.trim()) return { ok: true, data: { name: c.name, brand_color: c.brand_color, image_mood: c.image_mood, image_style: c.image_style, skipped: true } };
+  if (!styleNeedsWork(c.image_style)) return { ok: true, data: { name: c.name, brand_color: c.brand_color, image_mood: c.image_mood, image_style: c.image_style, skipped: true } };
   try {
     const s = await suggestIdentity(clientId);
     const patch = {

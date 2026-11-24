@@ -110,3 +110,9 @@ export const SCENE_GUIDE = `Como escrever a cena da foto:
 export function photoPrompt(scene: string, client?: VisualClient | null): string {
   return `${scene.trim().replace(/\s+/g, " ")}${PHOTO_REALISM}${visualDirection(client)}`;
 }
+
+/** "Estilo das imagens" vazio ou cortado no meio da frase: o CMS monta de novo. */
+export function styleNeedsWork(style: string | null | undefined): boolean {
+  const t = style?.trim() ?? "";
+  return !t || (t.length >= 590 && !/[.!?)]$/.test(t));
+}
