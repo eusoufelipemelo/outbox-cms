@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useActionState, useState, type FormEvent, type KeyboardEvent } from "react";
-import { ImageIcon, X } from "lucide-react";
+import { startTransition, useActionState, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { ImageIcon, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Panel } from "@/components/ui/panel";
 import { MediaPicker } from "@/components/media/media-picker";
-import { saveClient } from "@/lib/data/client-actions";
+import { saveClient, suggestClientIdentity } from "@/lib/data/client-actions";
 import type { ActionResult, Client } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { IMAGE_MOODS } from "@/lib/ai/visual";
@@ -185,6 +185,28 @@ export function ClientForm({ client }: { client?: Client }) {
   const [logoUrl, setLogoUrl] = useState(client?.logo_url ?? "");
   const [color, setColor] = useState(client?.brand_color ?? "");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const moodRef = useRef<HTMLSelectElement>(null);
+  const styleRef = useRef<HTMLTextAreaElement>(null);
+  const [suggesting, setSuggesting] = useState(false);
+
+  /** Preenche cor, clima e estilo das imagens pelo site e pelo cadastro. Só salva quando a equipe clicar em Salvar. */
+  async function suggestIdentity() {
+    if (!client) return;
+    setSuggesting(true);
+    try {
+      const res = await suggestClientIdentity(client.id);
+      if (!res.ok || !res.data) throw new Error(res.ok ? "Não foi possível sugerir agora." : res.error);
+      const s = res.data;
+      if (s.brand_color && !/^#[0-9a-f]{6}$/i.test(color)) setColor(s.brand_color);
+      if (moodRef.current) moodRef.current.value = s.image_mood;
+      if (styleRef.current) styleRef.current.value = s.image_style;
+      toast.success(s.siteUrl ? "Identidade sugerida pelo site e pelo cadastro. Confira e salve." : "Identidade sugerida pelo cadastro (sem site). Confira e salve.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível sugerir agora.");
+    } finally {
+      setSuggesting(false);
+    }
+  }
 
   const [state, formAction, pending] = useActionState<State, FormData>(async (prev, formData) => {
     const result = await saveClient(prev, formData);
@@ -282,7 +304,7 @@ export function ClientForm({ client }: { client?: Client }) {
               error={err("image_mood")}
               hint="Aplicado a toda imagem gerada por IA para este cliente."
             >
-              <Select id="image_mood" name="image_mood" defaultValue={client?.image_mood ?? "auto"}>
+              <Select ref={moodRef} id="image_mood" name="image_mood" defaultValue={client?.image_mood ?? "auto"}>
                 {IMAGE_MOODS.map((m) => (
                   <option key={m.value} value={m.value}>
                     {m.label}
@@ -297,6 +319,7 @@ export function ClientForm({ client }: { client?: Client }) {
               hint="Ex.: fundo escuro quase preto, detalhes em laranja, fotografia editorial de marcenaria."
             >
               <Textarea
+                ref={styleRef}
                 id="image_style"
                 name="image_style"
                 rows={2}
@@ -305,6 +328,15 @@ export function ClientForm({ client }: { client?: Client }) {
                 aria-invalid={invalid("image_style")}
               />
             </Field>
+            {client ? (
+              <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+                <Button variant="secondary" onClick={suggestIdentity} loading={suggesting}>
+                  <Sparkles className="size-4" aria-hidden />
+                  Sugerir pelo site e pelo cadastro
+                </Button>
+                <span className="text-[13px] text-muted">Preenche cor da marca, tom e estilo das imagens. Confira antes de salvar.</span>
+              </div>
+            ) : null}
             <Field label="Início do contrato" htmlFor="contract_start" error={err("contract_start")} hint="Quando o cliente entrou.">
               <Input id="contract_start" name="contract_start" type="date" defaultValue={client?.contract_start ?? ""} aria-invalid={invalid("contract_start")} />
             </Field>

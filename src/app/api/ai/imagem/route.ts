@@ -5,7 +5,7 @@ import { putImage } from "@/lib/storage";
 import { generateImage, imageProvider, imagesEnabled, IMAGE_ASPECTS, IMAGE_MODELS, IMAGE_SIZES, ImageError } from "@/lib/ai/image";
 import { MEDIA_COLUMNS, isUuid } from "@/lib/data/media";
 import { slugify } from "@/lib/utils";
-import { visualDirection, type VisualClient } from "@/lib/ai/visual";
+import { PHOTO_REALISM, visualDirection, type VisualClient } from "@/lib/ai/visual";
 import { dayKey } from "@/components/agenda/dates";
 
 export const dynamic = "force-dynamic";
@@ -36,10 +36,11 @@ export async function POST(request: Request) {
   const { prompt, aspect, size, model, alt, clientId, useClientStyle } = parsed.data;
 
   // identidade visual do cliente, quando a imagem é para um cliente
-  let finalPrompt = prompt;
+  // estilos de fotografia ganham as regras de realismo (escala real, sem tela virada para a câmera, sem pose)
+  let finalPrompt = /fotografia/i.test(prompt) ? `${prompt}${PHOTO_REALISM}` : prompt;
   if (clientId && isUuid(clientId) && useClientStyle !== false) {
     const { data: client } = await db().from("clients").select("name, segment, brand_color, image_style, image_mood").eq("id", clientId).maybeSingle();
-    finalPrompt = `${prompt}${visualDirection(client as VisualClient | null)}`;
+    finalPrompt = `${finalPrompt}${visualDirection(client as VisualClient | null)}`;
   }
 
   try {

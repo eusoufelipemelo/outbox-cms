@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 import { runAi, generate, aiStatus, aiEnabled } from "@/lib/ai/server";
 import { sanitizeAiHtml, plainText } from "@/lib/ai/sanitize";
 import { generateImage, imagesEnabled, type ImageModel } from "@/lib/ai/image";
-import { visualDirection, type VisualClient } from "@/lib/ai/visual";
+import { PHOTO_REALISM, SCENE_GUIDE, visualDirection, type VisualClient } from "@/lib/ai/visual";
 import { putImage } from "@/lib/storage";
 import { publishPost } from "@/lib/delivery";
 import { countWords, readingMinutes, slugify } from "@/lib/utils";
@@ -91,24 +91,24 @@ Devolva a categoria e as etiquetas.`,
 /** Descrição de cena para a capa: a IA escreve o prompt da imagem a partir do artigo. */
 async function coverPrompt(input: { title: string; summary: string; segment: string | null; city: string | null; identity: string }): Promise<{ prompt: string; alt: string }> {
   const fallback = {
-    prompt: `Editorial photograph about "${input.title}"${input.segment ? `, in the context of ${input.segment}` : ""}${input.city ? `, in Brazil (${input.city})` : ", in Brazil"}. Real working scene, natural light, shallow depth of field, no text and no logos.${input.identity}`,
+    prompt: `Photograph about "${input.title}"${input.segment ? `, showing a real ${input.segment} business` : ""}${input.city ? `, in Brazil (${input.city})` : ", in Brazil"}: the place, the materials and the people at work.${PHOTO_REALISM}${input.identity}`,
     alt: input.title,
   };
   if (!aiEnabled()) return fallback;
   try {
     const out = await generate(
       z.object({
-        prompt: z.string().describe("Descrição da cena em inglês, 1 a 2 frases, fotográfica e concreta. Sem texto na imagem, sem logotipos, sem pessoas famosas."),
+        prompt: z.string().describe("Descrição da cena em inglês, 2 a 3 frases, fotográfica e concreta: lugar, ação, materiais, luz e enquadramento. Sem texto na imagem, sem logotipos, sem pessoas famosas, sem telas."),
         alt: z.string().describe("Texto alternativo em português do Brasil, até 120 caracteres, descrevendo a cena."),
       }),
       {
         system:
-          "Você dirige a fotografia de capa de artigos de blog da agência OutBox. Cria cenas reais, brasileiras quando fizer sentido, sem texto na imagem, sem colagens e sem clichê de banco de imagens genérico.",
+          `Você dirige a fotografia de capa de artigos de blog da agência OutBox. Cria cenas reais, brasileiras, que parecem fotografadas no próprio negócio do cliente, sem colagens e sem clichê de banco de imagens.\n${SCENE_GUIDE}\nA cena tem que combinar com a identidade visual da marca quando ela for informada (cores, clima, ambientes).`,
         user: `Artigo: "${input.title}"\nResumo: ${input.summary}\nSegmento do cliente: ${input.segment ?? "não informado"}\nCidade: ${input.city ?? "não informada"}${input.identity ? `\nIdentidade visual da marca (respeite): ${input.identity}` : ""}\n\nEscreva o prompt da imagem de capa (16:9).`,
       },
       { maxTokens: 1200, timeoutMs: 60_000, effort: "low", task: "apoio" },
     );
-    return { prompt: `${out.prompt} Editorial photography, no text, no logos, no watermark.${input.identity}`, alt: out.alt.slice(0, 160) };
+    return { prompt: `${out.prompt.trim()}${PHOTO_REALISM}${input.identity}`, alt: out.alt.slice(0, 160) };
   } catch {
     return fallback;
   }

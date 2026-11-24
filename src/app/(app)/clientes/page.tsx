@@ -8,6 +8,8 @@ import { StatusDot } from "@/components/ui/badge";
 import { EmptyState, PageHeader } from "@/components/ui/panel";
 import { BrandDot, ConnectionDot } from "@/components/clients/bits";
 import { ClientFilters } from "@/components/clients/client-filters";
+import { IdentityFill } from "@/components/clients/identity-fill";
+import { db } from "@/lib/supabase/admin";
 import { CLIENT_STATUS, CLIENT_STATUSES } from "@/components/clients/options";
 import type { ClientStatus } from "@/lib/types";
 import { hostname } from "@/lib/utils";
@@ -85,6 +87,11 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const filtered = Boolean(q || status || svc || uf);
 
   const base = (await listClients({ q, status: status || undefined })) as Row[];
+  // clientes sem "Estilo das imagens": as imagens de IA saem genéricas
+  const { data: noStyle } = await db().from("clients").select("id, name, image_style").neq("status", "archived").order("name");
+  const missingIdentity = ((noStyle ?? []) as { id: string; name: string; image_style: string | null }[])
+    .filter((c) => !c.image_style?.trim())
+    .map(({ id, name }) => ({ id, name }));
   const ufOf = (c: Row) => (c.state ?? "").toUpperCase();
   const bySvc = svc ? base.filter((c) => svcOf(c) === svc) : base;
   const byUf = uf ? base.filter((c) => ufOf(c) === uf) : base;
@@ -140,6 +147,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         </div>
         {newButton}
       </div>
+
+      <IdentityFill missing={missingIdentity} />
 
       <div className="mb-3">
         <ClientFilters q={q} status={status} />

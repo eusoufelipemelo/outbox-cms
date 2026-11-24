@@ -84,3 +84,29 @@ export function visualSummary(client: VisualClient | null | undefined): string |
   if (client.image_style?.trim()) bits.push("estilo próprio");
   return bits.length ? bits.join(", ") : null;
 }
+
+/**
+ * Regras de realismo somadas a toda foto gerada (capas, lâminas do Instagram, Mídia).
+ * Existem para evitar o "jeito de IA": celular gigante na mão, objetos flutuando, pose de banco de imagens.
+ */
+export const PHOTO_REALISM =
+  " Authentic documentary-style photograph, as if taken by a professional photographer with a full-frame camera and a 35mm lens at eye level, natural available light." +
+  " Everything at true real-world scale and correct perspective: hands, fingers and objects anatomically correct, physically resting on surfaces or held naturally, nothing floating, nothing oversized." +
+  " People are candid and unposed, absorbed in real work, natural skin texture, relaxed expressions, not looking at the camera." +
+  " If a phone, tablet or computer appears, it is a small secondary element at its real size, seen from the side, with the screen not readable; never a device held up toward the camera, never a visible app, map or interface." +
+  " Real Brazilian place with lived-in details and small imperfections. One clear subject, uncluttered composition." +
+  " No text, letters, numbers, logos, signs or watermarks. Not a stock photo, not CGI, not an illustration, no collage.";
+
+/** Orientação em português para a IA que escreve a cena (capa, lâmina ou post). */
+export const SCENE_GUIDE = `Como escrever a cena da foto:
+- Mostre a realidade física do negócio: o ambiente pronto, o material, o detalhe do acabamento, o profissional trabalhando com as mãos, o cliente sendo atendido no local.
+- Tema digital (Google, Instagram, site, anúncios, avaliações) não vira foto de tela: mostre o resultado na vida real, como clientes chegando à loja, o atendimento, o produto entregue.
+- Nada de pessoa segurando celular ou tablet virado para a câmera, nada de telas com mapa, estrelas ou aplicativo, nada de apertos de mão, gráficos, setas ou símbolos.
+- Uma cena só, concreta e plausível no Brasil, com detalhes de material, luz (direção e hora do dia) e enquadramento (plano aberto, médio ou detalhe).
+- Pessoas comuns, com roupa de trabalho real, em ação natural, sem pose e sem olhar para a câmera.
+- Sem texto, letreiros, logotipos ou marcas visíveis.`;
+
+/** Prompt final de uma foto: a cena + as regras de realismo + a identidade visual do cliente. */
+export function photoPrompt(scene: string, client?: VisualClient | null): string {
+  return `${scene.trim().replace(/\s+/g, " ")}${PHOTO_REALISM}${visualDirection(client)}`;
+}

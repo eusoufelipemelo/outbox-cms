@@ -6,6 +6,7 @@ import { plainText } from "@/lib/ai/sanitize";
 import { putImage } from "@/lib/storage";
 import { coverSlide, contentSlide, ctaSlide, photoData, storyFrame, type Brand } from "./art";
 import { slidePhotos } from "./photos";
+import { SCENE_GUIDE } from "@/lib/ai/visual";
 import { igAccount } from "./oauth";
 import { publishCarousel, publishStory } from "./api";
 
@@ -18,7 +19,7 @@ const draftSchema = z.object({
       z.object({
         title: z.string().describe("Até 45 caracteres."),
         text: z.string().describe("Até 180 caracteres, uma ideia por lâmina."),
-        photo_prompt: z.string().describe("Cena fotográfica em inglês que ilustra a lâmina, concreta, sem texto na imagem."),
+        photo_prompt: z.string().describe("Cena da foto em inglês, 1 a 2 frases concretas: lugar real do negócio, o que acontece, materiais, luz e enquadramento. Sem telas, sem celular virado para a câmera, sem texto na imagem."),
       }),
     )
     .describe("3 a 5 lâminas com os pontos principais do artigo, em ordem."),
@@ -70,7 +71,8 @@ export async function draftFromArticle(
     {
       system: `Você é social media da agência OutBox e transforma artigos de blog em carrossel de Instagram para ${c.name ?? "o cliente"}${c.segment ? ` (${c.segment})` : ""}.
 ${c.tone_of_voice ? `Tom de voz: ${c.tone_of_voice}.` : "Tom próximo, claro e profissional."}
-Regras: nada de promessas exageradas, nada inventado além do artigo, sem emojis em excesso (no máximo 2 na legenda), português do Brasil. Links não são clicáveis na legenda: mande para o link da bio.`,
+Regras: nada de promessas exageradas, nada inventado além do artigo, sem emojis em excesso (no máximo 2 na legenda), português do Brasil. Links não são clicáveis na legenda: mande para o link da bio.
+${SCENE_GUIDE}`,
       user: `Artigo: "${p.title}"
 Resumo: ${plainText(p.answer_summary ?? p.excerpt ?? "")}
 Pontos-chave: ${(p.key_takeaways ?? []).join(" | ")}

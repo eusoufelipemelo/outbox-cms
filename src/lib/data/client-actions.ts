@@ -7,6 +7,7 @@ import { db } from "@/lib/supabase/admin";
 import { isUuid } from "@/lib/data/sites";
 import { CLIENT_STATUSES, UFS } from "@/components/clients/options";
 import type { ActionResult } from "@/lib/types";
+import { suggestIdentity, type IdentitySuggestion } from "@/lib/ai/brand-identity";
 
 const text = (max: number) =>
   z
@@ -197,4 +198,50 @@ export async function deleteClient(id: string): Promise<ActionResult> {
   revalidatePath("/clientes");
   revalidatePath("/", "layout");
   return { ok: true, message: "Cliente excluído" };
+}
+
+// ---------- Identidade visual das imagens ----------
+
+export type IdentityResult = { name: string; brand_color: string | null; image_mood: string; image_style: string; skipped?: boolean };
+
+/** Sugere a identidade visual pelo cadastro e pelo site, sem salvar (o formulário mostra e a equipe decide). */
+export async function suggestClientIdentity(clientId: string): Promise<ActionResult<IdentitySuggestion>> {
+  await requireUser();
+  if (!isUuid(clientId)) return { ok: false, error: "Cliente inválido." };
+  try {
+    return { ok: true, data: await suggestIdentity(clientId) };
+  } catch (err) {
+    console.error("[identidade] sugestão falhou:", err instanceof Error ? err.message : err);
+    return { ok: false, error: err instanceof Error ? err.message : "Não foi possível sugerir agora." };
+  }
+}
+
+/**
+ * Monta e salva a identidade de um cliente que ainda não tem "Estilo das imagens".
+ * Não sobrescreve nada que a equipe já definiu: cor só se estiver vazia, clima só se estiver em Automático.
+ */
+export async function fillClientIdentity(clientId: string): Promise<ActionResult<IdentityResult>> {
+  await requireUser();
+  if (!isUuid(clientId)) return { ok: false, error: "Cliente inválido." };
+  const { data } = await db().from("clients").select("name, brand_color, image_mood, image_style").eq("id", clientId).maybeSingle();
+  const c = data as { name: string; brand_color: string | null; image_mood: string; image_style: string | null } | null;
+  if (!c) return { ok: false, error: "Cliente não encontrado." };
+  if (c.image_style?.trim()) return { ok: true, data: { name: c.name, brand_color: c.brand_color, image_mood: c.image_mood, image_style: c.image_style, skipped: true } };
+  try {
+    const s = await suggestIdentity(clientId);
+    const patch = {
+      image_style: s.image_style,
+      ...(c.brand_color ? {} : { brand_color: s.brand_color }),
+      ...(c.image_mood && c.image_mood !== "auto" ? {} : { image_mood: s.image_mood }),
+    };
+    const { error } = await db().from("clients").update(patch).eq("id", clientId);
+    if (error) throw new Error(error.message);
+    revalidatePath("/clientes");
+    revalidatePath(`/clientes/${clientId}`);
+    revalidatePath("/automacao");
+    return { ok: true, data: { name: c.name, brand_color: patch.brand_color ?? c.brand_color, image_mood: patch.image_mood ?? c.image_mood, image_style: s.image_style } };
+  } catch (err) {
+    console.error("[identidade] preencher falhou:", c.name, err instanceof Error ? err.message : err);
+    return { ok: false, error: `${c.name}: ${err instanceof Error ? err.message : "não foi possível montar agora."}` };
+  }
 }

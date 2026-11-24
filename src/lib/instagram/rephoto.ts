@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { generateImage, imagesEnabled, type ImageModel } from "@/lib/ai/image";
-import { visualDirection, type VisualClient } from "@/lib/ai/visual";
+import { photoPrompt, type VisualClient } from "@/lib/ai/visual";
 import { loadSettings } from "@/lib/settings";
 import { telegramEnabled } from "@/lib/automation/telegram";
 import { coverSlide, contentSlide, ctaSlide, photoData, photoFromBytes, storyFrame, type Brand } from "./art";
@@ -61,7 +61,7 @@ export async function rebuildWithPhotos(igPostId: string): Promise<{ ids: string
   }
   if (!cover) {
     const { bytes } = await generateImage({
-      prompt: `Editorial photograph that illustrates the theme "${topic}"${niche}. Natural composition, no text, no letters, no logos, no watermark.${visualDirection(client)}`,
+      prompt: photoPrompt(`A real scene inside the business that illustrates the theme "${topic}"${niche}: the place, the materials and the people at work.`, client),
       aspect: "4:5",
       size: "1K",
       model: "gemini-3.1-flash-image" as ImageModel,
@@ -78,7 +78,7 @@ export async function rebuildWithPhotos(igPostId: string): Promise<{ ids: string
     } else {
       const middle = row.slides.slice(1, -1);
       const photos = await slidePhotos(
-        middle.map((s) => `Editorial photograph that illustrates: ${s.title ?? ""}. ${s.text ?? ""}${niche}.`),
+        middle.map((s) => `A real scene inside the business that illustrates: ${s.title ?? ""}. ${s.text ?? ""}${niche}.`),
         client,
       );
       const closing = row.slides[row.slides.length - 1];

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { generate } from "@/lib/ai/server";
 import { generateImage, imagesEnabled, type ImageModel } from "@/lib/ai/image";
-import { visualDirection, type VisualClient } from "@/lib/ai/visual";
+import { photoPrompt, SCENE_GUIDE, type VisualClient } from "@/lib/ai/visual";
 import { loadSettings } from "@/lib/settings";
 import { nextRunAt } from "@/lib/automation/schedule";
 import { sendMediaGroup, sendMessage, telegramEnabled } from "@/lib/automation/telegram";
@@ -21,13 +21,13 @@ const schema = z.object({
   topic: z.string().describe("Tema do post em uma frase."),
   cover_title: z.string().describe("Título da capa, até 70 caracteres."),
   slides: z
-    .array(z.object({ title: z.string(), text: z.string(), photo_prompt: z.string().describe("Cena fotográfica em inglês para a lâmina, sem texto.") }))
+    .array(z.object({ title: z.string(), text: z.string(), photo_prompt: z.string().describe("Cena da foto em inglês, 1 a 2 frases concretas: lugar real do negócio, o que acontece, materiais, luz e enquadramento. Sem telas, sem celular virado para a câmera, sem texto na imagem.") }))
     .describe("3 a 5 lâminas: título até 45 caracteres, texto até 180 e a cena da foto."),
   closing: z.string().describe("Chamada final curta, até 50 caracteres."),
   caption: z.string().describe("Legenda de 500 a 1300 caracteres, parágrafos curtos, termina com chamada para ação (direct, WhatsApp ou link da bio). Sem hashtags."),
   hashtags: z.array(z.string()).describe("8 a 15 hashtags, sem #."),
   story_title: z.string().describe("Título do story, até 60 caracteres."),
-  photo_prompt: z.string().describe("Cena fotográfica em inglês para a capa, sem texto na imagem."),
+  photo_prompt: z.string().describe("Cena da foto em inglês, 1 a 2 frases concretas: lugar real do negócio, o que acontece, materiais, luz e enquadramento. Sem telas, sem celular virado para a câmera, sem texto na imagem."),
 });
 
 type Client = {
@@ -62,7 +62,8 @@ export async function createIndependentPost(clientId: string, focus?: string | n
     {
       system: `Você é social media da agência OutBox e cria posts de Instagram para ${client.name}${client.segment ? ` (${client.segment})` : ""}.
 ${client.tone_of_voice ? `Tom de voz: ${client.tone_of_voice}.` : "Tom próximo, claro e profissional."}
-Conteúdo útil para o público, que gere confiança e contato. Nada inventado sobre a empresa além do que está abaixo. Português do Brasil. No máximo 2 emojis na legenda.`,
+Conteúdo útil para o público, que gere confiança e contato. Nada inventado sobre a empresa além do que está abaixo. Português do Brasil. No máximo 2 emojis na legenda.
+${SCENE_GUIDE}`,
       user: `Sobre a empresa: ${client.about ?? "não informado"}
 Serviços: ${(client.services ?? []).join("; ") || "não informado"}
 Público: ${client.audience ?? "não informado"}
@@ -80,7 +81,7 @@ Crie um carrossel educativo, a legenda, as hashtags, o story e a cena da foto de
   if (imagesEnabled()) {
     try {
       const { bytes } = await generateImage({
-        prompt: `${out.photo_prompt} Editorial photography, no text, no logos.${visualDirection(client)}`,
+        prompt: photoPrompt(out.photo_prompt, client),
         aspect: "4:5",
         size: "2K",
         model: "gemini-3.1-flash-image" as ImageModel,
