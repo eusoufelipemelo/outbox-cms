@@ -128,6 +128,12 @@ async function recentTitles(clientId: string): Promise<string[]> {
 
 type PostDraft = z.infer<typeof postSchema>;
 
+/** Texto com "autocorreção" da IA ("pera, corrigindo", "ou melhor"): sinal de número inventado. Reescreve. */
+const SELF_FIX = /(corrigindo|\bpera[,.]|\bops[,.!]|ou melhor,|\bdigo,|\berrata)/i;
+function selfCorrects(p: PostDraft): boolean {
+  return SELF_FIX.test([p.headline, ...[p.cover, ...p.slides].flatMap((x) => [x.title, x.text, x.bold]), p.closing, p.caption].join(" "));
+}
+
 function isPolitical(p: PostDraft): boolean {
   const all = [p.headline, p.cover.text, p.cover.bold, ...p.slides.flatMap((x) => [x.text, x.bold]), p.closing, p.caption, ...p.hashtags].join(" ");
   return POLITICAL.test(all);
@@ -176,8 +182,9 @@ O perfil é como um programa de TV com vários quadros. O quadro de hoje é "${p
 Regras de verdade: notícias, números, preços, datas e nomes só se estiverem na lista de notícias; nunca invente fatos, lançamentos ou citações. Cite a fonte no texto de forma natural ("segundo a OpenAI", "a Google anunciou").
 Escolha de notícia: prefira lançamentos, recursos novos, usos práticos e avanços que ajudam empresas e pessoas. Fuja de processos, escândalos, demissões e polêmicas.
 REGRA ABSOLUTA: nada político. Não cite governos, políticos, partidos, eleições, leis, regulação, tarifas, guerras ou disputas entre países, nem de passagem.${strict ? "\nATENÇÃO: a versão anterior saiu com assunto político e foi descartada. Escolha outra notícia e outro ângulo, 100% sobre tecnologia e negócios." : ""}
+Nunca se corrija no meio do texto ("pera, corrigindo", "quer dizer", "ops"): escreva o dado certo de primeira, exatamente como está na notícia.
 Pouco texto: quem rola o feed lê em 3 segundos. Uma ideia por lâmina, frases curtas.
-Nada de repetição: a capa só fisga; a primeira lâmina de conteúdo já entrega a informação; cada lâmina avança a história; o negrito nunca repete o texto da própria lâmina.${repeat ? "\nATENÇÃO: a versão anterior repetiu a mesma informação em lâminas diferentes e foi descartada." : ""}
+Nada de repetição: a capa só fisga; a primeira lâmina de conteúdo já entrega a informação; cada lâmina avança a história; o negrito nunca repete o texto da própria lâmina.${repeat ? "\nATENÇÃO: a versão anterior foi descartada (repetiu informação entre lâminas ou se corrigiu no meio do texto)." : ""}
 Sem markdown: nada de asteriscos, títulos ou rótulos. O negrito é o campo "bold", separado.
 Português do Brasil correto.`,
       user: `Quadro de hoje: ${program.name}
@@ -192,6 +199,23 @@ Escreva o carrossel.`,
     },
     { maxTokens: 6000, timeoutMs: 150_000, effort: "medium", task: "programa" },
   );
+}
+
+/**
+ * Book fotográfico do Felipe: fotos na Mídia do cliente OutBox com "book felipe" na descrição.
+ * Cada fechamento usa uma diferente, evitando as usadas nos últimos posts. Sem book, usa a foto do perfil.
+ */
+async function bookPhoto(clientId: string): Promise<{ id: string; data: string } | null> {
+  const { data } = await db().from("media").select("id, url").eq("client_id", clientId).ilike("alt", "%book felipe%").limit(200);
+  const all = (data ?? []) as { id: string; url: string }[];
+  if (!all.length) return null;
+  const { data: recent } = await db().from("ig_posts").select("slides").eq("client_id", clientId).eq("source", "show").order("created_at", { ascending: false }).limit(Math.min(10, Math.max(1, all.length - 1)));
+  const used = new Set(((recent ?? []) as { slides: { photo_id?: string }[] }[]).flatMap((r) => r.slides.map((sl) => sl.photo_id).filter(Boolean) as string[]));
+  const pool = all.filter((m) => !used.has(m.id));
+  const pickFrom = pool.length ? pool : all;
+  const chosen = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+  const img = await photoData(chosen.url);
+  return img ? { id: chosen.id, data: img } : null;
 }
 
 /** Gera um post do programa e guarda em ig_posts (source "show"). */
@@ -213,9 +237,9 @@ export async function createShowPost(input: { program?: Program; status: "draft"
   // regra fixa: nada político. Se o texto sair político, reescreve; se insistir, troca por um quadro sem notícia.
   let out = await writePost(program, ctx, news, used, false);
   if (isPolitical(out)) out = await writePost(program, ctx, news, used, true);
-  else if (repeats(out)) {
+  else if (repeats(out) || selfCorrects(out)) {
     const again = await writePost(program, ctx, news, used, false, true);
-    if (!isPolitical(again) && !repeats(again)) out = again;
+    if (!isPolitical(again) && !repeats(again) && !selfCorrects(again)) out = again;
   }
   if (isPolitical(out)) {
     if (!program.news) throw new Error("O texto saiu com assunto político duas vezes; nada foi publicado.");
@@ -272,6 +296,7 @@ export async function createShowPost(input: { program?: Program; status: "draft"
   if (!out.headline?.trim()) console.warn("[programa] manchete veio vazia; usando a reserva:", headline);
   const firstSource = out.sources.map((u) => news.find((n) => n.link === u)?.source).find(Boolean);
   let buffers: Buffer[];
+  const book = isCapa ? await bookPhoto(ctx.clientId).catch(() => null) : null;
   if (isCapa) {
     buffers = await Promise.all([
       editorialCover(ctx.author, { headline, kicker: firstSource ? `${program.name} | Fonte: ${firstSource}` : program.name, image: coverPhoto }),
@@ -279,7 +304,7 @@ export async function createShowPost(input: { program?: Program; status: "draft"
         const t = slideText(sl, program.name);
         return editorialSlide({ title: clean(sl.title, 70).replace(/[.]+$/, ""), text: t.text, highlight: t.bold, image: images[i] }, i % 2 === 1, i % 2 === 1);
       }),
-      editorialClosing(ctx.author, { text: closingText, cta: "Quer minha ajuda para colocar IA no seu negócio? Link na bio." }),
+      editorialClosing(book ? { ...ctx.author, photo: book.data } : ctx.author, { text: closingText, cta: "Quer minha ajuda para colocar IA no seu negócio? Link na bio." }),
     ]);
   } else {
     const total = content.length;
@@ -305,7 +330,7 @@ export async function createShowPost(input: { program?: Program; status: "draft"
     isCapa
       ? [{ title: `${program.name}: ${headline}`, text: "" }, ...slides.map((sl) => ({ title: clean(sl.title, 40), text: clean(sl.text, 90) })), { title: closingText.slice(0, 90), text: "" }]
       : content.map((sl, i) => ({ title: i === 0 ? `${program.name}: ${sl.text.slice(0, 90)}` : sl.text.slice(0, 90), text: sl.bold ?? "" }))
-  ).map((m, i) => ({ url: urls[i], ...m }));
+  ).map((m, i, arr) => ({ url: urls[i], ...m, ...(book && i === arr.length - 1 ? { photo_id: book.id } : {}) }));
 
   const { data, error } = await db()
     .from("ig_posts")
