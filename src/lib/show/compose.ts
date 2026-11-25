@@ -8,8 +8,8 @@ import { loadSettings } from "@/lib/settings";
 import { sendMediaGroup, sendMessage, telegramEnabled } from "@/lib/automation/telegram";
 import { publishIgPost, upload } from "@/lib/instagram/compose";
 import { igAccount } from "@/lib/instagram/oauth";
-import { latestAiNews, type NewsItem } from "./news";
-import { programFor, type Program } from "./programs";
+import { latestAiNews, POLITICAL, type NewsItem } from "./news";
+import { programById, programFor, type Program } from "./programs";
 import { avatarData, tweetImage, tweetSlide, type Author, type TweetSlide } from "./art";
 
 /**
@@ -101,6 +101,40 @@ async function recentTitles(clientId: string): Promise<string[]> {
   return ((data ?? []) as { slides: { title?: string }[] }[]).map((r) => r.slides?.[0]?.title ?? "").filter(Boolean);
 }
 
+type PostDraft = z.infer<typeof postSchema>;
+
+function isPolitical(p: PostDraft): boolean {
+  const all = [p.cover.text, p.cover.bold, ...p.slides.flatMap((x) => [x.text, x.bold]), p.closing, p.caption, ...p.hashtags].join(" ");
+  return POLITICAL.test(all);
+}
+
+async function writePost(program: Program, ctx: ShowContext, news: NewsItem[], used: string[], strict: boolean): Promise<PostDraft> {
+  const [min, max] = program.slides;
+  return generate(
+    postSchema,
+    {
+      system: `Você escreve os carrosséis do Instagram de ${ctx.author.name} (@${ctx.author.handle}), dono da agência OutBox, que ensina IA para donos de pequenas e médias empresas no Brasil.
+Formato tweet: cada lâmina é um parágrafo curto e direto, em primeira pessoa, como se o Felipe estivesse conversando, seguido de uma frase de impacto em negrito.
+Tom: brasileiro, próximo, confiante, sem jargão, sem exagero, sem emoji nas lâminas. Use "você".
+O perfil é como um programa de TV com vários quadros. O quadro de hoje é "${program.name}".
+Regras de verdade: notícias, números, preços, datas e nomes só se estiverem na lista de notícias; nunca invente fatos, lançamentos ou citações. Cite a fonte no texto de forma natural ("segundo a OpenAI", "a Google anunciou").
+Escolha de notícia: prefira lançamentos, recursos novos, usos práticos e avanços que ajudam empresas e pessoas. Fuja de processos, escândalos, demissões e polêmicas.
+REGRA ABSOLUTA: nada político. Não cite governos, políticos, partidos, eleições, leis, regulação, tarifas, guerras ou disputas entre países, nem de passagem.${strict ? "\nATENÇÃO: a versão anterior saiu com assunto político e foi descartada. Escolha outra notícia e outro ângulo, 100% sobre tecnologia e negócios." : ""}
+Sem markdown: nada de asteriscos, títulos ou rótulos. O negrito é o campo "bold", separado.
+Português do Brasil correto.`,
+      user: `Quadro de hoje: ${program.name}
+O que o quadro faz: ${program.brief}
+Quantidade de lâminas de conteúdo: ${min} a ${max} (fora a capa e o fechamento).
+Frase de fechamento sugerida: ${program.closing}
+Evite repetir estes posts recentes: ${used.join(" | ") || "nenhum"}
+${program.news ? `\nNotícias de IA das últimas horas (use só estas):\n${newsBlock(news)}` : ""}
+
+Escreva o carrossel.`,
+    },
+    { maxTokens: 6000, timeoutMs: 150_000, effort: "medium", task: "programa" },
+  );
+}
+
 /** Gera um post do programa e guarda em ig_posts (source "show"). */
 export async function createShowPost(input: { program?: Program; status: "draft" | "awaiting"; scheduledAt?: Date | null }): Promise<{ id: string; urls: string[]; title: string; program: Program }> {
   await loadSettings();
@@ -115,30 +149,17 @@ export async function createShowPost(input: { program?: Program; status: "draft"
     if (!news.length) throw new Error("Nenhuma notícia de IA encontrada nas fontes agora.");
   }
   const used = await recentTitles(ctx.clientId);
-  const [min, max] = program.slides;
+  const max = program.slides[1];
 
-  const out = await generate(
-    postSchema,
-    {
-      system: `Você escreve os carrosséis do Instagram de ${ctx.author.name} (@${ctx.author.handle}), dono da agência OutBox, que ensina IA para donos de pequenas e médias empresas no Brasil.
-Formato tweet: cada lâmina é um parágrafo curto e direto, em primeira pessoa, como se o Felipe estivesse conversando, seguido de uma frase de impacto em negrito.
-Tom: brasileiro, próximo, confiante, sem jargão, sem exagero, sem emoji nas lâminas. Use "você".
-O perfil é como um programa de TV com vários quadros. O quadro de hoje é "${program.name}".
-Regras de verdade: notícias, números, preços, datas e nomes só se estiverem na lista de notícias; nunca invente fatos, lançamentos ou citações. Cite a fonte no texto de forma natural ("segundo a OpenAI", "a Google anunciou").
-Escolha de notícia: prefira lançamentos, recursos novos, usos práticos e avanços que ajudam empresas e pessoas. Fuja de política, processos, escândalos, demissões e polêmicas.
-Sem markdown: nada de asteriscos, títulos ou rótulos. O negrito é o campo "bold", separado.
-Português do Brasil correto.`,
-      user: `Quadro de hoje: ${program.name}
-O que o quadro faz: ${program.brief}
-Quantidade de lâminas de conteúdo: ${min} a ${max} (fora a capa e o fechamento).
-Frase de fechamento sugerida: ${program.closing}
-Evite repetir estes posts recentes: ${used.join(" | ") || "nenhum"}
-${program.news ? `\nNotícias de IA das últimas horas (use só estas):\n${newsBlock(news)}` : ""}
-
-Escreva o carrossel.`,
-    },
-    { maxTokens: 6000, timeoutMs: 150_000, effort: "medium", task: "programa" },
-  );
+  // regra fixa: nada político. Se o texto sair político, reescreve; se insistir, troca por um quadro sem notícia.
+  let out = await writePost(program, ctx, news, used, false);
+  if (isPolitical(out)) out = await writePost(program, ctx, news, used, true);
+  if (isPolitical(out)) {
+    if (!program.news) throw new Error("O texto saiu com assunto político duas vezes; nada foi publicado.");
+    const fallback = programById("prompt")!;
+    console.warn(`[programa] ${program.name} saiu político duas vezes; trocado por ${fallback.name}`);
+    return createShowPost({ ...input, program: fallback });
+  }
 
   const slides = [out.cover, ...out.slides.slice(0, max)];
   const style = program.id === "meme" ? MEME_IMAGE_STYLE : SHOW_IMAGE_STYLE;

@@ -82,7 +82,13 @@ async function readFeed(feed: (typeof FEEDS)[number]): Promise<NewsItem[]> {
   }
 }
 
-/** Assuntos que não combinam com o programa (dica e notícia boa para empresário): política, tribunal, tragédia. */
+/**
+ * Regra do Felipe: nada político nos posts até ele pedir. Vale para a escolha das notícias e para o texto pronto.
+ */
+export const POLITICAL =
+  /(?<![\p{L}\p{N}])(pol[ií]tic\p{L}*|politics|govern\p{L}*|government|prefeit\p{L}*|ministr\p{L}*|deputad\p{L}*|senador\p{L}*|vereador\p{L}*|partido\p{L}*|elei[cç]\p{L}*|election\p{L}*|eleitor\p{L}*|campanha eleitoral|congress\p{L}*|senado|senate|câmara dos deputados|stf|supremo|casa branca|white house|planalto|trump|biden|lula|bolsonaro|kamala|vance|doge|regula[cçt]\p{L}*|regulation\p{L}*|lei de ia|ai act|pl \d+|projeto de lei|san[cç]\p{L}*|tariff\p{L}*|guerra|war|militar\p{L}*|military|pent[aá]gono|pentagon|geopol[ií]tic\p{L}*)(?![\p{L}\p{N}])/iu;
+
+/** Assuntos que não combinam com o programa (dica e notícia boa para empresário): tribunal, escândalo, tragédia. */
 const OFF_TOPIC = /\b(trump|biden|casa branca|white house|elei[cç][aã]o|election|congress|senado|senate|governo|government|pol[ií]tic|guerra|war|militar|military|processo|lawsuit|sues?|sued|tribunal|court|judge|juiz|esc[aâ]ndalo|scandal|demiss|layoffs?|fired|morte|death|died|suic|abuso|abuse|fraude|fraud|hack|vazamento|leak|pornogr|deepfake)\b/i;
 
 const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, "").slice(0, 60);
@@ -95,7 +101,7 @@ export async function latestAiNews(hours = 48, limit = 40): Promise<NewsItem[]> 
   return all
     .map((n) => ({ n, t: Date.parse(n.published) || 0 }))
     .filter(({ t }) => t >= since)
-    .filter(({ n }) => !OFF_TOPIC.test(`${n.title} ${n.summary}`))
+    .filter(({ n }) => !OFF_TOPIC.test(`${n.title} ${n.summary}`) && !POLITICAL.test(`${n.title} ${n.summary}`))
     .sort((a, b) => b.t - a.t)
     .map(({ n }) => n)
     .filter((n) => {
