@@ -57,14 +57,14 @@ export async function showContext(): Promise<ShowContext> {
 }
 
 const slideSchema = z.object({
-  text: z.string().describe("Texto principal da lâmina: 2 ou 3 frases curtas, 110 a 190 caracteres, texto corrido sem rótulo no começo (nada de 'O caso:', 'Fechamento:', nome do quadro), sem markdown, sem asteriscos."),
-  bold: z.string().describe("Uma frase de impacto, 30 a 90 caracteres, que NÃO repete o texto principal. Sem asteriscos."),
+  text: z.string().describe("Texto da lâmina: 1 ou 2 frases curtas, 60 a 130 caracteres, sem rótulo no começo (nada de 'O caso:', 'Fechamento:', nome do quadro), sem markdown, sem asteriscos."),
+  bold: z.string().describe("Uma frase de impacto, 20 a 70 caracteres, com ideia NOVA: não repete nem resume o texto da mesma lâmina. Sem asteriscos."),
   image_prompt: z.string().describe("Cena da imagem de apoio em inglês, 1 frase concreta e visual. Nunca cite marcas, empresas, produtos ou pessoas reais; objetos genéricos e sem logotipo."),
 });
 
 const postSchema = z.object({
-  cover: slideSchema.describe("Capa: gancho forte que faz parar de rolar, com o negrito chamando para arrastar."),
-  slides: z.array(slideSchema).describe("Lâminas de conteúdo, em ordem."),
+  cover: slideSchema.describe("Capa: só o gancho que faz parar de rolar (curiosidade ou benefício), sem contar a notícia inteira. O negrito chama para arrastar."),
+  slides: z.array(slideSchema).describe("Lâminas de conteúdo, em ordem. Cada uma traz uma informação nova; nenhuma repete a capa ou outra lâmina."),
   closing: z.string().describe("Frase final da última lâmina (sem imagem), até 110 caracteres, sem rótulo e sem asteriscos."),
   caption: z.string().describe("Legenda em português do Brasil, 400 a 1200 caracteres, parágrafos curtos, tom de conversa, termina com uma pergunta ou chamada. Sem hashtags aqui."),
   hashtags: z.array(z.string()).describe("6 a 12 hashtags sem #, em português, sobre IA e negócios."),
@@ -85,11 +85,13 @@ function clean(text: string, max: number, program?: string): string {
 }
 
 function slideText(s: { text: string; bold: string }, program: string): { text: string; bold: string } {
-  const bold = clean(s.bold, 100, program);
-  let text = clean(s.text, 200, program);
-  // o negrito às vezes vem repetido dentro do texto
+  let bold = clean(s.bold, 80, program);
+  let text = clean(s.text, 140, program);
+  // o negrito às vezes vem repetido (ou só reescrito) dentro do texto
   if (bold && text.includes(bold)) text = text.replace(bold, "").replace(/\s+/g, " ").trim();
-  return { text: text || bold, bold: text ? bold : "" };
+  if (bold && text && overlap(text, bold) >= 0.6) bold = "";
+  if (!text) return { text: bold, bold: "" };
+  return { text, bold };
 }
 
 function newsBlock(news: NewsItem[]): string {
@@ -108,7 +110,38 @@ function isPolitical(p: PostDraft): boolean {
   return POLITICAL.test(all);
 }
 
-async function writePost(program: Program, ctx: ShowContext, news: NewsItem[], used: string[], strict: boolean): Promise<PostDraft> {
+const STOP = new Set("a o e é de da do das dos em no na nos nas um uma uns umas que para pra por com sem se seu sua seus suas você isso isto esse essa este esta mais menos muito já não sim ao aos à às como mas ou eu me meu minha te ele ela eles elas foi ser ter tem vai agora hoje".split(" "));
+
+function words(t: string): Set<string> {
+  return new Set(
+    t
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !STOP.has(w)),
+  );
+}
+
+/** Quanto duas frases dizem a mesma coisa (palavras em comum sobre a menor). */
+function overlap(a: string, b: string): number {
+  const x = words(a);
+  const y = words(b);
+  if (!x.size || !y.size) return 0;
+  let common = 0;
+  for (const w of x) if (y.has(w)) common++;
+  return common / Math.min(x.size, y.size);
+}
+
+/** Duas lâminas contando a mesma coisa (ex.: capa e lâmina 2 com a mesma notícia em outras palavras). */
+function repeats(p: PostDraft): boolean {
+  const all = [p.cover, ...p.slides].map((x) => `${x.text} ${x.bold}`);
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) if (overlap(all[i], all[j]) >= 0.4) return true;
+  return false;
+}
+
+async function writePost(program: Program, ctx: ShowContext, news: NewsItem[], used: string[], strict: boolean, repeat = false): Promise<PostDraft> {
   const [min, max] = program.slides;
   return generate(
     postSchema,
@@ -120,6 +153,8 @@ O perfil é como um programa de TV com vários quadros. O quadro de hoje é "${p
 Regras de verdade: notícias, números, preços, datas e nomes só se estiverem na lista de notícias; nunca invente fatos, lançamentos ou citações. Cite a fonte no texto de forma natural ("segundo a OpenAI", "a Google anunciou").
 Escolha de notícia: prefira lançamentos, recursos novos, usos práticos e avanços que ajudam empresas e pessoas. Fuja de processos, escândalos, demissões e polêmicas.
 REGRA ABSOLUTA: nada político. Não cite governos, políticos, partidos, eleições, leis, regulação, tarifas, guerras ou disputas entre países, nem de passagem.${strict ? "\nATENÇÃO: a versão anterior saiu com assunto político e foi descartada. Escolha outra notícia e outro ângulo, 100% sobre tecnologia e negócios." : ""}
+Pouco texto: quem rola o feed lê em 3 segundos. Uma ideia por lâmina, frases curtas.
+Nada de repetição: a capa só fisga; a primeira lâmina de conteúdo já entrega a informação; cada lâmina avança a história; o negrito nunca repete o texto da própria lâmina.${repeat ? "\nATENÇÃO: a versão anterior repetiu a mesma informação em lâminas diferentes e foi descartada." : ""}
 Sem markdown: nada de asteriscos, títulos ou rótulos. O negrito é o campo "bold", separado.
 Português do Brasil correto.`,
       user: `Quadro de hoje: ${program.name}
@@ -154,6 +189,10 @@ export async function createShowPost(input: { program?: Program; status: "draft"
   // regra fixa: nada político. Se o texto sair político, reescreve; se insistir, troca por um quadro sem notícia.
   let out = await writePost(program, ctx, news, used, false);
   if (isPolitical(out)) out = await writePost(program, ctx, news, used, true);
+  else if (repeats(out)) {
+    const again = await writePost(program, ctx, news, used, false, true);
+    if (!isPolitical(again) && !repeats(again)) out = again;
+  }
   if (isPolitical(out)) {
     if (!program.news) throw new Error("O texto saiu com assunto político duas vezes; nada foi publicado.");
     const fallback = programById("prompt")!;

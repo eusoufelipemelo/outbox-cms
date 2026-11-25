@@ -44,8 +44,8 @@ async function render(node: React.ReactElement): Promise<Buffer> {
 
 /** Corpo menor quando o texto é longo, para caber sem cortar (a imagem ocupa a metade de baixo). */
 function bodySize(chars: number, withImage: boolean): number {
-  if (!withImage) return chars > 320 ? 48 : chars > 200 ? 54 : 60;
-  return chars > 250 ? 40 : chars > 190 ? 43 : 47;
+  if (!withImage) return chars > 220 ? 52 : chars > 150 ? 58 : 64;
+  return chars > 190 ? 44 : chars > 140 ? 49 : 54;
 }
 
 function Header({ author, program }: { author: Author; program: string }) {
