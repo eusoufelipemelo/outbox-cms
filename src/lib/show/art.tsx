@@ -11,7 +11,7 @@ import sharp from "sharp";
  * (como o logo do canal na tela da TV). 1080×1350, JPEG.
  */
 
-export type Author = { name: string; handle: string; avatar: string | null };
+export type Author = { name: string; handle: string; avatar: string | null; /** Foto grande (fechamento do formato editorial). */ photo?: string | null };
 export type TweetSlide = { text: string; bold?: string; image?: string | null };
 
 const W = 1080;
@@ -133,91 +133,178 @@ export async function avatarData(url: string | null): Promise<string | null> {
   }
 }
 
-// ---------- Capa chamativa: foto grande em cima, manchete gigante no painel branco ----------
+// ---------- Formato editorial: capa com foto que se dissolve no escuro, lâminas claras e escuras alternadas ----------
 
-/** Área da foto da capa chamativa (largura total, parte de cima). */
-export const COVER_PHOTO = { width: W, height: 780 };
+const DARK = "#141518";
+const LIGHT = "#f6f5f2";
+export const EDITORIAL_COVER = { width: W, height: 860 };
+export const EDITORIAL_IMAGE = { width: W - PAD * 2, height: 520 };
 
-function headlineSize(chars: number): number {
-  return chars > 60 ? 58 : chars > 46 ? 66 : chars > 32 ? 76 : 88;
+function coverHeadSize(chars: number): number {
+  return chars > 60 ? 60 : chars > 44 ? 68 : chars > 30 ? 78 : 90;
 }
 
-/** Palavras da manchete, marcando as que fazem parte do trecho em destaque (vai em laranja). */
-function markWords(headline: string, highlight: string): { word: string; hot: boolean }[] {
-  const words = headline.trim().split(/\s+/);
-  const hot = highlight.trim().split(/\s+/).filter(Boolean);
-  const norm = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
-  if (!hot.length) return words.map((word) => ({ word, hot: false }));
-  // acha a sequência do destaque dentro da manchete
-  for (let i = 0; i + hot.length <= words.length; i++) {
-    if (hot.every((h, k) => norm(words[i + k]) === norm(h))) {
-      return words.map((word, j) => ({ word, hot: j >= i && j < i + hot.length }));
-    }
-  }
-  return words.map((word) => ({ word, hot: false }));
+/** Rodapé do formato editorial: "Felipe Melo | IA na prática". */
+function Signature({ name, color }: { name: string; color: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", fontSize: 22, fontWeight: 700, letterSpacing: "0.14em", color, textTransform: "uppercase" }}>
+      {name}
+      <div style={{ display: "flex", width: 2, height: 24, background: color, margin: "0 18px", opacity: 0.6 }} />
+      IA na prática
+    </div>
+  );
 }
 
-export function headlineCover(author: Author, program: string, input: { headline: string; highlight: string; image: string | null }, total: number): Promise<Buffer> {
-  const size = headlineSize(input.headline.length);
-  const words = markWords(input.headline, input.highlight);
+/** Capa: foto em cima que se dissolve no escuro, manchete centralizada e a linha laranja (quadro e fonte). */
+export function editorialCover(author: Author, input: { headline: string; kicker: string; image: string | null }): Promise<Buffer> {
+  const size = coverHeadSize(input.headline.length);
   return render(
-    <div style={{ width: W, height: H, display: "flex", flexDirection: "column", background: C.paper, fontFamily: "Archivo", position: "relative" }}>
-      {/* foto */}
-      <div style={{ display: "flex", width: W, height: COVER_PHOTO.height, background: C.line, position: "relative" }}>
-        {input.image ? <img src={input.image} width={COVER_PHOTO.width} height={COVER_PHOTO.height} alt="" style={{ objectFit: "cover" }} /> : null}
+    <div style={{ width: W, height: H, display: "flex", flexDirection: "column", background: DARK, fontFamily: "Archivo", position: "relative" }}>
+      {input.image ? (
+        <img src={input.image} width={EDITORIAL_COVER.width} height={EDITORIAL_COVER.height} alt="" style={{ position: "absolute", top: 0, left: 0, objectFit: "cover" }} />
+      ) : null}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: W,
+          height: H,
+          display: "flex",
+          backgroundImage: `linear-gradient(180deg, rgba(20,21,24,0) 0%, rgba(20,21,24,0) 38%, rgba(20,21,24,0.85) 58%, ${DARK} 68%)`,
+        }}
+      />
+      <div style={{ position: "absolute", left: PAD, right: PAD, bottom: 70, display: "flex", flexDirection: "column", alignItems: "center" }}>
         <div
           style={{
-            position: "absolute",
-            top: 56,
-            left: PAD,
             display: "flex",
-            alignItems: "center",
-            background: C.accent,
-            color: "#ffffff",
-            borderRadius: 999,
-            padding: "14px 26px 14px 22px",
+            textAlign: "center",
+            justifyContent: "center",
             fontFamily: "Display",
-            fontSize: 24,
+            fontSize: size,
+            lineHeight: 1.04,
+            letterSpacing: "-0.02em",
+            color: "#ffffff",
+            textTransform: "uppercase",
           }}
         >
-          <div style={{ display: "flex", width: 12, height: 12, borderRadius: 999, background: "#ffffff", marginRight: 12 }} />
-          {program}
+          {input.headline}
         </div>
-      </div>
-      {/* foto do Felipe sobre a divisa */}
-      <div style={{ position: "absolute", top: COVER_PHOTO.height - 74, right: PAD, display: "flex", width: 148, height: 148, borderRadius: 999, background: C.paper, padding: 7 }}>
-        {author.avatar ? (
-          <img src={author.avatar} width={134} height={134} alt="" style={{ borderRadius: 999, objectFit: "cover", border: `5px solid ${C.accent}` }} />
-        ) : (
-          <div style={{ display: "flex", width: 134, height: 134, borderRadius: 999, background: C.accent }} />
-        )}
-      </div>
-      {/* manchete */}
-      <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, padding: `48px ${PAD}px 0` }}>
-        <div style={{ display: "flex", fontSize: 26, fontWeight: 700, color: C.muted, marginBottom: 22 }}>
-          {author.name} | IA na prática
+        <div style={{ display: "flex", marginTop: 28, fontSize: 26, fontWeight: 700, color: C.accent, letterSpacing: "0.06em", textTransform: "uppercase", textAlign: "center" }}>
+          {input.kicker}
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", fontFamily: "Display", fontSize: size, lineHeight: 1.02, letterSpacing: "-0.02em", textTransform: "uppercase", paddingRight: 120 }}>
-          {words.map((w, i) => (
-            <span key={i} style={{ color: w.hot ? C.accent : C.ink, marginRight: Math.round(size * 0.26) }}>
-              {w.word}
-            </span>
-          ))}
+        <div style={{ display: "flex", marginTop: 64 }}>
+          <Signature name={author.name} color="rgba(255,255,255,0.8)" />
         </div>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 96, padding: `0 ${PAD}px`, fontSize: 24, color: C.muted, fontWeight: 500 }}>
-        <span>Arrasta para o lado</span>
-        <span>1/{total}</span>
       </div>
     </div>,
   );
 }
 
-/** Foto da capa chamativa já recortada, como data URL. */
-export async function coverImage(bytes: Uint8Array): Promise<string | null> {
+export type EditorialSlide = { title?: string; text: string; highlight?: string; image?: string | null };
+
+/** Lâmina do meio: fundo claro ou escuro, título laranja, parágrafos curtos, trecho final em laranja, foto opcional. */
+export function editorialSlide(s: EditorialSlide, dark: boolean, imageFirst: boolean): Promise<Buffer> {
+  const ink = dark ? "#ffffff" : C.ink;
+  const chars = s.text.length + (s.highlight?.length ?? 0);
+  const size = s.image ? (chars > 200 ? 38 : chars > 150 ? 42 : 46) : chars > 260 ? 44 : chars > 180 ? 48 : 54;
+  const paragraphs = s.text.split(/\n+|(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])/).map((p) => p.trim()).filter(Boolean);
+  const titleEl = s.title ? (
+    <div style={{ display: "flex", fontFamily: "Display", fontSize: 50, lineHeight: 1.08, color: C.accent, letterSpacing: "-0.02em", marginBottom: 34 }}>{s.title}</div>
+  ) : null;
+  const bodyEl = (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {paragraphs.map((p, i) => (
+        <div key={i} style={{ display: "flex", fontSize: size, lineHeight: 1.32, fontWeight: 500, color: ink, marginBottom: Math.round(size * 0.6) }}>
+          {p}
+        </div>
+      ))}
+      {s.highlight ? <div style={{ display: "flex", fontSize: size, lineHeight: 1.32, fontWeight: 700, color: C.accent }}>{s.highlight}</div> : null}
+    </div>
+  );
+  const img = s.image ? (
+    <img src={s.image} width={EDITORIAL_IMAGE.width} height={EDITORIAL_IMAGE.height} alt="" style={{ borderRadius: 28, objectFit: "cover", flexShrink: 0 }} />
+  ) : null;
+  return render(
+    <div
+      style={{
+        width: W,
+        height: H,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: img ? "flex-start" : "center",
+        background: dark ? DARK : LIGHT,
+        fontFamily: "Archivo",
+        padding: `${PAD + 16}px ${PAD}px`,
+      }}
+    >
+      {titleEl}
+      {img && imageFirst ? (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {img}
+          <div style={{ display: "flex", marginTop: 44 }}>{bodyEl}</div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", flexGrow: img ? 1 : 0, justifyContent: "space-between" }}>
+          {bodyEl}
+          {img}
+        </div>
+      )}
+    </div>,
+  );
+}
+
+/** Fechamento: a foto do Felipe à esquerda se dissolvendo no escuro, texto à direita e a caixa laranja de chamada. */
+export function editorialClosing(author: Author, input: { text: string; cta: string }): Promise<Buffer> {
+  const paragraphs = input.text.split(/\n+|(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])/).map((p) => p.trim()).filter(Boolean);
+  return render(
+    <div style={{ width: W, height: H, display: "flex", background: DARK, fontFamily: "Archivo", position: "relative" }}>
+      {author.photo ? <img src={author.photo} width={640} height={H} alt="" style={{ position: "absolute", top: 0, left: 0, objectFit: "cover" }} /> : null}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: W,
+          height: H,
+          display: "flex",
+          backgroundImage: `linear-gradient(90deg, rgba(20,21,24,0) 0%, rgba(20,21,24,0.2) 30%, rgba(20,21,24,0.92) 52%, ${DARK} 62%)`,
+        }}
+      />
+      <div style={{ position: "absolute", right: PAD, top: 170, width: 520, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        {paragraphs.map((p, i) => (
+          <div key={i} style={{ display: "flex", fontSize: 40, lineHeight: 1.3, fontWeight: 500, color: "#ffffff", textAlign: "right", marginBottom: 28 }}>
+            {p}
+          </div>
+        ))}
+      </div>
+      <div style={{ position: "absolute", right: PAD, bottom: 190, width: 600, display: "flex", background: C.accent, padding: "34px 40px", fontSize: 36, lineHeight: 1.25, fontWeight: 700, color: "#ffffff" }}>
+        {input.cta}
+      </div>
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 70, display: "flex", justifyContent: "center" }}>
+        <Signature name={author.name} color="rgba(255,255,255,0.7)" />
+      </div>
+    </div>,
+  );
+}
+
+/** Foto já recortada para os tamanhos do formato editorial. */
+export async function fitImage(bytes: Uint8Array, width: number, height: number): Promise<string | null> {
   try {
-    const buf = await sharp(Buffer.from(bytes)).resize(COVER_PHOTO.width, COVER_PHOTO.height, { fit: "cover", position: "attention" }).jpeg({ quality: 88 }).toBuffer();
+    const buf = await sharp(Buffer.from(bytes)).resize(width, height, { fit: "cover", position: "attention" }).jpeg({ quality: 88 }).toBuffer();
     return `data:image/jpeg;base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Foto grande do Felipe para o fechamento (metade esquerda da lâmina). */
+export async function photoData(url: string | null): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return null;
+    return fitImage(new Uint8Array(await res.arrayBuffer()), 640, H);
   } catch {
     return null;
   }

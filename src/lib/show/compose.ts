@@ -10,7 +10,7 @@ import { publishIgPost, upload } from "@/lib/instagram/compose";
 import { igAccount } from "@/lib/instagram/oauth";
 import { latestAiNews, POLITICAL, type NewsItem } from "./news";
 import { programById, programFor, type Program } from "./programs";
-import { avatarData, coverImage, headlineCover, tweetImage, tweetSlide, type Author, type TweetSlide } from "./art";
+import { avatarData, editorialClosing, editorialCover, editorialSlide, EDITORIAL_COVER, EDITORIAL_IMAGE, fitImage, photoData, tweetImage, tweetSlide, type Author, type TweetSlide } from "./art";
 
 /**
  * Programa diário do Instagram da OutBox: um carrossel no formato tweet por dia, com o programa
@@ -52,11 +52,17 @@ export async function showContext(): Promise<ShowContext> {
   return {
     clientId: client.id,
     chatId: client.telegram_chat_id,
-    author: { name: profile?.name?.trim() || "Felipe Melo", handle: acc.username ?? "eusoufelipemelo", avatar: await avatarData(profile?.avatar_url ?? null) },
+    author: {
+      name: profile?.name?.trim() || "Felipe Melo",
+      handle: acc.username ?? "eusoufelipemelo",
+      avatar: await avatarData(profile?.avatar_url ?? null),
+      photo: await photoData(profile?.avatar_url ?? null),
+    },
   };
 }
 
 const slideSchema = z.object({
+  title: z.string().describe("Título curto da lâmina (2 a 5 palavras), usado no formato editorial. Ex.: 'O que já foi provado?'. Sem ponto final."),
   text: z.string().describe("Texto da lâmina: 1 ou 2 frases curtas, 60 a 130 caracteres, sem rótulo no começo (nada de 'O caso:', 'Fechamento:', nome do quadro), sem markdown, sem asteriscos."),
   bold: z.string().describe("Uma frase de impacto, 20 a 70 caracteres, com ideia NOVA: não repete nem resume o texto da mesma lâmina. Sem asteriscos."),
   image_prompt: z.string().describe("Cena da imagem de apoio em inglês, 1 frase concreta e visual. Nunca cite marcas, empresas, produtos ou pessoas reais; objetos genéricos e sem logotipo."),
@@ -69,9 +75,8 @@ const postSchema = z.object({
   caption: z.string().describe("Legenda em português do Brasil, 3 a 5 parágrafos curtos (500 a 1100 caracteres): contexto, o que muda na prática, uma pergunta para quem tem empresa e um convite para comentar. Sem hashtags e sem a palavra Fonte (o sistema coloca)."),
   hashtags: z.array(z.string()).describe("6 a 12 hashtags sem #, em português, sobre IA e negócios."),
   sources: z.array(z.string()).describe("Links das notícias usadas (exatamente como vieram na lista). Vazio se o programa não usa notícias."),
-  headline: z.string().describe("Manchete da capa chamativa: 4 a 10 palavras, até 60 caracteres, forte e curiosa, como chamada de TV. Sem ponto final, sem emoji."),
-  highlight: z.string().describe("O trecho da manchete que vai em laranja: 1 a 4 palavras copiadas exatamente da manchete."),
-  cover_image_prompt: z.string().describe("Foto da capa chamativa em inglês, 1 frase: uma cena forte e clara que ilustra a manchete, com um assunto principal grande. Sem marcas, sem pessoas reais, sem telas legíveis."),
+  headline: z.string().describe("Manchete da capa editorial: 5 a 12 palavras, até 70 caracteres, forte e curiosa, como chamada de TV. Sem aspas, sem ponto final, sem emoji."),
+  cover_image_prompt: z.string().describe("Foto da capa editorial em inglês, 1 frase: uma cena forte e clara que ilustra a manchete, com um assunto principal grande no centro. Sem marcas, sem pessoas reais, sem telas legíveis."),
 
 });
 
@@ -109,7 +114,7 @@ async function recentTitles(clientId: string): Promise<string[]> {
 type PostDraft = z.infer<typeof postSchema>;
 
 function isPolitical(p: PostDraft): boolean {
-  const all = [p.headline, p.highlight, p.cover.text, p.cover.bold, ...p.slides.flatMap((x) => [x.text, x.bold]), p.closing, p.caption, ...p.hashtags].join(" ");
+  const all = [p.headline, p.cover.text, p.cover.bold, ...p.slides.flatMap((x) => [x.text, x.bold]), p.closing, p.caption, ...p.hashtags].join(" ");
   return POLITICAL.test(all);
 }
 
@@ -163,7 +168,7 @@ Português do Brasil correto.`,
       user: `Quadro de hoje: ${program.name}
 O que o quadro faz: ${program.brief}
 Quantidade de lâminas de conteúdo: ${min} a ${max} (fora a capa e o fechamento).
-Formato da capa hoje: ${program.format === "capa" ? "CAPA CHAMATIVA (foto + manchete gigante): capriche na manchete e no destaque; o campo cover não é usado" : "TWEET: a capa é o campo cover; a manchete não aparece"}.
+Formato de hoje: ${program.format === "capa" ? "EDITORIAL (capa com foto e manchete gigante; lâminas com título laranja, texto curto e a frase de impacto em laranja). Capriche na manchete e nos títulos. O campo cover não é usado" : "TWEET (a capa é o campo cover; manchete e títulos não aparecem)"}.
 Frase de fechamento sugerida: ${program.closing}
 Evite repetir estes posts recentes: ${used.join(" | ") || "nenhum"}
 ${program.news ? `\nNotícias de IA das últimas horas (use só estas):\n${newsBlock(news)}` : ""}
@@ -204,25 +209,31 @@ export async function createShowPost(input: { program?: Program; status: "draft"
     return createShowPost({ ...input, program: fallback });
   }
 
-  // capa chamativa: a capa é a manchete com foto; no tweet, a capa é a primeira lâmina tweet
+  // editorial: capa com foto + manchete e lâminas claras/escuras; tweet: tudo no formato tweet
   const isCapa = program.format === "capa";
   const slides = isCapa ? out.slides.slice(0, max) : [out.cover, ...out.slides.slice(0, max)];
   const style = program.id === "meme" ? MEME_IMAGE_STYLE : SHOW_IMAGE_STYLE;
+  // no editorial só algumas lâminas levam foto (a 1ª, a 2ª e a última), como no modelo de referência
+  const wantsImage = (i: number) => !isCapa || i === 0 || i === 1 || (i === slides.length - 1 && slides.length > 3);
   const images: (string | null)[] = new Array(slides.length).fill(null);
   let coverPhoto: string | null = null;
-  const jobs: (() => Promise<void>)[] = slides.map((sl, i) => async () => {
-    const { bytes } = await generateImage({ prompt: `${sl.image_prompt.trim()} Generic unbranded objects only.${style}`, aspect: "16:9", size: "1K", signal: AbortSignal.timeout(150_000) });
-    images[i] = await tweetImage(bytes);
+  const jobs: (() => Promise<void>)[] = [];
+  slides.forEach((sl, i) => {
+    if (!wantsImage(i)) return;
+    jobs.push(async () => {
+      const { bytes } = await generateImage({ prompt: `${sl.image_prompt.trim()} Generic unbranded objects only.${style}`, aspect: isCapa ? "3:2" : "16:9", size: "1K", signal: AbortSignal.timeout(150_000) });
+      images[i] = isCapa ? await fitImage(bytes, EDITORIAL_IMAGE.width * 2, EDITORIAL_IMAGE.height * 2) : await tweetImage(bytes);
+    });
   });
   if (isCapa) {
     jobs.unshift(async () => {
       const { bytes } = await generateImage({
-        prompt: `${out.cover_image_prompt.trim()} Bold, eye-catching composition with one large clear subject, vivid but natural colors, crisp light. Generic unbranded objects only.${style}`,
-        aspect: "3:2",
+        prompt: `${out.cover_image_prompt.trim()} Cinematic, eye-catching editorial photograph with one large clear subject in the upper-middle of the frame, darker tones toward the bottom. Generic unbranded objects only. No text, letters, logos, real or famous people, or readable screens.`,
+        aspect: "4:3",
         size: "2K",
         signal: AbortSignal.timeout(150_000),
       });
-      coverPhoto = await coverImage(bytes);
+      coverPhoto = await fitImage(bytes, EDITORIAL_COVER.width, EDITORIAL_COVER.height);
     });
   }
   let next = 0;
@@ -234,17 +245,27 @@ export async function createShowPost(input: { program?: Program; status: "draft"
   }
   await Promise.all([worker(), worker(), worker()]);
 
+  const closingText = clean(out.closing, 160, program.name) || program.closing;
   const content: TweetSlide[] = [
     ...slides.map((sl, i) => ({ ...slideText(sl, program.name), image: images[i] })),
-    { text: clean(out.closing, 140, program.name) || program.closing, bold: `Segue @${ctx.author.handle} para não perder o próximo programa.`, image: null },
+    { text: closingText, bold: `Segue @${ctx.author.handle} para não perder o próximo programa.`, image: null },
   ];
-  const headline = clean(out.headline, 70, program.name).replace(/[.!]+$/, "");
-  const total = content.length + (isCapa ? 1 : 0);
-  const offset = isCapa ? 2 : 1;
-  const buffers = await Promise.all([
-    ...(isCapa ? [headlineCover(ctx.author, program.name, { headline, highlight: out.highlight, image: coverPhoto }, total)] : []),
-    ...content.map((sl, i) => tweetSlide(ctx.author, program.name, sl, i + offset, total)),
-  ]);
+  const headline = clean(out.headline, 80, program.name).replace(/[.!"“”]+$/g, "").replace(/^["“]/, "");
+  const firstSource = out.sources.map((u) => news.find((n) => n.link === u)?.source).find(Boolean);
+  let buffers: Buffer[];
+  if (isCapa) {
+    buffers = await Promise.all([
+      editorialCover(ctx.author, { headline, kicker: firstSource ? `${program.name} | Fonte: ${firstSource}` : program.name, image: coverPhoto }),
+      ...slides.map((sl, i) => {
+        const t = slideText(sl, program.name);
+        return editorialSlide({ title: clean(sl.title, 40).replace(/[.]+$/, ""), text: t.text, highlight: t.bold, image: images[i] }, i % 2 === 1, i % 2 === 1);
+      }),
+      editorialClosing(ctx.author, { text: closingText, cta: "Quer minha ajuda para colocar IA no seu negócio? Link na bio." }),
+    ]);
+  } else {
+    const total = content.length;
+    buffers = await Promise.all(content.map((sl, i) => tweetSlide(ctx.author, program.name, sl, i + 1, total)));
+  }
   const urls = await Promise.all(buffers.map((b, i) => upload(ctx.clientId, b, `programa-${program.id}-${i + 1}`)));
 
   const sources = out.sources.filter((u) => news.some((n) => n.link === u));
@@ -261,10 +282,11 @@ export async function createShowPost(input: { program?: Program; status: "draft"
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   const caption = `${body}${sourceLine}\n\n#${program.name.replace(/\s+/g, "")} ${tags.map((t) => `#${t}`).join(" ")}`.slice(0, 2200);
-  const meta = [
-    ...(isCapa ? [{ title: `${program.name}: ${headline}`, text: "" }] : []),
-    ...content.map((sl, i) => ({ title: i === 0 && !isCapa ? `${program.name}: ${sl.text.slice(0, 90)}` : sl.text.slice(0, 90), text: sl.bold ?? "" })),
-  ].map((m, i) => ({ url: urls[i], ...m }));
+  const meta = (
+    isCapa
+      ? [{ title: `${program.name}: ${headline}`, text: "" }, ...slides.map((sl) => ({ title: clean(sl.title, 40), text: clean(sl.text, 90) })), { title: closingText.slice(0, 90), text: "" }]
+      : content.map((sl, i) => ({ title: i === 0 ? `${program.name}: ${sl.text.slice(0, 90)}` : sl.text.slice(0, 90), text: sl.bold ?? "" }))
+  ).map((m, i) => ({ url: urls[i], ...m }));
 
   const { data, error } = await db()
     .from("ig_posts")
