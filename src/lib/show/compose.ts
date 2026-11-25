@@ -66,7 +66,7 @@ const postSchema = z.object({
   cover: slideSchema.describe("Capa: só o gancho que faz parar de rolar (curiosidade ou benefício), sem contar a notícia inteira. O negrito chama para arrastar."),
   slides: z.array(slideSchema).describe("Lâminas de conteúdo, em ordem. Cada uma traz uma informação nova; nenhuma repete a capa ou outra lâmina."),
   closing: z.string().describe("Frase final da última lâmina (sem imagem), até 110 caracteres, sem rótulo e sem asteriscos."),
-  caption: z.string().describe("Legenda em português do Brasil, 400 a 1200 caracteres, parágrafos curtos, tom de conversa, termina com uma pergunta ou chamada. Sem hashtags aqui."),
+  caption: z.string().describe("Legenda em português do Brasil, 3 a 5 parágrafos curtos (500 a 1100 caracteres): contexto, o que muda na prática, uma pergunta para quem tem empresa e um convite para comentar. Sem hashtags e sem a palavra Fonte (o sistema coloca)."),
   hashtags: z.array(z.string()).describe("6 a 12 hashtags sem #, em português, sobre IA e negócios."),
   sources: z.array(z.string()).describe("Links das notícias usadas (exatamente como vieram na lista). Vazio se o programa não usa notícias."),
 
@@ -230,7 +230,15 @@ export async function createShowPost(input: { program?: Program; status: "draft"
   const sourceLine = sources.length
     ? `\n\nFonte${sources.length > 1 ? "s" : ""}: ${sources.map((u) => news.find((n) => n.link === u)?.source ?? "").filter(Boolean).join(", ")}`
     : "";
-  const caption = `${out.caption.trim()}${sourceLine}\n\n#${program.name.replace(/\s+/g, "")} ${tags.map((t) => `#${t}`).join(" ")}`.slice(0, 2200);
+  // a IA às vezes já põe hashtags e "Fonte:" no texto: tira para não sair repetido
+  const body = out.caption
+    .split("\n")
+    .map((l) => l.replace(/(^|\s)#[\p{L}\p{N}_]+/gu, "").trimEnd())
+    .filter((l) => !/^\s*fontes?\s*:/i.test(l))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  const caption = `${body}${sourceLine}\n\n#${program.name.replace(/\s+/g, "")} ${tags.map((t) => `#${t}`).join(" ")}`.slice(0, 2200);
   const meta = content.map((s, i) => ({ url: urls[i], title: i === 0 ? `${program.name}: ${s.text.slice(0, 90)}` : s.text.slice(0, 90), text: s.bold ?? "" }));
 
   const { data, error } = await db()
