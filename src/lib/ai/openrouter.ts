@@ -13,7 +13,7 @@ import { pick } from "@/lib/settings-store";
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
 /** Funções do CMS que podem usar modelos diferentes. */
-export const TASKS = ["artigo", "pautas", "diagnostico", "apoio", "pesquisa"] as const;
+export const TASKS = ["artigo", "pautas", "diagnostico", "apoio", "pesquisa", "programa"] as const;
 export type Task = (typeof TASKS)[number];
 
 /** Modelo da função, com o modelo padrão do OpenRouter como reserva. */

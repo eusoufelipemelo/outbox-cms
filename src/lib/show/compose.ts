@@ -57,19 +57,40 @@ export async function showContext(): Promise<ShowContext> {
 }
 
 const slideSchema = z.object({
-  text: z.string().describe("Texto principal da lâmina, em primeira pessoa (Felipe), 120 a 230 caracteres."),
-  bold: z.string().describe("Frase de impacto em negrito que fecha a lâmina, 40 a 110 caracteres."),
-  image_prompt: z.string().describe("Cena da imagem de apoio em inglês, 1 a 2 frases concretas e visuais. Sem texto, sem logos, sem pessoas famosas, sem telas legíveis."),
+  text: z.string().describe("Texto principal da lâmina: 2 ou 3 frases curtas, 110 a 190 caracteres, texto corrido sem rótulo no começo (nada de 'O caso:', 'Fechamento:', nome do quadro), sem markdown, sem asteriscos."),
+  bold: z.string().describe("Uma frase de impacto, 30 a 90 caracteres, que NÃO repete o texto principal. Sem asteriscos."),
+  image_prompt: z.string().describe("Cena da imagem de apoio em inglês, 1 frase concreta e visual. Nunca cite marcas, empresas, produtos ou pessoas reais; objetos genéricos e sem logotipo."),
 });
 
 const postSchema = z.object({
   cover: slideSchema.describe("Capa: gancho forte que faz parar de rolar, com o negrito chamando para arrastar."),
   slides: z.array(slideSchema).describe("Lâminas de conteúdo, em ordem."),
-  closing: z.string().describe("Frase final curta para a última lâmina (sem imagem), até 120 caracteres."),
+  closing: z.string().describe("Frase final da última lâmina (sem imagem), até 110 caracteres, sem rótulo e sem asteriscos."),
   caption: z.string().describe("Legenda em português do Brasil, 400 a 1200 caracteres, parágrafos curtos, tom de conversa, termina com uma pergunta ou chamada. Sem hashtags aqui."),
   hashtags: z.array(z.string()).describe("6 a 12 hashtags sem #, em português, sobre IA e negócios."),
   sources: z.array(z.string()).describe("Links das notícias usadas (exatamente como vieram na lista). Vazio se o programa não usa notícias."),
+
 });
+
+/** Tira markdown, rótulos e repetição; corta no fim de uma frase para caber na lâmina. */
+function clean(text: string, max: number, program?: string): string {
+  let t = text.replace(/\*\*?|__|#{1,6}\s/g, "").replace(/\s+/g, " ").trim();
+  if (program) t = t.replace(new RegExp(`^${program.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[:!.\\s-]*`, "i"), "").trim();
+  t = t.replace(/^(o caso|o detalhe que importa|fechamento|resumo|contexto|minha opini[aã]o|gancho|capa)\s*:\s*/i, "");
+  t = t.charAt(0).toUpperCase() + t.slice(1);
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  return end > max * 0.5 ? cut.slice(0, end + 1) : `${cut.slice(0, cut.lastIndexOf(" "))}…`;
+}
+
+function slideText(s: { text: string; bold: string }, program: string): { text: string; bold: string } {
+  const bold = clean(s.bold, 100, program);
+  let text = clean(s.text, 200, program);
+  // o negrito às vezes vem repetido dentro do texto
+  if (bold && text.includes(bold)) text = text.replace(bold, "").replace(/\s+/g, " ").trim();
+  return { text: text || bold, bold: text ? bold : "" };
+}
 
 function newsBlock(news: NewsItem[]): string {
   return news.map((n, i) => `${i + 1}. [${n.source}] ${n.title}${n.summary ? ` — ${n.summary.slice(0, 240)}` : ""}\n   ${n.link}`).join("\n");
@@ -104,6 +125,8 @@ Formato tweet: cada lâmina é um parágrafo curto e direto, em primeira pessoa,
 Tom: brasileiro, próximo, confiante, sem jargão, sem exagero, sem emoji nas lâminas. Use "você".
 O perfil é como um programa de TV com vários quadros. O quadro de hoje é "${program.name}".
 Regras de verdade: notícias, números, preços, datas e nomes só se estiverem na lista de notícias; nunca invente fatos, lançamentos ou citações. Cite a fonte no texto de forma natural ("segundo a OpenAI", "a Google anunciou").
+Escolha de notícia: prefira lançamentos, recursos novos, usos práticos e avanços que ajudam empresas e pessoas. Fuja de política, processos, escândalos, demissões e polêmicas.
+Sem markdown: nada de asteriscos, títulos ou rótulos. O negrito é o campo "bold", separado.
 Português do Brasil correto.`,
       user: `Quadro de hoje: ${program.name}
 O que o quadro faz: ${program.brief}
@@ -114,7 +137,7 @@ ${program.news ? `\nNotícias de IA das últimas horas (use só estas):\n${newsB
 
 Escreva o carrossel.`,
     },
-    { maxTokens: 6000, timeoutMs: 150_000, effort: "medium", task: "apoio" },
+    { maxTokens: 6000, timeoutMs: 150_000, effort: "medium", task: "programa" },
   );
 
   const slides = [out.cover, ...out.slides.slice(0, max)];
@@ -125,7 +148,7 @@ Escreva o carrossel.`,
     while (next < slides.length) {
       const i = next++;
       try {
-        const { bytes } = await generateImage({ prompt: `${slides[i].image_prompt.trim()}${style}`, aspect: "16:9", size: "1K", signal: AbortSignal.timeout(150_000) });
+        const { bytes } = await generateImage({ prompt: `${slides[i].image_prompt.trim()} Generic unbranded objects only.${style}`, aspect: "16:9", size: "1K", signal: AbortSignal.timeout(150_000) });
         images[i] = await tweetImage(bytes);
       } catch (err) {
         console.error("[programa] imagem falhou:", err instanceof Error ? err.message : err);
@@ -135,8 +158,8 @@ Escreva o carrossel.`,
   await Promise.all([worker(), worker(), worker()]);
 
   const content: TweetSlide[] = [
-    ...slides.map((s, i) => ({ text: s.text.trim(), bold: s.bold.trim(), image: images[i] })),
-    { text: out.closing.trim() || program.closing, bold: `Segue @${ctx.author.handle} para não perder o próximo programa.`, image: null },
+    ...slides.map((s, i) => ({ ...slideText(s, program.name), image: images[i] })),
+    { text: clean(out.closing, 140, program.name) || program.closing, bold: `Segue @${ctx.author.handle} para não perder o próximo programa.`, image: null },
   ];
   const total = content.length;
   const buffers = await Promise.all(content.map((s, i) => tweetSlide(ctx.author, program.name, s, i + 1, total)));

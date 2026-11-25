@@ -17,7 +17,7 @@ export type TweetSlide = { text: string; bold?: string; image?: string | null };
 const W = 1080;
 const H = 1350;
 const PAD = 80;
-export const TWEET_IMAGE = { width: W - PAD * 2, height: 500 };
+export const TWEET_IMAGE = { width: W - PAD * 2, height: 470 };
 
 const C = { paper: "#ffffff", ink: "#15171b", muted: "#6b6f78", line: "#e6e6e9", accent: "#f15532" };
 
@@ -45,7 +45,7 @@ async function render(node: React.ReactElement): Promise<Buffer> {
 /** Corpo menor quando o texto é longo, para caber sem cortar (a imagem ocupa a metade de baixo). */
 function bodySize(chars: number, withImage: boolean): number {
   if (!withImage) return chars > 320 ? 48 : chars > 200 ? 54 : 60;
-  return chars > 260 ? 40 : chars > 190 ? 44 : 48;
+  return chars > 250 ? 40 : chars > 190 ? 43 : 47;
 }
 
 function Header({ author, program }: { author: Author; program: string }) {
@@ -89,7 +89,7 @@ export function tweetSlide(author: Author, program: string, s: TweetSlide, index
   return render(
     <div style={{ width: W, height: H, display: "flex", flexDirection: "column", background: C.paper, fontFamily: "Archivo", padding: `${PAD}px ${PAD}px 0` }}>
       <Header author={author} program={program} />
-      <div style={{ display: "flex", flexDirection: "column", marginTop: 56, flexGrow: 1, justifyContent: withImage ? "flex-start" : "center", paddingBottom: withImage ? 0 : 120 }}>
+      <div style={{ display: "flex", flexDirection: "column", marginTop: 52, marginBottom: withImage ? 36 : 0, flexGrow: 1, flexShrink: 1, overflow: "hidden", justifyContent: withImage ? "flex-start" : "center", paddingBottom: withImage ? 0 : 120 }}>
         <div style={{ display: "flex", fontSize: size, lineHeight: 1.3, fontWeight: 500, color: C.ink, letterSpacing: "-0.01em" }}>{s.text}</div>
         {s.bold ? (
           <div style={{ display: "flex", fontSize: size, lineHeight: 1.3, fontWeight: 700, color: C.ink, marginTop: Math.round(size * 0.7), letterSpacing: "-0.01em" }}>
@@ -98,9 +98,9 @@ export function tweetSlide(author: Author, program: string, s: TweetSlide, index
         ) : null}
       </div>
       {s.image ? (
-        <img src={s.image} width={TWEET_IMAGE.width} height={TWEET_IMAGE.height} alt="" style={{ borderRadius: 32, objectFit: "cover", border: `1px solid ${C.line}` }} />
+        <img src={s.image} width={TWEET_IMAGE.width} height={TWEET_IMAGE.height} alt="" style={{ borderRadius: 32, objectFit: "cover", border: `1px solid ${C.line}`, flexShrink: 0 }} />
       ) : null}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 96, fontSize: 24, color: C.muted, fontWeight: 500 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 96, flexShrink: 0, fontSize: 24, color: C.muted, fontWeight: 500 }}>
         <span>{index === 1 ? "Arrasta para o lado" : ""}</span>
         <span>
           {index}/{total}

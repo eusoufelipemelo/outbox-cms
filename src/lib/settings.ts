@@ -89,6 +89,13 @@ export const GROUPS: Group[] = [
         placeholder: "usa o padrão",
         suggestions: MODEL_SUGGESTIONS,
       },
+      {
+        key: "model_programa",
+        label: "Modelo do programa diário do Instagram",
+        hint: "Escreve os carrosséis de IA no seu nome, todo dia. Vale um modelo bom de texto curto e tom de conversa.",
+        placeholder: "usa o padrão",
+        suggestions: MODEL_SUGGESTIONS,
+      },
       { key: "anthropic_api_key", label: "Chave da Anthropic", secret: true, placeholder: "sk-ant-...", hint: "Usada só quando o provedor é Anthropic." },
       { key: "anthropic_model", label: "Modelo da Anthropic", placeholder: "claude-sonnet-5" },
     ],

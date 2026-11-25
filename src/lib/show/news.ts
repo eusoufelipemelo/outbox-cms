@@ -82,6 +82,9 @@ async function readFeed(feed: (typeof FEEDS)[number]): Promise<NewsItem[]> {
   }
 }
 
+/** Assuntos que não combinam com o programa (dica e notícia boa para empresário): política, tribunal, tragédia. */
+const OFF_TOPIC = /\b(trump|biden|casa branca|white house|elei[cç][aã]o|election|congress|senado|senate|governo|government|pol[ií]tic|guerra|war|militar|military|processo|lawsuit|sues?|sued|tribunal|court|judge|juiz|esc[aâ]ndalo|scandal|demiss|layoffs?|fired|morte|death|died|suic|abuso|abuse|fraude|fraud|hack|vazamento|leak|pornogr|deepfake)\b/i;
+
 const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, "").slice(0, 60);
 
 /** Notícias de IA das últimas `hours` horas, das mais novas para as mais antigas, sem repetidas. */
@@ -92,6 +95,7 @@ export async function latestAiNews(hours = 48, limit = 40): Promise<NewsItem[]> 
   return all
     .map((n) => ({ n, t: Date.parse(n.published) || 0 }))
     .filter(({ t }) => t >= since)
+    .filter(({ n }) => !OFF_TOPIC.test(`${n.title} ${n.summary}`))
     .sort((a, b) => b.t - a.t)
     .map(({ n }) => n)
     .filter((n) => {
