@@ -141,7 +141,7 @@ export const EDITORIAL_COVER = { width: W, height: 860 };
 export const EDITORIAL_IMAGE = { width: W - PAD * 2, height: 520 };
 
 function coverHeadSize(chars: number): number {
-  return chars > 60 ? 60 : chars > 44 ? 68 : chars > 30 ? 78 : 90;
+  return chars > 80 ? 52 : chars > 60 ? 58 : chars > 44 ? 66 : chars > 30 ? 76 : 88;
 }
 
 /** Rodapé do formato editorial: "Felipe Melo | IA na prática". */
@@ -207,7 +207,7 @@ export type EditorialSlide = { title?: string; text: string; highlight?: string;
 export function editorialSlide(s: EditorialSlide, dark: boolean, imageFirst: boolean): Promise<Buffer> {
   const ink = dark ? "#ffffff" : C.ink;
   const chars = s.text.length + (s.highlight?.length ?? 0);
-  const size = s.image ? (chars > 200 ? 38 : chars > 150 ? 42 : 46) : chars > 260 ? 44 : chars > 180 ? 48 : 54;
+  const size = s.image ? (chars > 240 ? 36 : chars > 190 ? 40 : chars > 140 ? 44 : 48) : chars > 280 ? 44 : chars > 200 ? 50 : 56;
   const paragraphs = s.text.split(/\n+|(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])/).map((p) => p.trim()).filter(Boolean);
   const titleEl = s.title ? (
     <div style={{ display: "flex", fontFamily: "Display", fontSize: 50, lineHeight: 1.08, color: C.accent, letterSpacing: "-0.02em", marginBottom: 34 }}>{s.title}</div>

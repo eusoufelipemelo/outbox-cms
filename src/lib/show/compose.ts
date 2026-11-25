@@ -62,10 +62,10 @@ export async function showContext(): Promise<ShowContext> {
 }
 
 const slideSchema = z.object({
-  title: z.string().describe("Título curto da lâmina (2 a 5 palavras), usado no formato editorial. Ex.: 'O que já foi provado?'. Sem ponto final."),
+  title: z.string().describe("Título curto da lâmina, 2 a 5 palavras, no máximo 32 caracteres (conte). Ex.: 'O que já foi provado?'. Sem ponto final."),
   text: z.string().describe("Texto da lâmina: 1 ou 2 frases curtas, 60 a 130 caracteres, sem rótulo no começo (nada de 'O caso:', 'Fechamento:', nome do quadro), sem markdown, sem asteriscos."),
   bold: z.string().describe("Uma frase de impacto, 20 a 70 caracteres, com ideia NOVA: não repete nem resume o texto da mesma lâmina. Sem asteriscos."),
-  image_prompt: z.string().describe("Cena da imagem de apoio em inglês, 1 frase concreta e visual. Nunca cite marcas, empresas, produtos ou pessoas reais; objetos genéricos e sem logotipo."),
+  image_prompt: z.string().describe("Cena da imagem de apoio em inglês, 1 frase concreta e visual. Nunca cite nomes de pessoas (nem o do autor), marcas, empresas ou produtos; objetos genéricos e sem logotipo; nada escrito."),
 });
 
 const postSchema = z.object({
@@ -75,10 +75,20 @@ const postSchema = z.object({
   caption: z.string().describe("Legenda em português do Brasil, 3 a 5 parágrafos curtos (500 a 1100 caracteres): contexto, o que muda na prática, uma pergunta para quem tem empresa e um convite para comentar. Sem hashtags e sem a palavra Fonte (o sistema coloca)."),
   hashtags: z.array(z.string()).describe("6 a 12 hashtags sem #, em português, sobre IA e negócios."),
   sources: z.array(z.string()).describe("Links das notícias usadas (exatamente como vieram na lista). Vazio se o programa não usa notícias."),
-  headline: z.string().describe("Manchete da capa editorial: 5 a 12 palavras, até 70 caracteres, forte e curiosa, como chamada de TV. Sem aspas, sem ponto final, sem emoji."),
-  cover_image_prompt: z.string().describe("Foto da capa editorial em inglês, 1 frase: uma cena forte e clara que ilustra a manchete, com um assunto principal grande no centro. Sem marcas, sem pessoas reais, sem telas legíveis."),
+  headline: z.string().describe("Manchete da capa editorial: 5 a 10 palavras, no máximo 60 caracteres (conte), forte e curiosa, como chamada de TV. Uma frase só. Sem aspas, sem ponto final, sem emoji."),
+  cover_image_prompt: z.string().describe("Foto da capa editorial em inglês, 1 frase: um objeto ou cena forte que simboliza o assunto, grande no centro, sem pessoas em destaque. Nunca escreva nomes de pessoas, títulos, palavras entre aspas, marcas ou empresas."),
 
 });
+
+/** Pedido de imagem sem nome de gente (o modelo desenhava sósias, ex.: "Felipe Melo" virou o jogador) e sem pedido de texto. */
+function imagePrompt(prompt: string, authorName: string): string {
+  let p = prompt;
+  for (const part of [authorName, ...authorName.split(/\s+/)].filter((x) => x.length > 2)) {
+    p = p.replace(new RegExp(`\\b${part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi"), "");
+  }
+  p = p.replace(/["“”][^"“”]{1,60}["“”]/g, ""); // títulos entre aspas viram letreiro na imagem
+  return `${p.replace(/\s+/g, " ").trim()} Anonymous generic people only (never a specific or famous person, faces not the focus). Absolutely no text, words, titles, letters or captions anywhere in the image.`;
+}
 
 /** Tira markdown, rótulos e repetição; corta no fim de uma frase para caber na lâmina. */
 function clean(text: string, max: number, program?: string): string {
@@ -87,14 +97,19 @@ function clean(text: string, max: number, program?: string): string {
   t = t.replace(/^(o caso|o detalhe que importa|fechamento|resumo|contexto|minha opini[aã]o|gancho|capa)\s*:\s*/i, "");
   t = t.charAt(0).toUpperCase() + t.slice(1);
   if (t.length <= max) return t;
-  const cut = t.slice(0, max);
-  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
-  return end > max * 0.5 ? cut.slice(0, end + 1) : `${cut.slice(0, cut.lastIndexOf(" "))}…`;
+  // passou do limite: fica com as frases inteiras que cabem; nunca corta no meio com reticências
+  const sentences = t.match(/[^.!?]+[.!?]+/g) ?? [];
+  let out = "";
+  for (const sn of sentences) {
+    if ((out + sn).trim().length > max) break;
+    out += sn;
+  }
+  return out.trim() || t.slice(0, t.lastIndexOf(" ", max)).replace(/[,;:\s]+$/, "");
 }
 
 function slideText(s: { text: string; bold: string }, program: string): { text: string; bold: string } {
-  let bold = clean(s.bold, 80, program);
-  let text = clean(s.text, 140, program);
+  let bold = clean(s.bold, 110, program);
+  let text = clean(s.text, 230, program);
   // o negrito às vezes vem repetido (ou só reescrito) dentro do texto
   if (bold && text.includes(bold)) text = text.replace(bold, "").replace(/\s+/g, " ").trim();
   if (bold && text && overlap(text, bold) >= 0.6) bold = "";
@@ -221,14 +236,14 @@ export async function createShowPost(input: { program?: Program; status: "draft"
   slides.forEach((sl, i) => {
     if (!wantsImage(i)) return;
     jobs.push(async () => {
-      const { bytes } = await generateImage({ prompt: `${sl.image_prompt.trim()} Generic unbranded objects only.${style}`, aspect: isCapa ? "3:2" : "16:9", size: "1K", signal: AbortSignal.timeout(150_000) });
+      const { bytes } = await generateImage({ prompt: `${imagePrompt(sl.image_prompt, ctx.author.name)} Generic unbranded objects only.${style}`, aspect: isCapa ? "3:2" : "16:9", size: "1K", signal: AbortSignal.timeout(150_000) });
       images[i] = isCapa ? await fitImage(bytes, EDITORIAL_IMAGE.width * 2, EDITORIAL_IMAGE.height * 2) : await tweetImage(bytes);
     });
   });
   if (isCapa) {
     jobs.unshift(async () => {
       const { bytes } = await generateImage({
-        prompt: `${out.cover_image_prompt.trim()} Cinematic, eye-catching editorial photograph with one large clear subject in the upper-middle of the frame, darker tones toward the bottom. Generic unbranded objects only. No text, letters, logos, real or famous people, or readable screens.`,
+        prompt: `${imagePrompt(out.cover_image_prompt, ctx.author.name)} Cinematic, eye-catching editorial photograph with one large clear subject in the upper-middle of the frame, darker tones toward the bottom. Generic unbranded objects only. No text, letters, logos, real or famous people, or readable screens.`,
         aspect: "4:3",
         size: "2K",
         signal: AbortSignal.timeout(150_000),
@@ -250,7 +265,7 @@ export async function createShowPost(input: { program?: Program; status: "draft"
     ...slides.map((sl, i) => ({ ...slideText(sl, program.name), image: images[i] })),
     { text: closingText, bold: `Segue @${ctx.author.handle} para não perder o próximo programa.`, image: null },
   ];
-  const headline = clean(out.headline, 80, program.name).replace(/[.!"“”]+$/g, "").replace(/^["“]/, "");
+  const headline = clean(out.headline, 110, program.name).replace(/[.!"“”]+$/g, "").replace(/^["“]/, "");
   const firstSource = out.sources.map((u) => news.find((n) => n.link === u)?.source).find(Boolean);
   let buffers: Buffer[];
   if (isCapa) {
@@ -258,7 +273,7 @@ export async function createShowPost(input: { program?: Program; status: "draft"
       editorialCover(ctx.author, { headline, kicker: firstSource ? `${program.name} | Fonte: ${firstSource}` : program.name, image: coverPhoto }),
       ...slides.map((sl, i) => {
         const t = slideText(sl, program.name);
-        return editorialSlide({ title: clean(sl.title, 40).replace(/[.]+$/, ""), text: t.text, highlight: t.bold, image: images[i] }, i % 2 === 1, i % 2 === 1);
+        return editorialSlide({ title: clean(sl.title, 70).replace(/[.]+$/, ""), text: t.text, highlight: t.bold, image: images[i] }, i % 2 === 1, i % 2 === 1);
       }),
       editorialClosing(ctx.author, { text: closingText, cta: "Quer minha ajuda para colocar IA no seu negócio? Link na bio." }),
     ]);
