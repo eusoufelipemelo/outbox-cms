@@ -11,6 +11,8 @@ export type Program = {
   /** 0 = domingo … 6 = sábado */
   weekday: number;
   news: boolean;
+  /** "capa": capa chamativa com foto e manchete gigante; "tweet": tudo no formato tweet. Intercalados na semana. */
+  format: "capa" | "tweet";
   /** Lâminas de conteúdo, fora a capa e o fechamento. */
   slides: [number, number];
   brief: string;
@@ -20,6 +22,7 @@ export type Program = {
 export const PROGRAMS: Program[] = [
   {
     id: "giro",
+    format: "capa",
     name: "Giro da IA",
     weekday: 1,
     news: true,
@@ -30,6 +33,7 @@ export const PROGRAMS: Program[] = [
   },
   {
     id: "prompt",
+    format: "capa",
     name: "Prompt na Prática",
     weekday: 2,
     news: false,
@@ -40,6 +44,7 @@ export const PROGRAMS: Program[] = [
   },
   {
     id: "ferramenta",
+    format: "tweet",
     name: "Ferramenta da Semana",
     weekday: 3,
     news: true,
@@ -50,6 +55,7 @@ export const PROGRAMS: Program[] = [
   },
   {
     id: "negocio",
+    format: "tweet",
     name: "IA no Seu Negócio",
     weekday: 4,
     news: false,
@@ -60,6 +66,7 @@ export const PROGRAMS: Program[] = [
   },
   {
     id: "plantao",
+    format: "capa",
     name: "Plantão IA",
     weekday: 5,
     news: true,
@@ -70,6 +77,7 @@ export const PROGRAMS: Program[] = [
   },
   {
     id: "meme",
+    format: "tweet",
     name: "Meme da Semana",
     weekday: 6,
     news: false,
@@ -80,6 +88,7 @@ export const PROGRAMS: Program[] = [
   },
   {
     id: "mito",
+    format: "capa",
     name: "Mito ou Verdade",
     weekday: 0,
     news: false,

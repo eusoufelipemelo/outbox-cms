@@ -10,7 +10,7 @@ import { publishIgPost, upload } from "@/lib/instagram/compose";
 import { igAccount } from "@/lib/instagram/oauth";
 import { latestAiNews, POLITICAL, type NewsItem } from "./news";
 import { programById, programFor, type Program } from "./programs";
-import { avatarData, tweetImage, tweetSlide, type Author, type TweetSlide } from "./art";
+import { avatarData, coverImage, headlineCover, tweetImage, tweetSlide, type Author, type TweetSlide } from "./art";
 
 /**
  * Programa diário do Instagram da OutBox: um carrossel no formato tweet por dia, com o programa
@@ -69,6 +69,9 @@ const postSchema = z.object({
   caption: z.string().describe("Legenda em português do Brasil, 3 a 5 parágrafos curtos (500 a 1100 caracteres): contexto, o que muda na prática, uma pergunta para quem tem empresa e um convite para comentar. Sem hashtags e sem a palavra Fonte (o sistema coloca)."),
   hashtags: z.array(z.string()).describe("6 a 12 hashtags sem #, em português, sobre IA e negócios."),
   sources: z.array(z.string()).describe("Links das notícias usadas (exatamente como vieram na lista). Vazio se o programa não usa notícias."),
+  headline: z.string().describe("Manchete da capa chamativa: 4 a 10 palavras, até 60 caracteres, forte e curiosa, como chamada de TV. Sem ponto final, sem emoji."),
+  highlight: z.string().describe("O trecho da manchete que vai em laranja: 1 a 4 palavras copiadas exatamente da manchete."),
+  cover_image_prompt: z.string().describe("Foto da capa chamativa em inglês, 1 frase: uma cena forte e clara que ilustra a manchete, com um assunto principal grande. Sem marcas, sem pessoas reais, sem telas legíveis."),
 
 });
 
@@ -106,7 +109,7 @@ async function recentTitles(clientId: string): Promise<string[]> {
 type PostDraft = z.infer<typeof postSchema>;
 
 function isPolitical(p: PostDraft): boolean {
-  const all = [p.cover.text, p.cover.bold, ...p.slides.flatMap((x) => [x.text, x.bold]), p.closing, p.caption, ...p.hashtags].join(" ");
+  const all = [p.headline, p.highlight, p.cover.text, p.cover.bold, ...p.slides.flatMap((x) => [x.text, x.bold]), p.closing, p.caption, ...p.hashtags].join(" ");
   return POLITICAL.test(all);
 }
 
@@ -160,6 +163,7 @@ Português do Brasil correto.`,
       user: `Quadro de hoje: ${program.name}
 O que o quadro faz: ${program.brief}
 Quantidade de lâminas de conteúdo: ${min} a ${max} (fora a capa e o fechamento).
+Formato da capa hoje: ${program.format === "capa" ? "CAPA CHAMATIVA (foto + manchete gigante): capriche na manchete e no destaque; o campo cover não é usado" : "TWEET: a capa é o campo cover; a manchete não aparece"}.
 Frase de fechamento sugerida: ${program.closing}
 Evite repetir estes posts recentes: ${used.join(" | ") || "nenhum"}
 ${program.news ? `\nNotícias de IA das últimas horas (use só estas):\n${newsBlock(news)}` : ""}
@@ -200,29 +204,47 @@ export async function createShowPost(input: { program?: Program; status: "draft"
     return createShowPost({ ...input, program: fallback });
   }
 
-  const slides = [out.cover, ...out.slides.slice(0, max)];
+  // capa chamativa: a capa é a manchete com foto; no tweet, a capa é a primeira lâmina tweet
+  const isCapa = program.format === "capa";
+  const slides = isCapa ? out.slides.slice(0, max) : [out.cover, ...out.slides.slice(0, max)];
   const style = program.id === "meme" ? MEME_IMAGE_STYLE : SHOW_IMAGE_STYLE;
   const images: (string | null)[] = new Array(slides.length).fill(null);
+  let coverPhoto: string | null = null;
+  const jobs: (() => Promise<void>)[] = slides.map((sl, i) => async () => {
+    const { bytes } = await generateImage({ prompt: `${sl.image_prompt.trim()} Generic unbranded objects only.${style}`, aspect: "16:9", size: "1K", signal: AbortSignal.timeout(150_000) });
+    images[i] = await tweetImage(bytes);
+  });
+  if (isCapa) {
+    jobs.unshift(async () => {
+      const { bytes } = await generateImage({
+        prompt: `${out.cover_image_prompt.trim()} Bold, eye-catching composition with one large clear subject, vivid but natural colors, crisp light. Generic unbranded objects only.${style}`,
+        aspect: "3:2",
+        size: "2K",
+        signal: AbortSignal.timeout(150_000),
+      });
+      coverPhoto = await coverImage(bytes);
+    });
+  }
   let next = 0;
   async function worker() {
-    while (next < slides.length) {
-      const i = next++;
-      try {
-        const { bytes } = await generateImage({ prompt: `${slides[i].image_prompt.trim()} Generic unbranded objects only.${style}`, aspect: "16:9", size: "1K", signal: AbortSignal.timeout(150_000) });
-        images[i] = await tweetImage(bytes);
-      } catch (err) {
-        console.error("[programa] imagem falhou:", err instanceof Error ? err.message : err);
-      }
+    while (next < jobs.length) {
+      const job = jobs[next++];
+      await job().catch((err) => console.error("[programa] imagem falhou:", err instanceof Error ? err.message : err));
     }
   }
   await Promise.all([worker(), worker(), worker()]);
 
   const content: TweetSlide[] = [
-    ...slides.map((s, i) => ({ ...slideText(s, program.name), image: images[i] })),
+    ...slides.map((sl, i) => ({ ...slideText(sl, program.name), image: images[i] })),
     { text: clean(out.closing, 140, program.name) || program.closing, bold: `Segue @${ctx.author.handle} para não perder o próximo programa.`, image: null },
   ];
-  const total = content.length;
-  const buffers = await Promise.all(content.map((s, i) => tweetSlide(ctx.author, program.name, s, i + 1, total)));
+  const headline = clean(out.headline, 70, program.name).replace(/[.!]+$/, "");
+  const total = content.length + (isCapa ? 1 : 0);
+  const offset = isCapa ? 2 : 1;
+  const buffers = await Promise.all([
+    ...(isCapa ? [headlineCover(ctx.author, program.name, { headline, highlight: out.highlight, image: coverPhoto }, total)] : []),
+    ...content.map((sl, i) => tweetSlide(ctx.author, program.name, sl, i + offset, total)),
+  ]);
   const urls = await Promise.all(buffers.map((b, i) => upload(ctx.clientId, b, `programa-${program.id}-${i + 1}`)));
 
   const sources = out.sources.filter((u) => news.some((n) => n.link === u));
@@ -239,7 +261,10 @@ export async function createShowPost(input: { program?: Program; status: "draft"
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   const caption = `${body}${sourceLine}\n\n#${program.name.replace(/\s+/g, "")} ${tags.map((t) => `#${t}`).join(" ")}`.slice(0, 2200);
-  const meta = content.map((s, i) => ({ url: urls[i], title: i === 0 ? `${program.name}: ${s.text.slice(0, 90)}` : s.text.slice(0, 90), text: s.bold ?? "" }));
+  const meta = [
+    ...(isCapa ? [{ title: `${program.name}: ${headline}`, text: "" }] : []),
+    ...content.map((sl, i) => ({ title: i === 0 && !isCapa ? `${program.name}: ${sl.text.slice(0, 90)}` : sl.text.slice(0, 90), text: sl.bold ?? "" })),
+  ].map((m, i) => ({ url: urls[i], ...m }));
 
   const { data, error } = await db()
     .from("ig_posts")

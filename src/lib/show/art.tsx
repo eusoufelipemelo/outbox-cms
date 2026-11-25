@@ -132,3 +132,93 @@ export async function avatarData(url: string | null): Promise<string | null> {
     return null;
   }
 }
+
+// ---------- Capa chamativa: foto grande em cima, manchete gigante no painel branco ----------
+
+/** Área da foto da capa chamativa (largura total, parte de cima). */
+export const COVER_PHOTO = { width: W, height: 780 };
+
+function headlineSize(chars: number): number {
+  return chars > 60 ? 58 : chars > 46 ? 66 : chars > 32 ? 76 : 88;
+}
+
+/** Palavras da manchete, marcando as que fazem parte do trecho em destaque (vai em laranja). */
+function markWords(headline: string, highlight: string): { word: string; hot: boolean }[] {
+  const words = headline.trim().split(/\s+/);
+  const hot = highlight.trim().split(/\s+/).filter(Boolean);
+  const norm = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  if (!hot.length) return words.map((word) => ({ word, hot: false }));
+  // acha a sequência do destaque dentro da manchete
+  for (let i = 0; i + hot.length <= words.length; i++) {
+    if (hot.every((h, k) => norm(words[i + k]) === norm(h))) {
+      return words.map((word, j) => ({ word, hot: j >= i && j < i + hot.length }));
+    }
+  }
+  return words.map((word) => ({ word, hot: false }));
+}
+
+export function headlineCover(author: Author, program: string, input: { headline: string; highlight: string; image: string | null }, total: number): Promise<Buffer> {
+  const size = headlineSize(input.headline.length);
+  const words = markWords(input.headline, input.highlight);
+  return render(
+    <div style={{ width: W, height: H, display: "flex", flexDirection: "column", background: C.paper, fontFamily: "Archivo", position: "relative" }}>
+      {/* foto */}
+      <div style={{ display: "flex", width: W, height: COVER_PHOTO.height, background: C.line, position: "relative" }}>
+        {input.image ? <img src={input.image} width={COVER_PHOTO.width} height={COVER_PHOTO.height} alt="" style={{ objectFit: "cover" }} /> : null}
+        <div
+          style={{
+            position: "absolute",
+            top: 56,
+            left: PAD,
+            display: "flex",
+            alignItems: "center",
+            background: C.accent,
+            color: "#ffffff",
+            borderRadius: 999,
+            padding: "14px 26px 14px 22px",
+            fontFamily: "Display",
+            fontSize: 24,
+          }}
+        >
+          <div style={{ display: "flex", width: 12, height: 12, borderRadius: 999, background: "#ffffff", marginRight: 12 }} />
+          {program}
+        </div>
+      </div>
+      {/* foto do Felipe sobre a divisa */}
+      <div style={{ position: "absolute", top: COVER_PHOTO.height - 74, right: PAD, display: "flex", width: 148, height: 148, borderRadius: 999, background: C.paper, padding: 7 }}>
+        {author.avatar ? (
+          <img src={author.avatar} width={134} height={134} alt="" style={{ borderRadius: 999, objectFit: "cover", border: `5px solid ${C.accent}` }} />
+        ) : (
+          <div style={{ display: "flex", width: 134, height: 134, borderRadius: 999, background: C.accent }} />
+        )}
+      </div>
+      {/* manchete */}
+      <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, padding: `48px ${PAD}px 0` }}>
+        <div style={{ display: "flex", fontSize: 26, fontWeight: 700, color: C.muted, marginBottom: 22 }}>
+          {author.name} | IA na prática
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", fontFamily: "Display", fontSize: size, lineHeight: 1.02, letterSpacing: "-0.02em", textTransform: "uppercase", paddingRight: 120 }}>
+          {words.map((w, i) => (
+            <span key={i} style={{ color: w.hot ? C.accent : C.ink, marginRight: Math.round(size * 0.26) }}>
+              {w.word}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 96, padding: `0 ${PAD}px`, fontSize: 24, color: C.muted, fontWeight: 500 }}>
+        <span>Arrasta para o lado</span>
+        <span>1/{total}</span>
+      </div>
+    </div>,
+  );
+}
+
+/** Foto da capa chamativa já recortada, como data URL. */
+export async function coverImage(bytes: Uint8Array): Promise<string | null> {
+  try {
+    const buf = await sharp(Buffer.from(bytes)).resize(COVER_PHOTO.width, COVER_PHOTO.height, { fit: "cover", position: "attention" }).jpeg({ quality: 88 }).toBuffer();
+    return `data:image/jpeg;base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
