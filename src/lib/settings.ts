@@ -130,6 +130,22 @@ export const GROUPS: Group[] = [
     ],
   },
   {
+    id: "programa",
+    title: "Programa diário do Instagram",
+    description: "Carrossel no formato tweet sobre IA no Instagram da OutBox, um quadro por dia da semana. Fica pronto 1 hora antes, chega no Telegram com o botão de cancelar e vai ao ar sozinho no horário.",
+    fields: [
+      {
+        key: "show_enabled",
+        label: "Programa diário",
+        options: [
+          { value: "", label: "Desligado" },
+          { value: "on", label: "Ligado" },
+        ],
+      },
+      { key: "show_hour", label: "Horário de publicação (hora cheia, Brasília)", placeholder: "12", hint: "O post fica pronto e vai para o Telegram 1 hora antes." },
+    ],
+  },
+  {
     id: "seo",
     title: "SEO e diagnóstico",
     description: "Notas do PageSpeed e busca do perfil no Google Empresas.",

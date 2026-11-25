@@ -97,6 +97,9 @@ async function tick() {
   state.running = true;
   try {
     const runs = await processScheduledPosts();
+    // programa diário do Instagram: publica no horário (o veto fica aberto até lá)
+    const { publishDueShow } = await import("@/lib/show/compose");
+    await publishDueShow().catch((err) => console.error("[programa] publicar:", err instanceof Error ? err.message : err));
     for (const r of runs) {
       console.log(`[scheduler] "${r.title}" → ${r.sites - r.failed}/${r.sites} destinos${r.message ? ` (${r.message})` : ""}`);
     }
@@ -131,6 +134,12 @@ async function automationTick() {
     }
     const { processIgAutomations } = await import("@/lib/instagram/independent");
     await processIgAutomations().catch((err) => console.error("[instagram] calendário:", err instanceof Error ? err.message : err));
+    const { prepareShow } = await import("@/lib/show/compose");
+    const show = await prepareShow().catch((err) => {
+      console.error("[programa] preparar:", err instanceof Error ? err.message : err);
+      return null;
+    });
+    if (show) console.log(`[programa] ${show}`);
   } catch (err) {
     console.error("[automação]", err instanceof Error ? err.message : err);
   } finally {

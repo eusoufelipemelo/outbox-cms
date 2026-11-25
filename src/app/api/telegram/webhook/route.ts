@@ -63,6 +63,17 @@ export async function POST(req: Request) {
         if (chatId && q.message) {
           await editMessageText(chatId, q.message.message_id, result.ok ? "✅ <b>Aprovado.</b> O post já está no Instagram." : `⚠️ ${result.message}`);
         }
+      } else if (action === "showno" && runId) {
+        // janela de veto do programa diário: cancela antes do horário (fica como rascunho no CMS)
+        const { data: canceled } = await db().from("ig_posts").update({ status: "draft", scheduled_at: null }).eq("id", runId).eq("status", "awaiting").select("id");
+        await answerCallback(q.id, canceled?.length ? "Cancelado" : "Este post já saiu ou já foi cancelado.");
+        if (chatId && q.message) {
+          await editMessageText(
+            chatId,
+            q.message.message_id,
+            canceled?.length ? "🚫 <b>Cancelado.</b> O post de hoje não vai ao ar. Ele ficou como rascunho no CMS, em Instagram." : "Este post já foi publicado ou cancelado.",
+          );
+        }
       } else if (action === "igno" && runId) {
         await db().from("ig_posts").update({ status: "changes" }).eq("id", runId).neq("status", "published");
         await answerCallback(q.id, "Certo!");
