@@ -76,7 +76,7 @@ const postSchema = z.object({
   hashtags: z.array(z.string()).describe("6 a 12 hashtags sem #, em português, sobre IA e negócios."),
   sources: z.array(z.string()).describe("Links das notícias usadas (exatamente como vieram na lista). Vazio se o programa não usa notícias."),
   headline: z.string().describe("Manchete da capa editorial: 5 a 10 palavras, no máximo 60 caracteres (conte), forte e curiosa, como chamada de TV. Uma frase só. Sem aspas, sem ponto final, sem emoji."),
-  cover_image_prompt: z.string().describe("Foto da capa editorial em inglês, 1 frase: um objeto ou cena forte que simboliza o assunto, grande no centro, sem pessoas em destaque. Nunca escreva nomes de pessoas, títulos, palavras entre aspas, marcas ou empresas."),
+  cover_image_prompt: z.string().describe("Objeto principal da foto da capa, em inglês, 3 a 8 palavras, concreto e fotografável, que simboliza o assunto (ex.: 'a smartphone glowing on a dark desk', 'a robotic hand holding a paper receipt'). Sem pessoas, sem telas com texto, sem nomes, marcas ou palavras escritas."),
 
 });
 
@@ -243,7 +243,7 @@ export async function createShowPost(input: { program?: Program; status: "draft"
   if (isCapa) {
     jobs.unshift(async () => {
       const { bytes } = await generateImage({
-        prompt: `${imagePrompt(out.cover_image_prompt, ctx.author.name)} Cinematic, eye-catching editorial photograph with one large clear subject in the upper-middle of the frame, darker tones toward the bottom. Generic unbranded objects only. No text, letters, logos, real or famous people, or readable screens.`,
+        prompt: `Photorealistic moody studio still-life photograph of ${imagePrompt(out.cover_image_prompt, ctx.author.name).replace(/ Anonymous generic people only.*$/, "")}, large and centered in the upper half of the frame, dramatic soft side light, a subtle warm orange (#F15532) rim light, deep charcoal background fading to near-black at the bottom, shallow depth of field. No people. Plain unbranded surfaces. The image contains no text, no letters, no numbers, no signs, no logos and no screens.`,
         aspect: "4:3",
         size: "2K",
         signal: AbortSignal.timeout(150_000),
@@ -265,7 +265,11 @@ export async function createShowPost(input: { program?: Program; status: "draft"
     ...slides.map((sl, i) => ({ ...slideText(sl, program.name), image: images[i] })),
     { text: closingText, bold: `Segue @${ctx.author.handle} para não perder o próximo programa.`, image: null },
   ];
-  const headline = clean(out.headline, 110, program.name).replace(/[.!"“”]+$/g, "").replace(/^["“]/, "");
+  // a capa nunca sai sem manchete: se a IA não mandar, usa o gancho da capa ou o título da 1ª lâmina
+  const headline = (clean(out.headline, 110, program.name) || clean(out.cover.bold, 110, program.name) || clean(out.slides[0]?.title ?? "", 110) || program.name)
+    .replace(/[.!"“”]+$/g, "")
+    .replace(/^["“]/, "");
+  if (!out.headline?.trim()) console.warn("[programa] manchete veio vazia; usando a reserva:", headline);
   const firstSource = out.sources.map((u) => news.find((n) => n.link === u)?.source).find(Boolean);
   let buffers: Buffer[];
   if (isCapa) {
